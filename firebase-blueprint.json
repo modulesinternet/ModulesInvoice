@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents an authenticated user associated with a role in the system.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique Firebase Authentication UID." },
+        "email": { "type": "string", "format": "email", "description": "User email address." },
+        "name": { "type": "string", "description": "Full name of the system user." },
+        "role": { "type": "string", "enum": ["Admin", "Manager", "Accountant", "Staff"], "description": "Designated RBAC system role." },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "User account status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "lastLoginAt": { "type": "string", "format": "date-time", "description": "Timestamp of most recent system login." }
+      },
+      "required": ["userId", "email", "name", "role", "status"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Represents a business client/customer for billing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "gstIn": { "type": "string", "description": "GST Identification Number." },
+        "pan": { "type": "string", "description": "Permanent Account Number." },
+        "billingAddress": { "type": "string" },
+        "shippingAddress": { "type": "string" },
+        "outstandingBalance": { "type": "number", "description": "Current cumulative outstanding ledger balance." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "gstIn", "billingAddress", "outstandingBalance"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Represents a billing service or product inventory item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "gstPercent": { "type": "number", "description": "Applicable GST tax rate." },
+        "hsnSac": { "type": "string", "description": "HSN/SAC code for taxation mapping." },
+        "stockQty": { "type": "number", "description": "Current available inventory level." },
+        "unit": { "type": "string", "description": "Measurement unit (e.g., PCS, BOX, HRS)." }
+      },
+      "required": ["id", "name", "price", "gstPercent"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Represents a draft estimate or quotation sent to a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "quotationNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "date": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "sent", "accepted", "declined", "converted"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "quotationNumber", "clientId", "items", "total", "status"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Represents an official business invoice.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "date": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "taxType": { "type": "string", "enum": ["CGST_SGST", "IGST"] },
+        "taxAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid", "overdue"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "invoiceNumber", "clientId", "items", "total", "paidAmount", "dueAmount", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Represents a payment receipt received transaction.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentDate": { "type": "string" },
+        "paymentMode": { "type": "string", "enum": ["Cash", "UPI", "Bank Transfer", "Card", "Cheque"] },
+        "referenceNum": { "type": "string" },
+        "remarks": { "type": "string" }
+      },
+      "required": ["id", "invoiceId", "clientId", "amount", "paymentDate", "paymentMode"]
+    },
+    "Ledger": {
+      "title": "Ledger",
+      "description": "Represents accounting client-wise double-entry running ledger statements.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["debit", "credit"] },
+        "amount": { "type": "number" },
+        "runningBalance": { "type": "number" },
+        "referenceType": { "type": "string", "enum": ["invoice", "payment", "opening_balance", "adjustment"] },
+        "referenceId": { "type": "string" }
+      },
+      "required": ["id", "clientId", "date", "type", "amount", "runningBalance"]
+    },
+    "Cashbook": {
+      "title": "Cashbook",
+      "description": "Daily liquid logs for multi-channel cash/digital balances tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense", "bank_deposit", "withdrawal", "adjustment"] },
+        "paymentMode": { "type": "string" },
+        "amount": { "type": "number" },
+        "referenceId": { "type": "string" },
+        "runningCashBalance": { "type": "number" },
+        "runningBankBalance": { "type": "number" }
+      },
+      "required": ["id", "date", "description", "type", "amount"]
+    },
+    "BusinessSettings": {
+      "title": "BusinessSettings",
+      "description": "Global corporate organization identifiers, banking values, and prefixes.",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string" },
+        "gstIn": { "type": "string" },
+        "pan": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "website": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNum": { "type": "string" },
+        "ifscCode": { "type": "string" },
+        "upiId": { "type": "string" },
+        "invoicePrefix": { "type": "string" },
+        "quotationPrefix": { "type": "string" },
+        "currency": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "signatureUrl": { "type": "string" }
+      },
+      "required": ["companyName", "gstIn", "address", "invoicePrefix", "currency"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Auditable transaction logs for security audit purposes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notices for due date alerts or stock level alarms.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "success"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "message", "isRead", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles database."
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Billed commercial entities."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Inventory product listings."
+    },
+    "/quotations/{quotationId}": {
+      "schema": "Quotation",
+      "description": "Proposals and estimation logs."
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Corporate billing records."
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Received billing payments receipts."
+    },
+    "/ledger/{ledgerId}": {
+      "schema": "Ledger",
+      "description": "Double entry transaction ledgers."
+    },
+    "/cashbook/{cashbookId}": {
+      "schema": "Cashbook",
+      "description": "Operating cash flow records."
+    },
+    "/businessSettings/global": {
+      "schema": "BusinessSettings",
+      "description": "Singleton configuration document."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Regulatory system events audit."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "General system notices."
+    }
+  }
+}

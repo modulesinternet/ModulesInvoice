@@ -1,0 +1,304 @@
+import React, { useState } from 'react';
+import { 
+  Plus, 
+  Search, 
+  X,
+  Building2,
+  Wallet
+} from 'lucide-react';
+import { CashbookEntry } from '../types';
+
+interface CashbookModuleProps {
+  cashbook: CashbookEntry[];
+  onCreateCashbookEntry: (entry: Partial<CashbookEntry>) => Promise<void>;
+  canWrite?: boolean;
+}
+
+export default function CashbookModule({
+  cashbook,
+  onCreateCashbookEntry,
+  canWrite = true
+}: CashbookModuleProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Form states
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState('receipt');
+  const [account, setAccount] = useState('bank');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(val);
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!description || Number(amount) <= 0 || !reference) {
+      alert("Please check that description, reference, and numeric amount fields are completed.");
+      return;
+    }
+
+    const payload: Partial<CashbookEntry> = {
+      date,
+      description,
+      type: (type === 'receipt' ? 'income' : 'expense') as any,
+      amount: Number(amount),
+      paymentMode: account === 'bank' ? 'Bank Transfer' : 'Cash',
+      referenceId: reference,
+    };
+
+    await onCreateCashbookEntry(payload);
+    setIsModalOpen(false);
+
+    // reset Form
+    setDescription('');
+    setAmount('');
+    setReference('');
+  };
+
+  // Compute stats on-the-fly
+  const bankReceipts = cashbook.filter(c => c.paymentMode !== 'Cash' && c.type === 'income').reduce((sum, c) => sum + c.amount, 0);
+  const bankPayments = cashbook.filter(c => c.paymentMode !== 'Cash' && (c.type === 'expense' || c.type === 'withdrawal')).reduce((sum, c) => sum + c.amount, 0);
+  const bankBalance = bankReceipts - bankPayments;
+
+  const cashReceipts = cashbook.filter(c => c.paymentMode === 'Cash' && c.type === 'income').reduce((sum, c) => sum + c.amount, 0);
+  const cashPayments = cashbook.filter(c => c.paymentMode === 'Cash' && c.type === 'expense').reduce((sum, c) => sum + c.amount, 0);
+  const cashBalance = cashReceipts - cashPayments;
+
+  return (
+    <div className="space-y-6" id="cashbook-container">
+      {/* Upper header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 font-display">Cashbook</h1>
+          <p className="text-sm text-slate-500">Record on-hand operating payments, debits, credits, and cash registry logs.</p>
+        </div>
+        {canWrite && (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2"
+            id="add-cashbook-entry-btn"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Record Cashbook Entry</span>
+          </button>
+        )}
+      </div>
+
+      {/* METRIC CARD ALIGNMENTS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="cashbook-metrics">
+        {/* Bank ledger pool */}
+        <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">HDFC Bank Ledger</span>
+              <h3 className="text-2xl font-mono font-bold text-slate-900">{formatCurrency(bankBalance)}</h3>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
+              <Building2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[#E5E7EB] text-xs font-sans">
+            <div>
+              <span className="text-slate-400 block font-medium">Billed Receipts (+)</span>
+              <span className="font-mono font-bold text-emerald-600">+{formatCurrency(bankReceipts)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block font-medium">Operational Payouts (-)</span>
+              <span className="font-mono font-bold text-rose-500">-{formatCurrency(bankPayments)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Cash in hand pool */}
+        <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">On-Hand Cash Registry</span>
+              <h3 className="text-2xl font-mono font-bold text-[#5B21FF]">{formatCurrency(cashBalance)}</h3>
+            </div>
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl border border-purple-100">
+              <Wallet className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[#E5E7EB] text-xs font-sans">
+            <div>
+              <span className="text-slate-400 block font-medium">Cash Collected (+)</span>
+              <span className="font-mono font-bold text-emerald-600">+{formatCurrency(cashReceipts)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block font-medium">Registry Audited Payouts (-)</span>
+              <span className="font-mono font-bold text-rose-500">-{formatCurrency(cashPayments)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CORE OPERATIONS LOG TABLE */}
+      <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm overflow-hidden" id="cashbook-table-container">
+        <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between gap-4">
+          <div className="relative w-full md:w-80">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Search className="w-4 h-4" />
+            </span>
+            <input 
+              type="text"
+              placeholder="Search details or reference codes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+              id="cashbook-table-filter"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
+                <th className="py-3.5 px-5">Voucher Date</th>
+                <th className="py-3.5 px-5">Ref Code / Bank ID</th>
+                <th className="py-3.5 px-5">Ledger Clause Description</th>
+                <th className="py-3.5 px-4 text-center">Reconciled Pool</th>
+                <th className="py-3.5 px-5 text-right text-emerald-600">Credits / Receipts (+)</th>
+                <th className="py-3.5 px-5 text-right text-rose-600">Debits / Payouts (-)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs font-medium">
+              {cashbook.filter(c => c.description.toLowerCase().includes(searchTerm.toLowerCase()) || (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))).map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50/20">
+                  <td className="py-3.5 px-5 font-mono text-slate-550">{row.date}</td>
+                  <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">{row.referenceId || "N/A"}</td>
+                  <td className="py-3.5 px-5 text-slate-650">{row.description}</td>
+                  <td className="py-3.5 px-4 text-center">
+                    <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold uppercase ${row.paymentMode !== 'Cash' ? 'bg-blue-50 border border-blue-100 text-blue-700' : 'bg-purple-50 border border-purple-100 text-purple-700'}`}>
+                      {row.paymentMode}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-5 text-right font-mono font-bold text-emerald-600">
+                    {row.type === 'income' || row.type === 'bank_deposit' ? `+ ${formatCurrency(row.amount)}` : '-'}
+                  </td>
+                  <td className="py-3.5 px-5 text-right font-mono font-bold text-rose-600">
+                    {row.type === 'expense' || row.type === 'withdrawal' ? `- ${formatCurrency(row.amount)}` : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* FORM MODAL POPOVER */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <h3 className="font-bold text-sm">Post Cashbook Entry</h3>
+              <button onClick={() => setIsModalOpen(false)}>
+                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Voucher Date *</label>
+                <input 
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Clause Description *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. AWS Production Cloud Bill"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type *</label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                  >
+                    <option value="receipt">Credit / Receipt (+)</option>
+                    <option value="payment">Debit / Payment (-)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Account Pool *</label>
+                  <select
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                  >
+                    <option value="bank">HDFC Current Bank A/C</option>
+                    <option value="cash">Daily Physical Cash</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Numeric Amount (INR) *</label>
+                  <input 
+                    type="number"
+                    required
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase font-sans">Reference / Receipt ID *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. RF99120"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Drawer actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                >
+                  Approve Entry Post
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
