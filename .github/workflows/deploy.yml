@@ -1,87 +1,50 @@
-name: Continuous Integration & Deployment (CI/CD)
+name: Deploy static content to Pages
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: ["main"] # 👈 Runs whenever you push code to your "main" branch
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
 jobs:
-  build-and-deploy:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout Repository
-      - name: Checkout repository
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js Environment
-      - name: Set up Node.js
+      - name: Set up NodeJS (v20)
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'npm'
+          node-cache: "npm"
 
-      # Step 3: Install Node Dependencies
-      - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      # Step 4: Validate and Compile Applet 
-      - name: Run Linting and Type Verification
-        run: npm run lint
-
-      - name: Build Assets
+      - name: Compile and Build Static Assets
         run: npm run build
 
-      # Step 5: Authenticate with Google Cloud
-      # Modern secure method: Workload Identity Federation (recommended)
-      # Alternative method: Using a Service Account Secret JSON (uncomment if preferred)
-      - name: Authenticate with Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
+      - name: Setup Pages Ingress
+        uses: actions/configure-pages@v4
+
+      - name: Upload Compile Bundle
+        uses: actions/upload-pages-artifact@v3
         with:
-          # If using service account key (uncomment if using simpler secret method):
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-          # If using Workload Identity (uncomment to configure modern keyless federation):
-          # workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-provider'
-          # service_account: '${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}'
+          path: './dist' # 👈 Points to Vite's output compilation directory
 
-      # Step 6: Set up Cloud SDK
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      # Step 7: Configure Docker integration with Artifact Registry
-      - name: Configure Docker
-        run: |-
-          gcloud auth configure-docker ${{ secrets.GCP_REGION || 'us-central1' }}-docker.pkg.dev --quiet
-
-      # Step 8: Build and Push Docker Container Image
-      - name: Build & Push Container to Artifact Registry
-        run: |-
-          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
-          if [ -z "$PROJECT_ID" ]; then
-            PROJECT_ID=$(node -e "console.log(require('./firebase-applet-config.json').projectId)")
-          fi
-          echo "Building container for target project: $PROJECT_ID"
-          IMAGE_TAG="${{ secrets.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${PROJECT_ID}/${{ secrets.GCP_REGISTRY_NAME || 'cloud-run-source-deploy' }}/${{ secrets.GCP_SERVICE_NAME || 'smart-accounts' }}:${{ github.sha }}"
-          docker build -t $IMAGE_TAG .
-          docker push $IMAGE_TAG
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-      # Step 9: Deploy Container Image to Google Cloud Run
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ secrets.GCP_SERVICE_NAME || 'smart-accounts' }}
-          region: ${{ secrets.GCP_REGION || 'us-central1' }}
-          image: ${{ env.IMAGE_TAG }}
-          flags: '--port=3000 --allow-unauthenticated'
-          env_vars: |-
-            NODE_ENV=production
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            # Add any other required environment variables here
+      - name: Push to Production CDN
+        id: deployment
+        uses: actions/deploy-pages@v4
