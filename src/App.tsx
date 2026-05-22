@@ -339,6 +339,16 @@ export default function App() {
     }
   };
 
+  const handleImportBackup = async (backup: any) => {
+    try {
+      api.importDatabase(backup);
+      showToast("Approved: In-browser database backup restored successfully!");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleCreateUser = async (u: Partial<UserProfile>) => {
     try {
       await api.createUser(u);
@@ -724,6 +734,7 @@ export default function App() {
                 <SettingsModule 
                   settings={businessSettings}
                   onSaveSettings={handleSaveSettings}
+                  onImportBackup={handleImportBackup}
                 />
               )}
             </div>

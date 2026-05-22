@@ -16,19 +16,24 @@ import {
   FileImage,
   Sparkles,
   RefreshCw,
-  Image
+  Image,
+  Database,
+  Download
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 import SignaturePad from './SignaturePad';
+import { api } from '../services/api';
 
 interface SettingsModuleProps {
   settings: BusinessSettings;
   onSaveSettings: (settings: Partial<BusinessSettings>) => Promise<void>;
+  onImportBackup?: (backup: any) => Promise<void>;
 }
 
 export default function SettingsModule({
   settings,
-  onSaveSettings
+  onSaveSettings,
+  onImportBackup
 }: SettingsModuleProps) {
   const [success, setSuccess] = useState(false);
 
@@ -458,6 +463,84 @@ export default function SettingsModule({
               <Save className="w-4 h-4 text-indigo-600" />
               <span>Commit System Parameters</span>
             </button>
+          </div>
+
+          {/* Database Backup & Portability (Decouple Snaps) */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <Database className="w-4 h-4 text-indigo-500" />
+              <span>Snaps Database Portability</span>
+            </h3>
+            <p className="text-xs text-slate-500 leading-normal">
+              This system executes 100% client-side. Download business snapshots as offline backup files, or restore a previous snapshot to synchronize.
+            </p>
+
+            <div className="flex flex-col gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const data = api.exportDatabase();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `Apex_Business_DB_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  } catch (err: any) {
+                    alert("Failed to export database: " + err.message);
+                  }
+                }}
+                className="w-full py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition rounded-2xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer border border-[#818CF8]/25"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Database Backup</span>
+              </button>
+
+              <div className="border-t border-dashed border-slate-100 my-1"></div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Restore snapshot database</label>
+                <div 
+                  className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 rounded-2xl cursor-pointer text-center flex items-center justify-center gap-2 select-none"
+                  onClick={() => {
+                    const input = document.getElementById('db-restore-upload');
+                    if (input) input.click();
+                  }}
+                >
+                  <UploadCloud className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-bold text-slate-600 font-sans">Upload JSON data snapshot...</span>
+                </div>
+                <input
+                  id="db-restore-upload"
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                      try {
+                        const parsed = JSON.parse(reader.result as string);
+                        if (onImportBackup) {
+                          await onImportBackup(parsed);
+                        } else {
+                          api.importDatabase(parsed);
+                          alert("Database imported successfully! Please reload your browser page.");
+                        }
+                      } catch (err: any) {
+                        alert("Malformed/invalid JSON backup file: " + err.message);
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </form>

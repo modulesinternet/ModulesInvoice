@@ -1,0 +1,51 @@
+name: Deploy static content to Pages
+
+on:
+  push:
+    branches: ["main", "master"] # Runs whenever you push code to main or master branches
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up NodeJS (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Compile and Build Static Assets
+        run: npm run build
+
+      - name: Setup Pages Ingress
+        uses: actions/configure-pages@v4
+
+      - name: Upload Compiled Bundle
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist' # Points to Vite's output compilation directory
+
+      - name: Push to Production CDN
+        id: deployment
+        uses: actions/deploy-pages@v4
