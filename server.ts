@@ -1250,14 +1250,14 @@ async function bootServer() {
 
   // Only start the listening server when running as a direct, standalone app
   // (Avoid starting during serverless imports in Firebase Functions)
-  const isFirebase = !!(process.env.FIREBASE_CONFIG || process.env.FUNCTIONS_EMULATOR);
-  if (!isFirebase) {
+  const isFirebaseFunction = process.env.IS_FIREBASE_FUNCTION === "true";
+  if (!isFirebaseFunction) {
     // Listen on all network namespaces for seamless container routing
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Smart Accounts Server up and running at http://localhost:${PORT}`);
     });
   } else {
-    console.log("Firebase environment detected; bypassing standalone Port Listener.");
+    console.log("Firebase Cloud Function environment detected; bypassing standalone Port Listener.");
   }
 }
 
