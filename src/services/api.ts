@@ -73,6 +73,22 @@ export const api = {
     method: 'DELETE',
   }),
 
+  // Categories
+  getCategories: () => request<string[]>('/api/categories'),
+  createCategory: (name: string) => request<{ success: boolean; categories: string[] }>('/api/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  }),
+  updateCategory: (oldName: string, newName: string) => request<{ success: boolean; categories: string[] }>('/api/categories', {
+    method: 'PUT',
+    body: JSON.stringify({ oldName, newName }),
+  }),
+  deleteCategory: (name: string) => request<{ success: boolean; categories: string[] }>('/api/categories', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }),
+
   // Invoices
   getInvoices: () => request<Invoice[]>('/api/invoices'),
   createInvoice: (invoice: Partial<Invoice>) => request<Invoice>('/api/invoices', {

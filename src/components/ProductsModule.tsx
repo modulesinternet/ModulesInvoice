@@ -10,7 +10,9 @@ import {
   ShieldCheck, 
   Layers,
   X,
-  PlusCircle
+  PlusCircle,
+  Save,
+  Check
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -21,6 +23,10 @@ interface ProductsModuleProps {
   onDeleteProduct: (id: string) => Promise<void>;
   canWrite?: boolean;
   canDelete?: boolean;
+  categories: string[];
+  onAddCategory: (name: string) => Promise<void>;
+  onUpdateCategory: (oldName: string, newName: string) => Promise<void>;
+  onDeleteCategory: (name: string) => Promise<void>;
 }
 
 export default function ProductsModule({
@@ -29,30 +35,40 @@ export default function ProductsModule({
   onUpdateProduct,
   onDeleteProduct,
   canWrite = true,
-  canDelete = true
+  canDelete = true,
+  categories = [],
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory
 }: ProductsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  // Category Configuration Modal states
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [updatedCategoryName, setUpdatedCategoryName] = useState('');
+
   // Form states
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
-  const [category, setCategory] = useState('Software Services');
+  const [category, setCategory] = useState(categories[0] || 'Software Services');
   const [price, setPrice] = useState('');
   const [gstPercent, setGstPercent] = useState('18');
   const [hsnSac, setHsnSac] = useState('');
   const [stockQty, setStockQty] = useState('100');
   const [unit, setUnit] = useState('PCS');
 
-  const categories = ['All', 'Software Services', 'Cloud Infrastructure', 'Licensing', 'Creative Services', 'Security Services', 'Hardware Assets', 'Support Retainers'];
+  const filterCategories = ['All', ...categories];
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
     setName('');
     setSku(`SKU-${Date.now().toString().slice(-6)}`);
-    setCategory('Software Services');
+    setCategory(categories[0] || 'Software Services');
     setPrice('');
     setGstPercent('18');
     setHsnSac('994912');
@@ -100,6 +116,59 @@ export default function ProductsModule({
     setIsModalOpen(false);
   };
 
+  // Category Actions
+  const handleCreateCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    try {
+      await onAddCategory(newCategoryName.trim());
+      setNewCategoryName('');
+    } catch (err: any) {
+      alert(err.message || "Failed to create category");
+    }
+  };
+
+  const handleStartRenameCategory = (cat: string) => {
+    setEditingCategoryName(cat);
+    setUpdatedCategoryName(cat);
+  };
+
+  const handleSaveRenameCategory = async (oldName: string) => {
+    const trimmed = updatedCategoryName.trim();
+    if (!trimmed || trimmed === oldName) {
+      setEditingCategoryName(null);
+      return;
+    }
+    try {
+      await onUpdateCategory(oldName, trimmed);
+      setEditingCategoryName(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to rename category");
+    }
+  };
+
+  const handleDeleteCategoryClick = async (cat: string) => {
+    if (cat.toLowerCase() === 'uncategorized') {
+      alert("The default category 'Uncategorized' cannot be deleted.");
+      return;
+    }
+    const linkedProductsCount = products.filter(p => p.category?.toLowerCase() === cat.toLowerCase()).length;
+    const confirmMessage = linkedProductsCount > 0 
+      ? `Are you sure you want to delete category "${cat}"? This will move ${linkedProductsCount} linked catalog product(s) to "Uncategorized".`
+      : `Are you sure you want to delete the category "${cat}" permanently?`;
+      
+    if (confirm(confirmMessage)) {
+      try {
+        await onDeleteCategory(cat);
+        if (selectedCategory === cat) {
+          setSelectedCategory('All');
+        }
+      } catch (err: any) {
+        alert(err.message || "Failed to delete category");
+      }
+    }
+  };
+
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           p.sku.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -124,16 +193,28 @@ export default function ProductsModule({
           <h1 className="text-2xl font-bold text-slate-900 font-display">Products</h1>
           <p className="text-sm text-slate-500">Manage tax codes, HSN alignments, and pricing configurations.</p>
         </div>
-        {canWrite && (
-          <button 
-            onClick={handleOpenAdd}
-            className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2"
-            id="add-product-btn"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Catalogue Item</span>
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canWrite && (
+            <button 
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
+              id="manage-categories-btn"
+            >
+              <Layers className="w-4 h-4 text-slate-500" />
+              <span>Manage Categories</span>
+            </button>
+          )}
+          {canWrite && (
+            <button 
+              onClick={handleOpenAdd}
+              className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+              id="add-product-btn"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Catalogue Item</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* FILTER BUTTONS & SEARCH BAR */}
@@ -159,7 +240,7 @@ export default function ProductsModule({
 
         {/* Categories Pills */}
         <div className="flex flex-wrap gap-2 pt-2 border-t border-[#E5E7EB]">
-          {categories.map((cat) => (
+          {filterCategories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -372,13 +453,9 @@ export default function ProductsModule({
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 >
-                  <option value="Software Services">Software Services</option>
-                  <option value="Cloud Infrastructure">Cloud Infrastructure</option>
-                  <option value="Licensing">Licensing</option>
-                  <option value="Creative Services">Creative Services</option>
-                  <option value="Security Services">Security Services</option>
-                  <option value="Hardware Assets">Hardware Assets</option>
-                  <option value="Support Retainers">Support Retainers</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
                 </select>
               </div>
 
@@ -386,18 +463,160 @@ export default function ProductsModule({
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
+                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md"
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
                   {editingProduct ? 'Save Changes' : 'Confirm Catalogue Item'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORY CRUD DIALOG */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" id="category-crud-modal">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-xl border border-[#E5E7EB]">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-base font-display">Category Configuration Master</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setEditingCategoryName(null);
+                }} 
+                className="text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* CREATE ACTION */}
+              <form onSubmit={handleCreateCategorySubmit} className="space-y-2">
+                <label className="text-[11px] font-bold text-slate-400 uppercase block font-sans">Add Product / Service Category</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. Consulting Services"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="flex-1 text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                    id="new-category-input"
+                  />
+                  <button
+                    type="submit"
+                    className="gradient-btn rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                    id="submit-new-category-btn"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* READ / UPDATE / DELETE CONTAINER */}
+              <div className="space-y-3">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block font-sans pb-1 border-b border-slate-100">
+                  Active Asset Categories ({categories.length})
+                </div>
+
+                <div className="max-h-64 overflow-y-auto pr-1 space-y-2" id="category-items-list">
+                  {categories.map((cat) => {
+                    const linkedCount = products.filter(p => p.category?.toLowerCase() === cat.toLowerCase()).length;
+                    const isEditing = editingCategoryName === cat;
+
+                    return (
+                      <div 
+                        key={cat} 
+                        className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60 hover:bg-slate-50/80 transition"
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 w-full">
+                            <input 
+                              type="text"
+                              value={updatedCategoryName}
+                              onChange={(e) => setUpdatedCategoryName(e.target.value)}
+                              className="flex-1 text-xs p-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveRenameCategory(cat)}
+                              className="p-1 px-2.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Save</span>
+                            </button>
+                            <button
+                              onClick={() => setEditingCategoryName(null)}
+                              className="p-1 px-2 text-[10px] font-medium text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg transition cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-800">{cat}</span>
+                              <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                {linkedCount} linked catalog {linkedCount === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {/* UPDATE ACTION GRID TRIGGER */}
+                              <button 
+                                onClick={() => handleStartRenameCategory(cat)}
+                                className="p-1 px-2 text-[10px] font-medium text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                title="Rename Category"
+                              >
+                                <Edit className="w-3 h-3" />
+                                <span>Rename</span>
+                              </button>
+                              
+                              {/* DELETE ACTION GRID TRIGGER */}
+                              <button 
+                                onClick={() => handleDeleteCategoryClick(cat)}
+                                className="p-1 px-2 text-[10px] font-medium text-rose-600 hover:text-rose-700 border border-rose-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                title="Delete Category"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {categories.length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-400">
+                      No categories registered yet. Use the fields above to align catalog properties.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end">
+              <button 
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setEditingCategoryName(null);
+                }}
+                className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Close Panel
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -73,6 +73,7 @@ export default function App() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
   
   // RBAC Access management state
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
@@ -106,7 +107,8 @@ export default function App() {
         logsData,
         notificationsData,
         settingsData,
-        rolesData
+        rolesData,
+        categoriesData
       ] = await Promise.all([
         api.getDashboard(),
         api.getClients(),
@@ -120,7 +122,8 @@ export default function App() {
         api.getLogs(),
         api.getNotifications(),
         api.getSettings(),
-        api.getRoles()
+        api.getRoles(),
+        api.getCategories()
       ]);
 
       setDashboardMetrics(dashData);
@@ -136,6 +139,7 @@ export default function App() {
       setNotifications(notificationsData);
       setBusinessSettings(settingsData);
       setAppRoles(rolesData);
+      setCategories(categoriesData);
     } catch (e: any) {
       console.error("Fetch pipeline error: ", e);
       // If permission is denied because they shifted tab, keep loading other states graceful
@@ -229,6 +233,36 @@ export default function App() {
     try {
       await api.deleteProduct(id);
       showToast("Catalogue item removed.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleAddCategory = async (name: string) => {
+    try {
+      await api.createCategory(name);
+      showToast(`Category "${name}" added successfully.`);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateCategory = async (oldName: string, newName: string) => {
+    try {
+      await api.updateCategory(oldName, newName);
+      showToast(`Category renamed to "${newName}" successfully.`);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteCategory = async (name: string) => {
+    try {
+      await api.deleteCategory(name);
+      showToast(`Category "${name}" has been deleted.`);
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -618,6 +652,10 @@ export default function App() {
                   onDeleteProduct={handleDeleteProduct}
                   canWrite={getModulePermissions('products').write}
                   canDelete={getModulePermissions('products').delete}
+                  categories={categories}
+                  onAddCategory={handleAddCategory}
+                  onUpdateCategory={handleUpdateCategory}
+                  onDeleteCategory={handleDeleteCategory}
                 />
               )}
 
