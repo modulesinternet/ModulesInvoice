@@ -479,7 +479,9 @@ async function bootstrapFromFirestore() {
 
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'bootstrap');
+    console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap.");
+    console.warn("The server will proceed running using the local in-memory database fallback.");
+    console.warn("Details:", error instanceof Error ? error.message : String(error));
   }
 }
 
