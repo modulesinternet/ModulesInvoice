@@ -208,10 +208,65 @@ async function testConnection() {
   }
 }
 
+// Define path for local persistent backup
+const LOCAL_CACHE_PATH = path.join(__dirname, 'local-db-cache.json');
+
+// Self-contained file database persistent helpers
+function saveStateToLocalCache() {
+  const data = {
+    db_settings,
+    db_clients,
+    db_products,
+    db_invoices,
+    db_quotations,
+    db_payments,
+    db_ledger,
+    db_cashbook,
+    db_logs,
+    db_notifications,
+    db_users,
+    db_categories,
+    db_roles
+  };
+  try {
+    fs.writeFileSync(LOCAL_CACHE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    console.error("Failed to write to local state cache file: ", error);
+  }
+}
+
+function loadStateFromLocalCache() {
+  if (fs.existsSync(LOCAL_CACHE_PATH)) {
+    try {
+      const raw = fs.readFileSync(LOCAL_CACHE_PATH, 'utf8');
+      const data = JSON.parse(raw);
+      if (data.db_settings) db_settings = data.db_settings;
+      if (data.db_clients) db_clients = data.db_clients;
+      if (data.db_products) db_products = data.db_products;
+      if (data.db_invoices) db_invoices = data.db_invoices;
+      if (data.db_quotations) db_quotations = data.db_quotations;
+      if (data.db_payments) db_payments = data.db_payments;
+      if (data.db_ledger) db_ledger = data.db_ledger;
+      if (data.db_cashbook) db_cashbook = data.db_cashbook;
+      if (data.db_logs) db_logs = data.db_logs;
+      if (data.db_notifications) db_notifications = data.db_notifications;
+      if (data.db_users) db_users = data.db_users;
+      if (data.db_categories) db_categories = data.db_categories;
+      if (data.db_roles) db_roles = data.db_roles;
+      console.log("Local database file cache successfully loaded & restored!");
+    } catch (e) {
+      console.error("Failed to load local state cache file: ", e);
+    }
+  }
+}
+
 testConnection();
 
-// Direct synchronizer helper mapping active state mutations to Cloud Firestore
+// Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
 async function syncStateToFirestore(topic: string, id?: string) {
+  // Always commit synchronously to local file cache as priority persistent layer
+  saveStateToLocalCache();
+
   if (!db) return;
   try {
     if (topic === 'settings') {
@@ -322,14 +377,21 @@ async function syncStateToFirestore(topic: string, id?: string) {
       }
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, topic);
+    // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
+    console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
   }
 }
 
 // Master state-synchronization bootstrapper. Pulls down persistent Firestore data to prime the cache,
 // or performs an automatic default seed if Firestore is detected to be completely empty.
 async function bootstrapFromFirestore() {
-  if (!db) return;
+  // Always load from local JSON cache first to keep any changes saved offline
+  loadStateFromLocalCache();
+
+  if (!db) {
+    console.log("Firebase DB not configured or disabled. Running in full local cache model.");
+    return;
+  }
   try {
     console.log("Synchronizing memory database and seeding Firestore if required...");
     
@@ -481,7 +543,8 @@ async function bootstrapFromFirestore() {
   } catch (error) {
     console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap.");
     console.warn("The server will proceed running using the local in-memory database fallback.");
-    console.warn("Details:", error instanceof Error ? error.message : String(error));
+    console.warn("Disabling active Firestore communication to prevent runtime API issues.");
+    db = null; // Important: Disable Firestore triggers completely
   }
 }
 
