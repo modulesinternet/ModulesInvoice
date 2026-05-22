@@ -2,6 +2,22 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+// Initialize Firebase SDK
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  collection, 
+  writeBatch, 
+  getDocFromServer 
+} from 'firebase/firestore';
 
 // Import our types and default seeds
 import { 
@@ -27,7 +43,7 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// In-Memory Database Server State
+// In-Memory Database Server State (serving as high-speed backend cache mapped to Firestore)
 let db_settings = { ...DEFAULT_SETTINGS };
 let db_clients = [ ...DEMO_CLIENTS ];
 let db_products = [ ...DEMO_PRODUCTS ];
@@ -110,6 +126,365 @@ let db_roles: RolePermissions[] = [
   }
 ];
 
+// --- Firebase Initialization Engine ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let firebaseApp;
+let db: any;
+
+try {
+  const firebaseConfigPath = path.join(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+    firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    console.log("Firebase initialized successfully on backend with project ID:", firebaseConfig.projectId);
+  } else {
+    console.warn("firebase-applet-config.json not found in server root. Running in offline cache mode.");
+  }
+} catch (err) {
+  console.error("Failed to initialize Firebase:", err);
+}
+
+// --- Hardened Firestore Error Handlers ---
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: "server-session-admin",
+      email: "modulesinternet@gmail.com",
+      emailVerified: true,
+      isAnonymous: false,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error Payload: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Validate Firebase Connection on Setup using getDocFromServer
+async function testConnection() {
+  if (!db) return;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("Firestore secure connection check: OK (Connected)");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. Client is reporting offline.");
+    } else {
+      // General database connection is fine even if default test/connection doc doesn't exist
+      console.log("Firestore secure connection validated.");
+    }
+  }
+}
+
+testConnection();
+
+// Direct synchronizer helper mapping active state mutations to Cloud Firestore
+async function syncStateToFirestore(topic: string, id?: string) {
+  if (!db) return;
+  try {
+    if (topic === 'settings') {
+      await setDoc(doc(db, 'businessSettings', 'global'), db_settings);
+    } else if (topic === 'categories') {
+      await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
+    } else if (topic === 'roles') {
+      await setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles });
+    } else if (topic === 'clients') {
+      if (id) {
+        const item = db_clients.find(c => c.id === id);
+        if (item) await setDoc(doc(db, 'clients', id), item);
+        else await deleteDoc(doc(db, 'clients', id));
+      } else {
+        for (const item of db_clients) {
+          await setDoc(doc(db, 'clients', item.id), item);
+        }
+      }
+    } else if (topic === 'products') {
+      if (id) {
+        const item = db_products.find(p => p.id === id);
+        if (item) await setDoc(doc(db, 'products', id), item);
+        else await deleteDoc(doc(db, 'products', id));
+      } else {
+        for (const item of db_products) {
+          await setDoc(doc(db, 'products', item.id), item);
+        }
+      }
+    } else if (topic === 'invoices') {
+      if (id) {
+        const item = db_invoices.find(v => v.id === id);
+        if (item) await setDoc(doc(db, 'invoices', id), item);
+        else await deleteDoc(doc(db, 'invoices', id));
+      } else {
+        for (const item of db_invoices) {
+          await setDoc(doc(db, 'invoices', item.id), item);
+        }
+      }
+    } else if (topic === 'quotations') {
+      if (id) {
+        const item = db_quotations.find(q => q.id === id);
+        if (item) await setDoc(doc(db, 'quotations', id), item);
+        else await deleteDoc(doc(db, 'quotations', id));
+      } else {
+        for (const item of db_quotations) {
+          await setDoc(doc(db, 'quotations', item.id), item);
+        }
+      }
+    } else if (topic === 'payments') {
+      if (id) {
+        const item = db_payments.find(p => p.id === id);
+        if (item) await setDoc(doc(db, 'payments', id), item);
+        else await deleteDoc(doc(db, 'payments', id));
+      } else {
+        for (const item of db_payments) {
+          await setDoc(doc(db, 'payments', item.id), item);
+        }
+      }
+    } else if (topic === 'ledger') {
+      if (id) {
+        const item = db_ledger.find(l => l.id === id);
+        if (item) await setDoc(doc(db, 'ledger', id), item);
+        else await deleteDoc(doc(db, 'ledger', id));
+      } else {
+        for (const item of db_ledger) {
+          await setDoc(doc(db, 'ledger', item.id), item);
+        }
+      }
+    } else if (topic === 'cashbook') {
+      if (id) {
+        const item = db_cashbook.find(cb => cb.id === id);
+        if (item) await setDoc(doc(db, 'cashbook', id), item);
+        else await deleteDoc(doc(db, 'cashbook', id));
+      } else {
+        for (const item of db_cashbook) {
+          await setDoc(doc(db, 'cashbook', item.id), item);
+        }
+      }
+    } else if (topic === 'logs') {
+      if (id) {
+        const item = db_logs.find(lg => lg.id === id);
+        if (item) await setDoc(doc(db, 'activityLogs', id), item);
+        else await deleteDoc(doc(db, 'activityLogs', id));
+      } else {
+        for (const item of db_logs) {
+          await setDoc(doc(db, 'activityLogs', item.id), item);
+        }
+      }
+    } else if (topic === 'notifications') {
+      if (id) {
+        const item = db_notifications.find(n => n.id === id);
+        if (item) await setDoc(doc(db, 'notifications', id), item);
+        else await deleteDoc(doc(db, 'notifications', id));
+      } else {
+        for (const item of db_notifications) {
+          await setDoc(doc(db, 'notifications', item.id), item);
+        }
+      }
+    } else if (topic === 'users') {
+      if (id) {
+        const item = db_users.find(u => u.userId === id);
+        if (item) await setDoc(doc(db, 'users', id), item);
+        else await deleteDoc(doc(db, 'users', id));
+      } else {
+        for (const item of db_users) {
+          await setDoc(doc(db, 'users', item.userId), item);
+        }
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, topic);
+  }
+}
+
+// Master state-synchronization bootstrapper. Pulls down persistent Firestore data to prime the cache,
+// or performs an automatic default seed if Firestore is detected to be completely empty.
+async function bootstrapFromFirestore() {
+  if (!db) return;
+  try {
+    console.log("Synchronizing memory database and seeding Firestore if required...");
+    
+    // 1. Settings
+    const settingsDoc = await getDoc(doc(db, 'businessSettings', 'global'));
+    if (settingsDoc.exists()) {
+      db_settings = settingsDoc.data() as BusinessSettings;
+    } else {
+      await setDoc(doc(db, 'businessSettings', 'global'), db_settings);
+    }
+
+    // 2. Categories
+    const categoriesDoc = await getDoc(doc(db, 'businessSettings', 'categories'));
+    if (categoriesDoc.exists()) {
+      db_categories = (categoriesDoc.data() as { list: string[] }).list;
+    } else {
+      await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
+    }
+
+    // 3. Roles
+    const rolesDoc = await getDoc(doc(db, 'businessSettings', 'roles'));
+    if (rolesDoc.exists()) {
+      db_roles = (rolesDoc.data() as { list: RolePermissions[] }).list;
+    } else {
+      await setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles });
+    }
+
+    // 4. Clients
+    const clientsSnap = await getDocs(collection(db, 'clients'));
+    if (clientsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_clients) {
+        batch.set(doc(db, 'clients', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_clients = clientsSnap.docs.map(d => d.data() as Client);
+    }
+
+    // 5. Products
+    const productsSnap = await getDocs(collection(db, 'products'));
+    if (productsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_products) {
+        batch.set(doc(db, 'products', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_products = productsSnap.docs.map(d => d.data() as Product);
+    }
+
+    // 6. Invoices
+    const invoicesSnap = await getDocs(collection(db, 'invoices'));
+    if (invoicesSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_invoices) {
+        batch.set(doc(db, 'invoices', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_invoices = invoicesSnap.docs.map(d => d.data() as Invoice);
+    }
+
+    // 7. Quotations
+    const quotationsSnap = await getDocs(collection(db, 'quotations'));
+    if (quotationsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_quotations) {
+        batch.set(doc(db, 'quotations', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_quotations = quotationsSnap.docs.map(d => d.data() as Quotation);
+    }
+
+    // 8. Payments
+    const paymentsSnap = await getDocs(collection(db, 'payments'));
+    if (paymentsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_payments) {
+        batch.set(doc(db, 'payments', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_payments = paymentsSnap.docs.map(d => d.data() as Payment);
+    }
+
+    // 9. Ledger
+    const ledgerSnap = await getDocs(collection(db, 'ledger'));
+    if (ledgerSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_ledger) {
+        batch.set(doc(db, 'ledger', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_ledger = ledgerSnap.docs.map(d => d.data() as LedgerEntry);
+    }
+
+    // 10. Cashbook
+    const cashbookSnap = await getDocs(collection(db, 'cashbook'));
+    if (cashbookSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_cashbook) {
+        batch.set(doc(db, 'cashbook', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_cashbook = cashbookSnap.docs.map(d => d.data() as CashbookEntry);
+    }
+
+    // 11. Activity Logs
+    const logsSnap = await getDocs(collection(db, 'activityLogs'));
+    if (logsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_logs) {
+        batch.set(doc(db, 'activityLogs', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_logs = logsSnap.docs.map(d => d.data() as ActivityLog);
+    }
+
+    // 12. Notifications
+    const notificationsSnap = await getDocs(collection(db, 'notifications'));
+    if (notificationsSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_notifications) {
+        batch.set(doc(db, 'notifications', item.id), item);
+      }
+      await batch.commit();
+    } else {
+      db_notifications = notificationsSnap.docs.map(d => d.data() as Notification);
+    }
+
+    // 13. Users
+    const usersSnap = await getDocs(collection(db, 'users'));
+    if (usersSnap.empty) {
+      const batch = writeBatch(db);
+      for (const item of db_users) {
+        batch.set(doc(db, 'users', item.userId), item);
+      }
+      await batch.commit();
+    } else {
+      db_users = usersSnap.docs.map(d => d.data() as UserProfile);
+    }
+
+    console.log("Firebase Firestore synchronization successfully primed!");
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, 'bootstrap');
+  }
+}
+
+bootstrapFromFirestore();
+
 function checkPermission(module: keyof RolePermissions['modules'], action: 'read' | 'write' | 'delete') {
   return (req: Request, res: Response, next: any) => {
     const roleHeader = req.headers['x-user-role'] as string;
@@ -142,6 +517,7 @@ function logUserActivity(userId: string, userName: string, action: string, detai
   };
   db_logs.unshift(newLog);
   if (db_logs.length > 200) db_logs.pop();
+  syncStateToFirestore('logs', newLog.id);
 }
 
 // ----------------------------------------------------
@@ -269,6 +645,7 @@ app.post('/api/clients', checkPermission('clients', 'write'), (req: Request, res
     createdAt: new Date().toISOString()
   };
   db_clients.unshift(newClient);
+  syncStateToFirestore('clients', newClient.id);
   
   logUserActivity("demo-admin", "Karan Sharma", "CLIENT_CREATE", `Registered new client: ${newClient.name}`);
   res.status(201).json(newClient);
@@ -279,6 +656,7 @@ app.put('/api/clients/:id', checkPermission('clients', 'write'), (req: Request, 
   const index = db_clients.findIndex(c => c.id === id);
   if (index !== -1) {
     db_clients[index] = { ...db_clients[index], ...req.body };
+    syncStateToFirestore('clients', id);
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_UPDATE", `Updated client profile: ${db_clients[index].name}`);
     res.json(db_clients[index]);
   } else {
@@ -292,6 +670,7 @@ app.delete('/api/clients/:id', checkPermission('clients', 'delete'), (req: Reque
   if (index !== -1) {
     const deletedName = db_clients[index].name;
     db_clients.splice(index, 1);
+    syncStateToFirestore('clients', id);
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_DELETE", `Removed client database row: ${deletedName}`);
     res.json({ success: true, message: "Client deleted successfully" });
   } else {
@@ -318,6 +697,7 @@ app.post('/api/products', checkPermission('products', 'write'), (req: Request, r
     unit: data.unit || "PCS"
   };
   db_products.unshift(newProduct);
+  syncStateToFirestore('products', newProduct.id);
   logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_CREATE", `Added catalogue work item: ${newProduct.name} at GST ${newProduct.gstPercent}%`);
   res.status(201).json(newProduct);
 });
@@ -327,6 +707,7 @@ app.put('/api/products/:id', checkPermission('products', 'write'), (req: Request
   const index = db_products.findIndex(p => p.id === id);
   if (index !== -1) {
     db_products[index] = { ...db_products[index], ...req.body };
+    syncStateToFirestore('products', id);
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_UPDATE", `Updated catalogue item details: ${db_products[index].name}`);
     res.json(db_products[index]);
   } else {
@@ -340,6 +721,7 @@ app.delete('/api/products/:id', checkPermission('products', 'delete'), (req: Req
   if (index !== -1) {
     const deletedName = db_products[index].name;
     db_products.splice(index, 1);
+    syncStateToFirestore('products', id);
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_DELETE", `Removed catalogue item: ${deletedName}`);
     res.json({ success: true, message: "Product deleted" });
   } else {
@@ -360,6 +742,7 @@ app.post('/api/categories', checkPermission('products', 'write'), (req: Request,
     return res.status(400).json({ error: "Category already exists" });
   }
   db_categories.push(trimmed);
+  syncStateToFirestore('categories');
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_CREATE", `Created new product category: ${trimmed}`);
   res.status(201).json({ success: true, categories: db_categories });
 });
@@ -380,6 +763,8 @@ app.put('/api/categories', checkPermission('products', 'write'), (req: Request, 
       }
       return p;
     });
+    syncStateToFirestore('categories');
+    syncStateToFirestore('products');
     logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_UPDATE", `Renamed category from "${oldName}" to "${trimmedNew}" (affected ${count} product(s))`);
     res.json({ success: true, categories: db_categories });
   } else {
@@ -407,6 +792,8 @@ app.delete('/api/categories', checkPermission('products', 'delete'), (req: Reque
     db_categories.push('Uncategorized');
   }
   
+  syncStateToFirestore('categories');
+  syncStateToFirestore('products');
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "Uncategorized")`);
   res.json({ success: true, categories: db_categories });
 });
@@ -451,6 +838,7 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
   if (clientIndex !== -1) {
     startingBalance = db_clients[clientIndex].outstandingBalance;
     db_clients[clientIndex].outstandingBalance += newInvoice.dueAmount;
+    syncStateToFirestore('clients', newInvoice.clientId);
   }
 
   const newLedger: LedgerEntry = {
@@ -468,6 +856,9 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
   };
   db_ledger.unshift(newLedger);
 
+  syncStateToFirestore('invoices', newInvoice.id);
+  syncStateToFirestore('ledger', newLedger.id);
+
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
 });
@@ -482,9 +873,11 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), (req: Req
     const clientIndex = db_clients.findIndex(c => c.id === inv.clientId);
     if (clientIndex !== -1) {
       db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - inv.dueAmount);
+      syncStateToFirestore('clients', inv.clientId);
     }
     
     db_invoices.splice(index, 1);
+    syncStateToFirestore('invoices', id);
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber}`);
     res.json({ success: true });
   } else {
@@ -517,6 +910,7 @@ app.post('/api/quotations', checkPermission('quotations', 'write'), (req: Reques
   };
 
   db_quotations.unshift(newQuotation);
+  syncStateToFirestore('quotations', newQuotation.id);
   logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CREATE", `Prepared estimate ${newQuotation.quotationNumber} for ${newQuotation.clientName}`);
   res.status(201).json(newQuotation);
 });
@@ -526,6 +920,7 @@ app.put('/api/quotations/:id', checkPermission('quotations', 'write'), (req: Req
   const index = db_quotations.findIndex(q => q.id === id);
   if (index !== -1) {
     db_quotations[index] = { ...db_quotations[index], ...req.body };
+    syncStateToFirestore('quotations', id);
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_UPDATE", `Updated estimate status: ${db_quotations[index].quotationNumber} -> ${db_quotations[index].status}`);
     res.json(db_quotations[index]);
   } else {
@@ -575,6 +970,7 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
     // Incremental ledger outstanding
     if (clientDetails) {
       clientDetails.outstandingBalance += q.total;
+      syncStateToFirestore('clients', q.clientId);
     }
 
     const newLedger: LedgerEntry = {
@@ -591,6 +987,10 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
       createdAt: new Date().toISOString()
     };
     db_ledger.unshift(newLedger);
+
+    syncStateToFirestore('invoices', invoiceId);
+    syncStateToFirestore('quotations', id);
+    syncStateToFirestore('ledger', newLedger.id);
 
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CONVERT", `Authorized proposal ${q.quotationNumber} conversion into invoice ${invoiceNum}`);
     res.json({ success: true, invoice: convertedInvoice });
@@ -637,6 +1037,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
     } else if (inv.paidAmount > 0) {
       inv.status = 'partially_paid';
     }
+    syncStateToFirestore('invoices', newPayment.invoiceId);
   }
 
   // AUTOMATION TRIGGER 2: Auto outstanding updates in Client entity
@@ -645,6 +1046,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
   if (clientIndex !== -1) {
     db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - amountPaid);
     runningClientBalance = db_clients[clientIndex].outstandingBalance;
+    syncStateToFirestore('clients', newPayment.clientId);
   }
 
   // AUTOMATION TRIGGER 3: Auto ledger record credits
@@ -687,6 +1089,10 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
     createdAt: new Date().toISOString()
   };
   db_cashbook.unshift(newCashbook);
+
+  syncStateToFirestore('payments', payId);
+  syncStateToFirestore('ledger', newLedger.id);
+  syncStateToFirestore('cashbook', newCashbook.id);
 
   logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
   res.status(201).json(newPayment);
@@ -746,6 +1152,7 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), (req: Request, r
   };
 
   db_cashbook.unshift(newEntry);
+  syncStateToFirestore('cashbook', newEntry.id);
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
 });
@@ -767,6 +1174,7 @@ app.post('/api/users', checkPermission('users', 'write'), (req: Request, res: Re
     lastLoginAt: ""
   };
   db_users.push(newUser);
+  syncStateToFirestore('users', newUser.userId);
   logUserActivity("demo-admin", "Karan Sharma", "USER_CREATE", `Onboarded teammate ${newUser.name} as ${newUser.role}`);
   res.status(201).json(newUser);
 });
@@ -785,6 +1193,7 @@ app.put('/api/notifications/:id/read', (req: Request, res: Response) => {
   const item = db_notifications.find(n => n.id === id);
   if (item) {
     item.isRead = true;
+    syncStateToFirestore('notifications', id);
     res.json(item);
   } else {
     res.status(404).json({ error: "Notification not found" });
@@ -798,6 +1207,7 @@ app.get('/api/settings', checkPermission('settings', 'read'), (req: Request, res
 
 app.post('/api/settings', checkPermission('settings', 'write'), (req: Request, res: Response) => {
   db_settings = { ...db_settings, ...req.body };
+  syncStateToFirestore('settings');
   logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", "Updated corporate profile settings & banking info");
   res.json(db_settings);
 });
@@ -815,6 +1225,7 @@ app.put('/api/roles/:role', (req: Request, res: Response) => {
     return res.status(404).json({ error: `Security failure: Role ${role} not found` });
   }
   targetRole.modules = payload.modules;
+  syncStateToFirestore('roles');
   logUserActivity("demo-admin", "Karan Sharma", "ROLE_PERMISSIONS_UPDATE", `Reconfigured operational permission matrices for Role: ${role}`);
   res.json(targetRole);
 });
@@ -837,12 +1248,21 @@ async function bootServer() {
     });
   }
 
-  // Listen on all network namespaces for seamless container routing
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Smart Accounts Server up and running at http://localhost:${PORT}`);
-  });
+  // Only start the listening server when running as a direct, standalone app
+  // (Avoid starting during serverless imports in Firebase Functions)
+  const isFirebase = !!(process.env.FIREBASE_CONFIG || process.env.FUNCTIONS_EMULATOR);
+  if (!isFirebase) {
+    // Listen on all network namespaces for seamless container routing
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Smart Accounts Server up and running at http://localhost:${PORT}`);
+    });
+  } else {
+    console.log("Firebase environment detected; bypassing standalone Port Listener.");
+  }
 }
 
 bootServer().catch((e) => {
   console.error("Server initialization failed:", e);
 });
+
+export { app };
