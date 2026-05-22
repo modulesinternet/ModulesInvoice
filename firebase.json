@@ -5,7 +5,7 @@
   },
   "functions": {
     "source": ".",
-    "runtime": "nodejs18",
+    "runtime": "nodejs22",
     "codebase": "default",
     "ignore": [
       "firestore.rules",
