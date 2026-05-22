@@ -6,7 +6,20 @@
   "functions": {
     "source": ".",
     "runtime": "nodejs18",
-    "codebase": "default"
+    "codebase": "default",
+    "ignore": [
+      "firestore.rules",
+      "firestore.indexes.json",
+      "firebase-applet-config.json",
+      "firebase-blueprint.json",
+      ".git",
+      ".github",
+      "src",
+      "node_modules",
+      "firebase-debug.log",
+      "firestore-debug.log",
+      "ui-debug.log"
+    ]
   },
   "hosting": {
     "public": "dist",
