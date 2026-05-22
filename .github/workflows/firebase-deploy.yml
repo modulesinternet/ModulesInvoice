@@ -50,7 +50,18 @@ jobs:
             PROJECT_ID=$(node -e "console.log(require('./firebase-applet-config.json').projectId)")
           fi
           echo "Deploying to Firebase project ID: $PROJECT_ID"
-          npx firebase-tools deploy --only hosting,functions --project "$PROJECT_ID"
+          echo "Checking if GOOGLE_APPLICATION_CREDENTIALS exists..."
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            echo "GOOGLE_APPLICATION_CREDENTIALS environment variable is set."
+            if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+              echo "Credentials file exists at $GOOGLE_APPLICATION_CREDENTIALS size: $(wc -c < "$GOOGLE_APPLICATION_CREDENTIALS") bytes."
+            else
+              echo "Credentials file does NOT exist at $GOOGLE_APPLICATION_CREDENTIALS"
+            fi
+          else
+            echo "GOOGLE_APPLICATION_CREDENTIALS is NOT set."
+          fi
+          npx firebase-tools deploy --only hosting,functions --project "$PROJECT_ID" --debug
         env:
           # Expose the Gemini AI secret to the Cloud environment if needed or passed during pipeline execution
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
