@@ -3,9 +3,10 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Copy lockfiles and dependencies
+# Copy package configurations
 COPY package*.json ./
-RUN npm ci
+# Remove package-lock.json to enforce correct platform-specific binary installations
+RUN rm -f package-lock.json && npm install
 
 # Copy codebase
 COPY . .
@@ -24,8 +25,8 @@ ENV PORT=3000
 # Copy packages configuration
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --omit=dev
+# Install only production dependencies cleanly
+RUN rm -f package-lock.json && npm install --omit=dev
 
 # Copy production compiled bundles and client assets from builder stage
 COPY --from=builder /app/dist ./dist

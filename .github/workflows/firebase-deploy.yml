@@ -45,8 +45,12 @@ jobs:
       # Step 6: Install Firebase-Tools & Deploy Serverless Resources
       - name: Deploy to Firebase (Hosting & Functions)
         run: |
-          # Use npx to run the latest Firebase tools safely
-          npx firebase-tools deploy --only hosting,functions --project ${{ secrets.GCP_PROJECT_ID }}
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          if [ -z "$PROJECT_ID" ]; then
+            PROJECT_ID=$(node -e "console.log(require('./firebase-applet-config.json').projectId)")
+          fi
+          echo "Deploying to Firebase project ID: $PROJECT_ID"
+          npx firebase-tools deploy --only hosting,functions --project "$PROJECT_ID"
         env:
           # Expose the Gemini AI secret to the Cloud environment if needed or passed during pipeline execution
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
