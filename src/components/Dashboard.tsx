@@ -86,14 +86,6 @@ export default function Dashboard({
         </div>
         <div className="flex items-center gap-3">
           <button 
-            onClick={onRefresh}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 text-slate-600 transition"
-            id="refresh-dash-btn"
-          >
-            <RefreshCw className="w-4 h-4 text-slate-500" />
-            <span className="text-xs font-medium">Sync Ledger</span>
-          </button>
-          <button 
             onClick={() => onNavigate('invoices')}
             className="gradient-btn px-4 py-2 rounded-xl text-xs font-medium shadow-sm flex items-center gap-2"
             id="quick-raise-invoice-btn"

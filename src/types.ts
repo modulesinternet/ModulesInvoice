@@ -20,8 +20,8 @@ export interface Client {
   name: string;
   email: string;
   phone: string;
-  gstIn: string;
-  pan: string;
+  gstIn?: string;
+  pan?: string;
   billingAddress: string;
   shippingAddress: string;
   outstandingBalance: number;
@@ -31,19 +31,19 @@ export interface Client {
 export interface Product {
   id: string;
   name: string;
-  sku: string;
+  sku?: string;
   category: string;
   price: number;
   gstPercent: number; // e.g. 5, 12, 18, 28
-  hsnSac: string;
-  stockQty: number;
-  unit: string;
+  hsnSac?: string;
+  stockQty?: number;
+  unit?: string;
 }
 
 export interface InvoiceItem {
   productId: string;
   name: string;
-  hsnSac: string;
+  hsnSac?: string;
   qty: number;
   price: number;
   gstPercent: number;
@@ -75,7 +75,7 @@ export interface Invoice {
 export interface QuotationItem {
   productId: string;
   name: string;
-  hsnSac: string;
+  hsnSac?: string;
   qty: number;
   price: number;
   gstPercent: number;
@@ -162,6 +162,7 @@ export interface BusinessSettings {
   signatureUrl?: string;
   timezone?: string;
   gstOption?: "standard" | "zero_tax";
+  titleBarText?: string;
 }
 
 export interface ActivityLog {

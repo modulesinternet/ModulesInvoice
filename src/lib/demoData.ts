@@ -19,7 +19,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   logoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
   signatureUrl: "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
   timezone: "Asia/Kolkata",
-  gstOption: "standard"
+  gstOption: "standard",
+  titleBarText: "Apex Digital Solutions"
 };
 
 export const DEMO_USERS: UserProfile[] = [

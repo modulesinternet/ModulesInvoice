@@ -88,7 +88,7 @@ export default function LedgerModule({
             <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-sm flex flex-col justify-between">
               <span className="text-[10px] text-slate-400 uppercase font-bold">Client Account Particulars</span>
               <h4 className="font-bold text-slate-800 text-sm mt-1">{selectedClientObj.name}</h4>
-              <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 mt-2 rounded max-w-max uppercase">{selectedClientObj.gstIn}</span>
+              <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 mt-2 rounded max-w-max uppercase">{selectedClientObj.gstIn || 'URP'}</span>
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-sm">

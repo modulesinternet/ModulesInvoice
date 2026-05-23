@@ -213,7 +213,7 @@ export default function App() {
     return defaults;
   });
 
-  const companyNameText = businessSettings?.companyName || "Apex Digital Solutions";
+  const companyNameText = businessSettings?.titleBarText || businessSettings?.companyName || "Apex Digital Solutions";
   const companyInitials = companyNameText
     .split(/\s+/)
     .map((word) => word.charAt(0))
@@ -1272,7 +1272,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'products' && (
+              {activeTab === 'products' && businessSettings && (
                 <ProductsModule 
                   products={products}
                   onAddProduct={handleAddProduct}
@@ -1284,6 +1284,7 @@ export default function App() {
                   onAddCategory={handleAddCategory}
                   onUpdateCategory={handleUpdateCategory}
                   onDeleteCategory={handleDeleteCategory}
+                  businessSettings={businessSettings}
                 />
               )}
 

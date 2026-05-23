@@ -28,6 +28,7 @@ interface ProductsModuleProps {
   onAddCategory: (name: string) => Promise<void>;
   onUpdateCategory: (oldName: string, newName: string) => Promise<void>;
   onDeleteCategory: (name: string) => Promise<void>;
+  businessSettings: any;
 }
 
 export default function ProductsModule({
@@ -40,7 +41,8 @@ export default function ProductsModule({
   categories = [],
   onAddCategory,
   onUpdateCategory,
-  onDeleteCategory
+  onDeleteCategory,
+  businessSettings
 }: ProductsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -62,8 +64,8 @@ export default function ProductsModule({
   const [price, setPrice] = useState('');
   const [gstPercent, setGstPercent] = useState('18');
   const [hsnSac, setHsnSac] = useState('');
-  const [stockQty, setStockQty] = useState('100');
-  const [unit, setUnit] = useState('PCS');
+  const [stockQty, setStockQty] = useState('999');
+  const [unit, setUnit] = useState('');
 
   const filterCategories = ['All', ...categories];
 
@@ -73,42 +75,42 @@ export default function ProductsModule({
     setSku(`SKU-${Date.now().toString().slice(-6)}`);
     setCategory(categories[0] || 'Software Services');
     setPrice('');
-    setGstPercent('18');
-    setHsnSac('994912');
-    setStockQty('100');
-    setUnit('HRS');
+    setGstPercent(businessSettings?.gstOption === 'zero_tax' ? '0' : '18');
+    setHsnSac('');
+    setStockQty('999');
+    setUnit('');
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
     setName(p.name);
-    setSku(p.sku);
+    setSku(p.sku || '');
     setCategory(p.category);
     setPrice(String(p.price));
-    setGstPercent(String(p.gstPercent));
-    setHsnSac(p.hsnSac);
-    setStockQty(String(p.stockQty));
-    setUnit(p.unit);
+    setGstPercent(businessSettings?.gstOption === 'zero_tax' ? '0' : String(p.gstPercent || '0'));
+    setHsnSac(p.hsnSac || '');
+    setStockQty(String(p.stockQty || '999'));
+    setUnit(p.unit || '');
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !price || !gstPercent || !hsnSac) {
-      alert("Name, Price, GST % and HSN/SAC are mandatory values!");
+    if (!name || !price) {
+      alert("Name and Price are mandatory values!");
       return;
     }
 
     const payload: Partial<Product> = {
       name,
-      sku,
+      sku: sku || `SKU-${Date.now().toString().slice(-6)}`,
       category,
       price: Number(price),
-      gstPercent: Number(gstPercent),
-      hsnSac,
-      stockQty: Number(stockQty),
-      unit
+      gstPercent: businessSettings?.gstOption === 'zero_tax' ? 0 : Number(gstPercent),
+      hsnSac: hsnSac || '',
+      stockQty: Number(stockQty) || 999,
+      unit: unit || ''
     };
 
     if (editingProduct) {
@@ -173,9 +175,7 @@ export default function ProductsModule({
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.hsnSac.includes(searchTerm);
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -194,7 +194,7 @@ export default function ProductsModule({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-display">Products</h1>
-          <p className="text-sm text-slate-500">Manage tax codes, HSN alignments, and pricing configurations.</p>
+          <p className="text-sm text-slate-500">Manage catalog deliverables, categories, and item pricing configurations.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canWrite && (
@@ -229,7 +229,7 @@ export default function ProductsModule({
             </span>
             <input 
               type="text"
-              placeholder="Search by name, SKU, HSN/SAC..."
+              placeholder="Search by name..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
@@ -278,35 +278,17 @@ export default function ProductsModule({
               </div>
 
               {/* Price and GST details */}
-              <div className="grid grid-cols-2 gap-4 py-3 border-y border-[#E5E7EB] text-xs">
+              <div className={`grid ${businessSettings?.gstOption === 'zero_tax' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 py-3 border-y border-[#E5E7EB] text-xs`}>
                 <div>
                   <span className="text-slate-400 font-medium block">Price Limit / Rate</span>
                   <span className="font-bold font-mono text-slate-900 text-sm">{formatCurrency(p.price)}</span>
-                  <span className="text-[10px] text-slate-400 uppercase"> / {p.unit}</span>
                 </div>
-                <div>
-                  <span className="text-slate-400 font-medium block">GST Rate (SAC/HSN)</span>
-                  <span className="font-bold font-sans text-indigo-700 text-sm">{p.gstPercent}%</span>
-                  <span className="text-[10px] font-mono text-slate-400 block mt-0.5">HSN: {p.hsnSac}</span>
-                </div>
-              </div>
-
-              {/* Stock Indicator */}
-              <div className="flex items-center justify-between text-xs pt-1">
-                <span className="text-slate-400 font-medium font-mono">CODE: {p.sku}</span>
-                <div className="flex items-center gap-1.5">
-                  {p.stockQty < 15 ? (
-                    <div className="flex items-center gap-1 text-rose-500 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100 animate-pulse">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>{p.stockQty} low</span>
-                    </div>
-                  ) : (
-                    <div className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>{p.stockQty} ready</span>
-                    </div>
-                  )}
-                </div>
+                {businessSettings?.gstOption !== 'zero_tax' && (
+                  <div>
+                    <span className="text-slate-400 font-medium block">GST Rate</span>
+                    <span className="font-bold font-sans text-indigo-700 text-sm">{p.gstPercent}%</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -382,32 +364,7 @@ export default function ProductsModule({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">SKU / ITEM CODE</label>
-                  <input 
-                    type="text"
-                    required
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase font-sans">SAC / HSN CODE *</label>
-                  <input 
-                    type="text"
-                    required
-                    maxLength={8}
-                    placeholder="e.g. 998313"
-                    value={hsnSac}
-                    onChange={(e) => setHsnSac(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid ${businessSettings?.gstOption === 'zero_tax' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Price Limit (INR) *</label>
                   <input 
@@ -419,42 +376,22 @@ export default function ProductsModule({
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Applicable GST Rate *</label>
-                  <select 
-                    value={gstPercent}
-                    onChange={(e) => setGstPercent(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                  >
-                    <option value="5">5% (GST Lower rate)</option>
-                    <option value="12">12% (Standard secondary rate)</option>
-                    <option value="18">18% (Standard service rate)</option>
-                    <option value="28">28% (Luxuries and high assets rate)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase font-sans">Stock / Target Limits</label>
-                  <input 
-                    type="number"
-                    required
-                    value={stockQty}
-                    onChange={(e) => setStockQty(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Selling Unit</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. HRS, PCS, UNITS"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
+                {businessSettings?.gstOption !== 'zero_tax' && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Applicable GST Rate *</label>
+                    <select 
+                      value={gstPercent}
+                      onChange={(e) => setGstPercent(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="0">0% (GST Exempt / Nil Rate)</option>
+                      <option value="5">5% (GST Lower rate)</option>
+                      <option value="12">12% (Standard secondary rate)</option>
+                      <option value="18">18% (Standard service rate)</option>
+                      <option value="28">28% (Luxuries and high assets rate)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">

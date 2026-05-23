@@ -41,7 +41,7 @@ export default function SettingsModule({
   const [companyName, setCompanyName] = useState(settings.companyName);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
   const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
-  const [gstIn, setGstIn] = useState(settings.gstIn);
+  const [gstIn, setGstIn] = useState(settings.gstIn || '');
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
   const [email, setEmail] = useState(settings.email);
@@ -52,6 +52,7 @@ export default function SettingsModule({
   const [signatureUrl, setSignatureUrl] = useState(settings.signatureUrl);
   const [timezone, setTimezone] = useState(settings.timezone || 'Asia/Kolkata');
   const [gstOption, setGstOption] = useState(settings.gstOption || 'standard');
+  const [titleBarText, setTitleBarText] = useState(settings.titleBarText || '');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
@@ -80,14 +81,14 @@ export default function SettingsModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName || !gstIn || !bankName || !accountNum || !ifscCode || !upiId) {
+    if (!companyName || !bankName || !accountNum || !ifscCode || !upiId) {
       alert("All specified settings parameters must be fully documented!");
       return;
     }
 
     const payload: Partial<BusinessSettings> = {
       companyName,
-      gstIn: gstIn.toUpperCase(),
+      gstIn: gstIn ? gstIn.toUpperCase() : '',
       address,
       phone,
       email,
@@ -99,7 +100,8 @@ export default function SettingsModule({
       timezone,
       gstOption,
       logoUrl,
-      faviconUrl
+      faviconUrl,
+      titleBarText
     };
 
     await onSaveSettings(payload);
@@ -126,28 +128,15 @@ export default function SettingsModule({
               <span>Corporate Branding &amp; Tax Registration</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
-                <input 
-                  type="text"
-                  required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Corporate GSTIN</label>
-                <input 
-                  type="text"
-                  required
-                  maxLength={15}
-                  value={gstIn}
-                  onChange={(e) => setGstIn(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
-                />
-              </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
+              <input 
+                type="text"
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+              />
             </div>
 
             {/* Logo and Favicon uploads with previews and drag-and-drop triggers */}
@@ -242,6 +231,20 @@ export default function SettingsModule({
                     onChange={(e) => handleFileChange(e, setLogoUrl)}
                     className="hidden"
                   />
+                </div>
+
+                {/* Unified Title Bar option option to set */}
+                <div className="space-y-1 pt-2">
+                  <label className="text-[10px] font-bold text-indigo-600 uppercase font-sans">Title Bar App Name</label>
+                  <input
+                    type="text"
+                    value={titleBarText}
+                    onChange={(e) => setTitleBarText(e.target.value)}
+                    placeholder="e.g. Apex Digital Solutions"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                    id="title-bar-text-setting"
+                  />
+                  <p className="text-[9px] text-slate-400">Sets the active name/title displayed in the navigation sidebar &amp; top toolbar.</p>
                 </div>
               </div>
 

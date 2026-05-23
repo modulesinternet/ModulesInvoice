@@ -81,17 +81,18 @@ export default function ClientsModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !gstIn || !billingAddress) {
-      alert("Name, GSTIN, and Billing Address are mandatory fields.");
+    if (!name || !billingAddress) {
+      alert("Name and Billing Address are mandatory fields.");
       return;
     }
 
+    const upperGst = (gstIn || '').toUpperCase().trim();
     const payload: Partial<Client> = {
       name,
       email,
       phone,
-      gstIn: gstIn.toUpperCase(),
-      pan: pan.toUpperCase() || gstIn.substring(2, 12).toUpperCase(), // GST digits 3-12 are PAN automatically in India!
+      gstIn: upperGst,
+      pan: pan.toUpperCase().trim() || (upperGst.length >= 12 ? upperGst.substring(2, 12) : ''),
       billingAddress,
       shippingAddress: shippingAddress || billingAddress,
       outstandingBalance: Number(outstandingBalance || 0)
@@ -107,7 +108,7 @@ export default function ClientsModule({
 
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.gstIn.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (c.gstIn || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -178,8 +179,8 @@ export default function ClientsModule({
                   <div>
                     <h3 className="font-bold text-slate-900 text-sm line-clamp-1 font-display" title={c.name}>{c.name}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10.5px] font-mono font-bold uppercase text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded leading-none">{c.gstIn}</span>
-                      <span className="text-[10.5px] font-mono text-slate-400">PAN: {c.pan}</span>
+                      <span className="text-[10.5px] font-mono font-bold uppercase text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded leading-none">{c.gstIn || 'URP (Unregistered)'}</span>
+                      {c.pan && <span className="text-[10.5px] font-mono text-slate-400">PAN: {c.pan}</span>}
                     </div>
                   </div>
                 </div>
@@ -295,10 +296,9 @@ export default function ClientsModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">GSTIN Registration *</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">GSTIN Registration (Optional)</label>
                   <input 
                     type="text"
-                    required
                     maxLength={15}
                     placeholder="e.g. 27AAATT1234F1Z1"
                     value={gstIn}

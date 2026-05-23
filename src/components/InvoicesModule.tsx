@@ -94,7 +94,7 @@ export default function InvoicesModule({
 
   // Home State mapping. We are based in Maharashtra (starts with "27")
   const homeStateCode = "27";
-  const isInterstate = selectedClientDetails && !selectedClientDetails.gstIn.startsWith(homeStateCode);
+  const isInterstate = selectedClientDetails && !(selectedClientDetails.gstIn || '').startsWith(homeStateCode);
 
   const handleProductSelect = (pId: string) => {
     setCurrentProductId(pId);
@@ -160,7 +160,7 @@ export default function InvoicesModule({
       return {
         productId: item.productId,
         name: prod.name,
-        hsnSac: prod.hsnSac,
+        hsnSac: prod.hsnSac || '',
         qty: item.qty,
         price: item.price,
         gstPercent: rate,
@@ -172,13 +172,13 @@ export default function InvoicesModule({
     const payload: Partial<Invoice> = {
       clientId,
       clientName: clientObj.name,
-      clientGst: clientObj.gstIn,
+      clientGst: clientObj.gstIn || 'URP',
       date,
       dueDate,
       items: finalItems,
       subtotal: draftSubtotal,
       discount: draftDiscountNum,
-      taxType: clientObj.gstIn.startsWith(homeStateCode) ? "CGST_SGST" : "IGST",
+      taxType: (clientObj.gstIn || '').startsWith(homeStateCode) ? "CGST_SGST" : "IGST",
       taxAmount: draftTax,
       total: draftTotal,
       paidAmount: 0,
@@ -434,7 +434,6 @@ export default function InvoicesModule({
                 <thead>
                   <tr className="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Standard Deliverables Line Item</th>
-                    <th className="py-3 px-3 text-center">HSN/SAC</th>
                     <th className="py-3 px-3 text-center col-span-1">Qty</th>
                     <th className="py-3 px-3 text-right">Unit Rate (INR)</th>
                     {businessSettings.gstOption !== 'zero_tax' && (
@@ -447,7 +446,6 @@ export default function InvoicesModule({
                   {selectedInvoice.items.map((item, index) => (
                     <tr key={index} className="hover:bg-slate-50/50">
                       <td className="py-4 px-4 font-semibold text-slate-800">{item.name}</td>
-                      <td className="py-4 px-3 text-center font-mono text-slate-400">{item.hsnSac}</td>
                       <td className="py-4 px-3 text-center font-mono font-bold text-slate-600">{item.qty}</td>
                       <td className="py-4 px-3 text-right font-mono text-slate-600">{formatCurrency(item.price)}</td>
                       {businessSettings.gstOption !== 'zero_tax' && (
@@ -716,7 +714,7 @@ export default function InvoicesModule({
                     <Globe className="w-4 h-4 text-indigo-500" />
                     <span>Selected client resides in: <b>{isInterstate ? 'Domestic Out-of-State (IGST 18% mapping)' : 'Domestic Home-State (Maharashtra CGST 9% + SGST 9%)'}</b></span>
                   </div>
-                  <span className="font-mono text-[10.5px] font-bold uppercase underline">verified: {selectedClientDetails.gstIn}</span>
+                  <span className="font-mono text-[10.5px] font-bold uppercase underline">verified: {selectedClientDetails.gstIn || 'URP (Unregistered)'}</span>
                 </div>
               )}
 
@@ -733,7 +731,9 @@ export default function InvoicesModule({
                     >
                       <option value="">-- Choose Deliverable --</option>
                       {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} (GST {p.gstPercent}%)</option>
+                        <option key={p.id} value={p.id}>
+                          {p.name} {businessSettings.gstOption === 'zero_tax' ? '' : `(GST ${p.gstPercent}%)`}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -831,10 +831,12 @@ export default function InvoicesModule({
                       <span>Subtotal net base:</span>
                       <span>{formatCurrency(draftSubtotal)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Calculated GST Taxes:</span>
-                      <span className="text-indigo-300">+{formatCurrency(draftTax)}</span>
-                    </div>
+                    {businessSettings.gstOption !== 'zero_tax' && (
+                      <div className="flex justify-between">
+                        <span>Calculated GST Taxes:</span>
+                        <span className="text-indigo-300">+{formatCurrency(draftTax)}</span>
+                      </div>
+                    )}
                     {draftDiscountNum > 0 && (
                       <div className="flex justify-between text-emerald-400">
                         <span>Discount Promo applied:</span>

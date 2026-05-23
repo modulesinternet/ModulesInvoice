@@ -144,7 +144,7 @@ export default function QuotationsModule({
       return {
         productId: item.productId,
         name: prod.name,
-        hsnSac: prod.hsnSac,
+        hsnSac: prod.hsnSac || '',
         qty: item.qty,
         price: item.price,
         gstPercent: rate,
@@ -280,7 +280,6 @@ export default function QuotationsModule({
                 <thead>
                   <tr className="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Line Description / Scope</th>
-                    <th className="py-3 px-3 text-center">HSN/SAC</th>
                     <th className="py-3 px-3 text-center">Qty</th>
                     <th className="py-3 px-3 text-right">Unit Rate (INR)</th>
                     {businessSettings.gstOption !== 'zero_tax' && (
@@ -293,7 +292,6 @@ export default function QuotationsModule({
                   {selectedQuotation.items.map((item, index) => (
                     <tr key={index} className="hover:bg-slate-50/50">
                       <td className="py-4 px-4 font-semibold text-slate-800">{item.name}</td>
-                      <td className="py-4 px-3 text-center font-mono text-slate-400">{item.hsnSac}</td>
                       <td className="py-4 px-3 text-center font-mono font-bold text-slate-600">{item.qty}</td>
                       <td className="py-4 px-3 text-right font-mono text-slate-600">{formatCurrency(item.price)}</td>
                       {businessSettings.gstOption !== 'zero_tax' && (
@@ -500,7 +498,9 @@ export default function QuotationsModule({
                     >
                       <option value="">-- Available Catalogue --</option>
                       {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} (GST {p.gstPercent}%)</option>
+                        <option key={p.id} value={p.id}>
+                          {p.name} {businessSettings.gstOption === 'zero_tax' ? '' : `(GST ${p.gstPercent}%)`}
+                        </option>
                       ))}
                     </select>
                   </div>
