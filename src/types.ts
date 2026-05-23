@@ -158,6 +158,7 @@ export interface BusinessSettings {
   quotationPrefix: string;
   currency: string;
   logoUrl?: string;
+  faviconUrl?: string;
   signatureUrl?: string;
   timezone?: string;
   gstOption?: "standard" | "zero_tax";

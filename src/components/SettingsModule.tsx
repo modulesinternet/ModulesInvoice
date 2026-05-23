@@ -39,6 +39,8 @@ export default function SettingsModule({
 
   // Form parameters
   const [companyName, setCompanyName] = useState(settings.companyName);
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
+  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
   const [gstIn, setGstIn] = useState(settings.gstIn);
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
@@ -50,6 +52,23 @@ export default function SettingsModule({
   const [signatureUrl, setSignatureUrl] = useState(settings.signatureUrl);
   const [timezone, setTimezone] = useState(settings.timezone || 'Asia/Kolkata');
   const [gstOption, setGstOption] = useState(settings.gstOption || 'standard');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("File size exceeds 2MB limit. Please upload compact images.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setter(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const [sigMode, setSigMode] = useState<'draw' | 'upload' | 'link'>(() => {
     if (settings.signatureUrl && settings.signatureUrl.startsWith('data:image')) {
@@ -78,7 +97,9 @@ export default function SettingsModule({
       upiId,
       signatureUrl,
       timezone,
-      gstOption
+      gstOption,
+      logoUrl,
+      faviconUrl
     };
 
     await onSaveSettings(payload);
@@ -105,9 +126,9 @@ export default function SettingsModule({
               <span>Corporate Branding &amp; Tax Registration</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Firm Name</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
                 <input 
                   type="text"
                   required
@@ -117,7 +138,7 @@ export default function SettingsModule({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Corporate GSTIN Identification</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Corporate GSTIN</label>
                 <input 
                   type="text"
                   required
@@ -126,6 +147,195 @@ export default function SettingsModule({
                   onChange={(e) => setGstIn(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
                 />
+              </div>
+            </div>
+
+            {/* Logo and Favicon uploads with previews and drag-and-drop triggers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-2">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase font-sans tracking-wider flex items-center justify-between">
+                  <span>Firm Corporate Logo</span>
+                  <span className="text-[8.5px] text-indigo-650 lowercase italic">Supports Drag-and-Drop</span>
+                </label>
+                <div 
+                  className={`border-2 border-dashed rounded-2xl p-4 transition duration-200 flex flex-col items-center justify-center text-center space-y-2.5 ${
+                    isDragging ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("File size exceeds 2MB limit. Please upload compact images.");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        if (typeof reader.result === 'string') {
+                          setLogoUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                >
+                  {logoUrl ? (
+                    <div className="relative p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center h-20 w-36 shadow-xs group">
+                      <img 
+                        src={logoUrl} 
+                        className="max-h-full max-w-full object-contain rounded-lg" 
+                        alt="Logo preview" 
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLogoUrl('');
+                        }}
+                        className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md transition font-bold cursor-pointer"
+                        title="Remove Logo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-2">
+                      <Image className="w-8 h-8 text-slate-400 mb-1" />
+                      <p className="text-[11px] text-slate-500">Drag &amp; drop logo file, or</p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('logo-file-picker')?.click()}
+                      className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Browse image</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = prompt("Enter web URL of your corporate logo:");
+                        if (url) {
+                          setLogoUrl(url);
+                        }
+                      }}
+                      className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-[10px] font-semibold rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Link className="w-3 h-3 text-slate-500" />
+                      <span>Paste URL</span>
+                    </button>
+                  </div>
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    id="logo-file-picker"
+                    onChange={(e) => handleFileChange(e, setLogoUrl)}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase font-sans tracking-wider flex items-center justify-between">
+                  <span>Portal Favicon</span>
+                  <span className="text-[8.5px] text-indigo-650 lowercase italic">Supports Drag-and-Drop</span>
+                </label>
+                <div 
+                  className={`border-2 border-dashed rounded-2xl p-4 transition duration-200 flex flex-col items-center justify-center text-center space-y-2.5 ${
+                    isDragging ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("File size exceeds 2MB limit. Please upload compact images.");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        if (typeof reader.result === 'string') {
+                          setFaviconUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                >
+                  {faviconUrl ? (
+                    <div className="relative p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center h-20 w-20 shadow-xs group">
+                      <img 
+                        src={faviconUrl} 
+                        className="max-h-full max-w-full object-contain rounded-lg" 
+                        alt="Favicon preview" 
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFaviconUrl('');
+                        }}
+                        className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md transition font-bold cursor-pointer"
+                        title="Remove Favicon"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-2">
+                      <Sparkles className="w-8 h-8 text-slate-400 mb-1" />
+                      <p className="text-[11px] text-slate-500">Drag &amp; drop favicon file, or</p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('favicon-file-picker')?.click()}
+                      className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Browse image</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = prompt("Enter web URL of your favicon:");
+                        if (url) {
+                          setFaviconUrl(url);
+                        }
+                      }}
+                      className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-[10px] font-semibold rounded-xl transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Link className="w-3 h-3 text-slate-500" />
+                      <span>Paste URL</span>
+                    </button>
+                  </div>
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    id="favicon-file-picker"
+                    onChange={(e) => handleFileChange(e, setFaviconUrl)}
+                    className="hidden"
+                  />
+                </div>
               </div>
             </div>
 
@@ -441,106 +651,32 @@ export default function SettingsModule({
           </div>
 
           {/* Save panel */}
-          <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4">
+          <div className="bg-white border border-[#E5E7EB] rounded-3xl p-6 shadow-sm space-y-4">
             <div>
-              <span className="text-[9px] uppercase font-bold text-purple-400 tracking-wider">firm locks state</span>
-              <h4 className="font-bold text-sm text-slate-150 mt-1">Audit Ledger Integrity</h4>
-              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">Updating profile configurations commits instant log alerts onto the double-entry security indexes.</p>
+              <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2 font-display">
+                <Save className="w-4 h-4 text-indigo-600" />
+                <span>Apply System Configuration</span>
+              </h4>
+              <p className="text-xs text-slate-505 text-slate-500 mt-1 leading-normal">
+                Updating profile configurations saves changes to company headers, banking parameters, and PDF invoice templates universally.
+              </p>
             </div>
 
             {success && (
-              <div className="flex items-center gap-2 p-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold leading-none select-none">
-                <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
-                <span>Firm profiles updated successfully</span>
+              <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-2xl text-xs font-bold leading-none select-none">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Configurations persisted successfully!</span>
               </div>
             )}
 
             <button 
               type="submit"
-              className="w-full py-3 bg-white text-slate-900 hover:bg-slate-50 transition rounded-xl text-xs font-bold font-display shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white transition rounded-2xl text-xs font-bold font-sans shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-indigo-700/20 active:scale-[0.99]"
               id="save-settings-btn"
             >
-              <Save className="w-4 h-4 text-indigo-600" />
-              <span>Commit System Parameters</span>
+              <Save className="w-4 h-4 text-white" />
+              <span>Save Settings</span>
             </button>
-          </div>
-
-          {/* Database Backup & Portability (Decouple Snaps) */}
-          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
-              <Database className="w-4 h-4 text-indigo-500" />
-              <span>Snaps Database Portability</span>
-            </h3>
-            <p className="text-xs text-slate-500 leading-normal">
-              This system executes 100% client-side. Download business snapshots as offline backup files, or restore a previous snapshot to synchronize.
-            </p>
-
-            <div className="flex flex-col gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    const data = api.exportDatabase();
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `Apex_Business_DB_${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                  } catch (err: any) {
-                    alert("Failed to export database: " + err.message);
-                  }
-                }}
-                className="w-full py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition rounded-2xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer border border-[#818CF8]/25"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Database Backup</span>
-              </button>
-
-              <div className="border-t border-dashed border-slate-100 my-1"></div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Restore snapshot database</label>
-                <div 
-                  className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 rounded-2xl cursor-pointer text-center flex items-center justify-center gap-2 select-none"
-                  onClick={() => {
-                    const input = document.getElementById('db-restore-upload');
-                    if (input) input.click();
-                  }}
-                >
-                  <UploadCloud className="w-4 h-4 text-slate-500" />
-                  <span className="text-xs font-bold text-slate-600 font-sans">Upload JSON data snapshot...</span>
-                </div>
-                <input
-                  id="db-restore-upload"
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = async () => {
-                      try {
-                        const parsed = JSON.parse(reader.result as string);
-                        if (onImportBackup) {
-                          await onImportBackup(parsed);
-                        } else {
-                          api.importDatabase(parsed);
-                          alert("Database imported successfully! Please reload your browser page.");
-                        }
-                      } catch (err: any) {
-                        alert("Malformed/invalid JSON backup file: " + err.message);
-                      }
-                    };
-                    reader.readAsText(file);
-                  }}
-                />
-              </div>
-            </div>
           </div>
         </div>
       </form>

@@ -397,7 +397,8 @@ async function bootstrapFromFirestore() {
     
     // 1. Settings
     const settingsDoc = await getDoc(doc(db, 'businessSettings', 'global'));
-    if (settingsDoc.exists()) {
+    const isFirstSeed = !settingsDoc.exists();
+    if (!isFirstSeed) {
       db_settings = settingsDoc.data() as BusinessSettings;
     } else {
       await setDoc(doc(db, 'businessSettings', 'global'), db_settings);
@@ -408,7 +409,11 @@ async function bootstrapFromFirestore() {
     if (categoriesDoc.exists()) {
       db_categories = (categoriesDoc.data() as { list: string[] }).list;
     } else {
-      await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
+      if (isFirstSeed) {
+        await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
+      } else {
+        db_categories = [];
+      }
     }
 
     // 3. Roles
@@ -422,11 +427,15 @@ async function bootstrapFromFirestore() {
     // 4. Clients
     const clientsSnap = await getDocs(collection(db, 'clients'));
     if (clientsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_clients) {
-        batch.set(doc(db, 'clients', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_clients) {
+          batch.set(doc(db, 'clients', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_clients = [];
       }
-      await batch.commit();
     } else {
       db_clients = clientsSnap.docs.map(d => d.data() as Client);
     }
@@ -434,11 +443,15 @@ async function bootstrapFromFirestore() {
     // 5. Products
     const productsSnap = await getDocs(collection(db, 'products'));
     if (productsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_products) {
-        batch.set(doc(db, 'products', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_products) {
+          batch.set(doc(db, 'products', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_products = [];
       }
-      await batch.commit();
     } else {
       db_products = productsSnap.docs.map(d => d.data() as Product);
     }
@@ -446,11 +459,15 @@ async function bootstrapFromFirestore() {
     // 6. Invoices
     const invoicesSnap = await getDocs(collection(db, 'invoices'));
     if (invoicesSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_invoices) {
-        batch.set(doc(db, 'invoices', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_invoices) {
+          batch.set(doc(db, 'invoices', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_invoices = [];
       }
-      await batch.commit();
     } else {
       db_invoices = invoicesSnap.docs.map(d => d.data() as Invoice);
     }
@@ -458,11 +475,15 @@ async function bootstrapFromFirestore() {
     // 7. Quotations
     const quotationsSnap = await getDocs(collection(db, 'quotations'));
     if (quotationsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_quotations) {
-        batch.set(doc(db, 'quotations', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_quotations) {
+          batch.set(doc(db, 'quotations', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_quotations = [];
       }
-      await batch.commit();
     } else {
       db_quotations = quotationsSnap.docs.map(d => d.data() as Quotation);
     }
@@ -470,11 +491,15 @@ async function bootstrapFromFirestore() {
     // 8. Payments
     const paymentsSnap = await getDocs(collection(db, 'payments'));
     if (paymentsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_payments) {
-        batch.set(doc(db, 'payments', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_payments) {
+          batch.set(doc(db, 'payments', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_payments = [];
       }
-      await batch.commit();
     } else {
       db_payments = paymentsSnap.docs.map(d => d.data() as Payment);
     }
@@ -482,11 +507,15 @@ async function bootstrapFromFirestore() {
     // 9. Ledger
     const ledgerSnap = await getDocs(collection(db, 'ledger'));
     if (ledgerSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_ledger) {
-        batch.set(doc(db, 'ledger', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_ledger) {
+          batch.set(doc(db, 'ledger', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_ledger = [];
       }
-      await batch.commit();
     } else {
       db_ledger = ledgerSnap.docs.map(d => d.data() as LedgerEntry);
     }
@@ -494,11 +523,15 @@ async function bootstrapFromFirestore() {
     // 10. Cashbook
     const cashbookSnap = await getDocs(collection(db, 'cashbook'));
     if (cashbookSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_cashbook) {
-        batch.set(doc(db, 'cashbook', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_cashbook) {
+          batch.set(doc(db, 'cashbook', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_cashbook = [];
       }
-      await batch.commit();
     } else {
       db_cashbook = cashbookSnap.docs.map(d => d.data() as CashbookEntry);
     }
@@ -506,11 +539,15 @@ async function bootstrapFromFirestore() {
     // 11. Activity Logs
     const logsSnap = await getDocs(collection(db, 'activityLogs'));
     if (logsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_logs) {
-        batch.set(doc(db, 'activityLogs', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_logs) {
+          batch.set(doc(db, 'activityLogs', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_logs = [];
       }
-      await batch.commit();
     } else {
       db_logs = logsSnap.docs.map(d => d.data() as ActivityLog);
     }
@@ -518,11 +555,15 @@ async function bootstrapFromFirestore() {
     // 12. Notifications
     const notificationsSnap = await getDocs(collection(db, 'notifications'));
     if (notificationsSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_notifications) {
-        batch.set(doc(db, 'notifications', item.id), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_notifications) {
+          batch.set(doc(db, 'notifications', item.id), item);
+        }
+        await batch.commit();
+      } else {
+        db_notifications = [];
       }
-      await batch.commit();
     } else {
       db_notifications = notificationsSnap.docs.map(d => d.data() as Notification);
     }
@@ -530,11 +571,20 @@ async function bootstrapFromFirestore() {
     // 13. Users
     const usersSnap = await getDocs(collection(db, 'users'));
     if (usersSnap.empty) {
-      const batch = writeBatch(db);
-      for (const item of db_users) {
-        batch.set(doc(db, 'users', item.userId), item);
+      if (isFirstSeed) {
+        const batch = writeBatch(db);
+        for (const item of db_users) {
+          batch.set(doc(db, 'users', item.userId), item);
+        }
+        await batch.commit();
+      } else {
+        // Essential demo fallback profiles if user table is fully deleted, to ensure login remains functional
+        const batch = writeBatch(db);
+        for (const item of db_users) {
+          batch.set(doc(db, 'users', item.userId), item);
+        }
+        await batch.commit();
       }
-      await batch.commit();
     } else {
       db_users = usersSnap.docs.map(d => d.data() as UserProfile);
     }
@@ -1293,6 +1343,55 @@ app.put('/api/roles/:role', (req: Request, res: Response) => {
   syncStateToFirestore('roles');
   logUserActivity("demo-admin", "Karan Sharma", "ROLE_PERMISSIONS_UPDATE", `Reconfigured operational permission matrices for Role: ${role}`);
   res.json(targetRole);
+});
+
+// 13. System Database Restore & Synchronization with Firestore
+app.post('/api/restore', checkPermission('settings', 'write'), async (req: Request, res: Response) => {
+  const backup = req.body;
+  if (!backup || typeof backup !== 'object') {
+    return res.status(400).json({ error: "Invalid backup format payload" });
+  }
+
+  try {
+    if (backup.settings) db_settings = backup.settings;
+    if (backup.clients) db_clients = backup.clients;
+    if (backup.products) db_products = backup.products;
+    if (backup.invoices) db_invoices = backup.invoices;
+    if (backup.quotations) db_quotations = backup.quotations;
+    if (backup.payments) db_payments = backup.payments;
+    if (backup.ledger) db_ledger = backup.ledger;
+    if (backup.cashbook) db_cashbook = backup.cashbook;
+    if (backup.logs) db_logs = backup.logs;
+    if (backup.notifications) db_notifications = backup.notifications;
+    if (backup.users) db_users = backup.users;
+    if (backup.roles) db_roles = backup.roles;
+    if (backup.categories) db_categories = backup.categories;
+
+    // Trigger sequential sync for all collections onto Firestore
+    await syncStateToFirestore('settings');
+    await syncStateToFirestore('categories');
+    await syncStateToFirestore('roles');
+
+    if (db) {
+      // In case we have db, directly iterate and push to Firestore
+      for (const item of db_clients) await syncStateToFirestore('clients', item.id);
+      for (const item of db_products) await syncStateToFirestore('products', item.id);
+      for (const item of db_invoices) await syncStateToFirestore('invoices', item.id);
+      for (const item of db_quotations) await syncStateToFirestore('quotations', item.id);
+      for (const item of db_payments) await syncStateToFirestore('payments', item.id);
+      for (const item of db_ledger) await syncStateToFirestore('ledger', item.id);
+      for (const item of db_cashbook) await syncStateToFirestore('cashbook', item.id);
+      for (const item of db_notifications) await syncStateToFirestore('notifications', item.id);
+      for (const item of db_users) await syncStateToFirestore('users', item.userId);
+    } else {
+      saveStateToLocalCache();
+    }
+
+    logUserActivity("demo-admin", "Karan Sharma", "DB_RESTORE", "Successfully restored standard database file from manual backup and synchronized with Cloud Firestore.");
+    res.json({ success: true, message: "Database backup imported and synchronized successfully with Cloud Firestore!" });
+  } catch (error: any) {
+    res.status(500).json({ error: `Firestore restoration failed: ${error.message}` });
+  }
 });
 
 // Configure Vite integration for SPA fallback / Dev Middleware

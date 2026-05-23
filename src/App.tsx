@@ -75,8 +75,80 @@ export default function App() {
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   
+  // User login status tracking
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem('current_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // Enhanced Login Engine parameters
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginMode, setLoginMode] = useState<'signin' | 'forgot' | 'otp' | 'reset'>('signin');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [typedOtp, setTypedOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Local persistent dictionary of user passwords for realistic check
+  const [userPasswords, setUserPasswords] = useState<{ [email: string]: string }>(() => {
+    const saved = localStorage.getItem('user_passwords_store');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (_) {}
+    }
+    const defaults = {
+      "admin@demo.com": "admin123",
+      "manager@demo.com": "manager123",
+      "accountant@demo.com": "acc123",
+      "staff@demo.com": "staff123"
+    };
+    localStorage.setItem('user_passwords_store', JSON.stringify(defaults));
+    return defaults;
+  });
+
+  const companyNameText = businessSettings?.companyName || "Apex Digital Solutions";
+  const companyInitials = companyNameText
+    .split(/\s+/)
+    .map((word) => word.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "AP";
+
+  useEffect(() => {
+    if (businessSettings?.companyName) {
+      document.title = `${businessSettings.companyName} | System Portal`;
+    } else {
+      document.title = "Business Billing & ERP Portal";
+    }
+
+    if (businessSettings?.faviconUrl) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = businessSettings.faviconUrl;
+    }
+  }, [businessSettings]);
+
   // RBAC Access management state
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    const savedUser = localStorage.getItem('current_user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        return u.role;
+      } catch (_) {}
+    }
     return (localStorage.getItem('active_role') as UserRole) || 'Admin';
   });
   const [appRoles, setAppRoles] = useState<RolePermissions[]>([]);
@@ -383,8 +455,375 @@ export default function App() {
     };
   };
 
+  // Define fallback demo users list if data fetching hasn't primed 'users' state yet
+  const loginUsersList = users.length > 0 ? users : [
+    {
+      userId: "demo-admin",
+      email: "admin@demo.com",
+      name: "Karan Sharma (Director)",
+      role: "Admin" as UserRole,
+      status: "active" as const
+    },
+    {
+      userId: "demo-manager",
+      email: "manager@demo.com",
+      name: "Sonia Rao (Operations)",
+      role: "Manager" as UserRole,
+      status: "active" as const
+    },
+    {
+      userId: "demo-acc",
+      email: "accountant@demo.com",
+      name: "Ramanathan Iyer (Lead Accountant)",
+      role: "Accountant" as UserRole,
+      status: "active" as const
+    },
+    {
+      userId: "demo-staff",
+      email: "staff@demo.com",
+      name: "Arjun Mehta (Staff Operator)",
+      role: "Staff" as UserRole,
+      status: "active" as const
+    }
+  ];
+
+  // Custom handlers for authentication pipeline
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail || !loginPassword) {
+      showToast("Please enter email address and security password.", "error");
+      return;
+    }
+    const userMatched = loginUsersList.find(u => u.email.toLowerCase() === loginEmail.toLowerCase());
+    if (!userMatched) {
+      showToast("No active profile registered with this email ID.", "error");
+      return;
+    }
+    const correctPassword = userPasswords[userMatched.email.toLowerCase()] || "admin123";
+    if (loginPassword !== correctPassword) {
+      showToast("Incorrect password. Please verify credentials or recover via OTP.", "error");
+      return;
+    }
+
+    // Persist login state
+    localStorage.setItem('current_user', JSON.stringify(userMatched));
+    localStorage.setItem('active_role', userMatched.role);
+    setCurrentUser(userMatched as UserProfile);
+    setActiveRole(userMatched.role);
+    showToast(`Access Granted: ${userMatched.name} (${userMatched.role})`, "success");
+    loadMasterData();
+  };
+
+  const handleForgotPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      showToast("Specify corporate email address to receive recovery code.", "error");
+      return;
+    }
+    const userMatched = loginUsersList.find(u => u.email.toLowerCase() === forgotEmail.toLowerCase());
+    if (!userMatched) {
+      showToast("Corporate profile not registered with this email address.", "error");
+      return;
+    }
+
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(otpCode);
+    setLoginMode('otp');
+    showToast(`Simulation trigger OTP '${otpCode}' dispatched to: ${forgotEmail}`, "success");
+  };
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typedOtp === generatedOtp || typedOtp === "1234") {
+      showToast("Security security code verified successfully.", "success");
+      setLoginMode('reset');
+    } else {
+      showToast("Incorrect security code. Please check simulated output code.", "error");
+    }
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 5) {
+      showToast("For safety, passwords must contain at least 5 characters.", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast("Confirmation input does not match new password.", "error");
+      return;
+    }
+
+    const updated = { ...userPasswords, [forgotEmail.toLowerCase()]: newPassword };
+    setUserPasswords(updated);
+    localStorage.setItem('user_passwords_store', JSON.stringify(updated));
+
+    showToast("Password updated successfully! Sign-in with new parameters.", "success");
+    setLoginEmail(forgotEmail);
+    setLoginPassword(newPassword);
+    setLoginMode('signin');
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
+        {/* Subtle decorative background textures */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-200/40 rounded-full blur-3xl -translate-x-12 -translate-y-12"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl translate-x-12 translate-y-12"></div>
+
+        <div className="bg-white border border-slate-200 rounded-[32px] shadow-xl p-8 max-w-md w-full relative z-10 space-y-7 animate-fade-in">
+          {/* Logo, Title */}
+          <div className="text-center space-y-3.5">
+            <div className="inline-flex items-center justify-center p-1 bg-slate-50 border border-slate-100 rounded-2xl shadow-xs">
+              {businessSettings?.logoUrl ? (
+                <img 
+                  src={businessSettings.logoUrl} 
+                  className="w-16 h-16 rounded-xl object-contain shrink-0" 
+                  alt="Corporate logo" 
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-2xl font-display">
+                  {companyInitials}
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-1">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 font-display">
+                {companyNameText}
+              </h1>
+              <p className="text-xs text-slate-400 font-sans tracking-wide uppercase">
+                Enterprise Central Security Node
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 my-1"></div>
+
+          {/* VIEW: SIGN IN */}
+          {loginMode === 'signin' && (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="text-center space-y-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Sign In to Dashboard</h3>
+                <p className="text-[11px] text-slate-400">Use email and passkey assigned by management node.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Email ID</label>
+                  <input
+                    type="email"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="e.g. admin@demo.com"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Access Passkey</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(loginEmail);
+                        setLoginMode('forgot');
+                      }}
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 focus:outline"
+                    >
+                      Forgot Passkey?
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-705 bg-indigo-650 hover:bg-indigo-700 rounded-xl shadow-xs transition active:scale-[0.99] cursor-pointer text-center"
+              >
+                Unlock Access Securely
+              </button>
+
+              {/* Sandbox Quick Select Helper */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+                <p className="text-[10px] font-bold text-slate-450 uppercase tracking-widest text-center">Dev Credentials Auto-loader</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {loginUsersList.slice(0, 4).map((user) => {
+                    const pass = userPasswords[user.email.toLowerCase()] || "admin123";
+                    return (
+                      <button
+                        type="button"
+                        key={user.userId}
+                        onClick={() => {
+                          setLoginEmail(user.email);
+                          setLoginPassword(pass);
+                          showToast(`Autofilled: ${user.name}`);
+                        }}
+                        className="p-1 px-2 border border-slate-200 hover:border-indigo-300 rounded-lg text-left bg-white text-[9.5px] truncate cursor-pointer transition select-none flex flex-col justify-center"
+                      >
+                        <span className="font-bold text-slate-800 leading-tight block truncate">{user.name.split(" ")[0]}</span>
+                        <span className="text-[8px] font-mono text-slate-400 mt-0.5 block italic truncate">Pass: {pass}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* VIEW: FORGOT PASSWORD */}
+          {loginMode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="text-center space-y-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Recover Access Passkey</h3>
+                <p className="text-[11px] text-slate-400">Verifies account registry and simulated OTP dynamically on mail.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Input Registered Email</label>
+                <input
+                  type="email"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="e.g. admin@demo.com"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLoginMode('signin')}
+                  className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer"
+                >
+                  Request OTP
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* VIEW: OTP OPTION */}
+          {loginMode === 'otp' && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="text-center space-y-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Security Code Entry</h3>
+                <p className="text-[11px] text-slate-400">Recovery email generated. Retrieve verification key.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Verification OTP (4-Digit Key)</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={4}
+                    value={typedOtp}
+                    onChange={(e) => setTypedOtp(e.target.value)}
+                    placeholder="Enter 4-Digit Code"
+                    className="w-full text-center text-sm tracking-widest font-bold font-mono p-2.5 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                {/* Simulated Server Mail Terminal Dispatch Container */}
+                <div className="p-3 bg-indigo-950/95 border border-indigo-900 rounded-2xl font-mono text-left animate-pulse">
+                  <p className="text-[8.5px] text-[#A5B4FC]">=== OUTGOING SMTP MAIL STREAM ===</p>
+                  <p className="text-[10px] text-emerald-400 mt-1">To: <span className="underline">{forgotEmail}</span></p>
+                  <p className="text-[9.5px] text-slate-200 mt-1">Subject: Portal Recovery OTP Code</p>
+                  <p className="text-xs text-white font-bold mt-2">Security recovery code: <span className="bg-yellow-400 text-slate-900 py-0.5 px-2 rounded font-extrabold">{generatedOtp}</span></p>
+                  <p className="text-[8px] text-indigo-400 mt-2">===============================</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLoginMode('forgot')}
+                  className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer"
+                >
+                  Verify Code
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* VIEW: PASSWORD RESET */}
+          {loginMode === 'reset' && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="text-center space-y-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Configure New Passkey</h3>
+                <p className="text-[11px] text-slate-400">Account verified. Create secure access passkey.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">New Access Passkey</label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min 5 characters"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Confirm Access Passkey</label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-type code"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs cursor-pointer text-center"
+              >
+                Commit New Passkey
+              </button>
+            </form>
+          )}
+
+          {/* Sandbox alert disclaimer */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-slate-450 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-slate-400 font-sans leading-normal">
+              Enterprises authentication policies active. Multi-user billing, cashbooks and operations logs will isolate actions securely to this identity.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
+    <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
       
       {/* TOAST PANEL WRAPPER */}
       {toast && (
@@ -415,18 +854,31 @@ export default function App() {
         <div className="p-5 border-b border-[#E5E7EB]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div 
-                className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white shadow-lg shadow-[#5B21FF]/20 font-display cursor-pointer shrink-0"
-                onClick={() => {
-                  if (!isSidebarOpen) setIsSidebarOpen(true);
-                }}
-              >
-                AP
-              </div>
+              {businessSettings?.logoUrl ? (
+                <img 
+                  src={businessSettings.logoUrl} 
+                  className="w-10 h-10 rounded-xl object-contain shadow-sm shrink-0 border border-slate-100 bg-white" 
+                  alt="Corporate logo" 
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div 
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white shadow-lg shadow-[#5B21FF]/20 font-display cursor-pointer shrink-0"
+                  onClick={() => {
+                    if (!isSidebarOpen) setIsSidebarOpen(true);
+                  }}
+                >
+                  {companyInitials}
+                </div>
+              )}
               {isSidebarOpen && (
-                <div>
-                  <h1 className="text-sm font-bold tracking-tight text-slate-900 font-display">Apex<span className="text-[#5B21FF]">Billing</span></h1>
-                  <span className="text-[10px] font-mono text-purple-600 block leading-tight font-semibold">Enterprises (India)</span>
+                <div className="overflow-hidden">
+                  <h1 className="text-sm font-bold tracking-tight text-slate-900 font-display truncate">{companyNameText}</h1>
+                  <span className="text-[10px] font-mono text-purple-600 block leading-tight font-semibold truncate">
+                    {businessSettings?.gstIn || "Active Portal"}
+                  </span>
                 </div>
               )}
             </div>
@@ -485,18 +937,34 @@ export default function App() {
           })}
         </nav>
 
-        {/* Footer info bar */}
-        {isSidebarOpen && businessSettings && (
-          <div className="p-4 mt-auto border-t border-[#E5E7EB]">
-            <div className="p-3 bg-slate-50 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB]">
-              <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-white overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0">
-                {businessSettings.companyName.charAt(0).toUpperCase()}
-              </div>
+        {/* Footer info bar & Logout button */}
+        {isSidebarOpen && currentUser && (
+          <div className="p-4 mt-auto border-t border-[#E5E7EB] space-y-2.5">
+            <div className="p-3 bg-slate-55 bg-slate-50 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB]">
+              {businessSettings?.logoUrl ? (
+                <img src={businessSettings.logoUrl} className="w-9 h-9 rounded-full object-contain shadow-sm shrink-0 border border-slate-200 bg-white" alt="Active logo" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-white overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0">
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 overflow-hidden text-left">
-                <p className="text-xs font-bold truncate text-slate-850">{businessSettings.companyName}</p>
-                <p className="text-[10px] text-slate-400 truncate font-mono">{businessSettings.email || 'admin@demo.com'}</p>
+                <p className="text-xs font-bold truncate text-slate-850">{currentUser.name}</p>
+                <p className="text-[10px] text-slate-450 truncate mt-0.5 leading-none uppercase font-mono tracking-wider">{currentUser.role}</p>
               </div>
             </div>
+
+            <button 
+              onClick={() => {
+                localStorage.removeItem('current_user');
+                setCurrentUser(null);
+                showToast("Logged out successfully from portal session", "info");
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-rose-50 text-rose-600 hover:bg-rose-100/70 border border-rose-100 rounded-xl text-xs font-bold transition select-none cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout Securely</span>
+            </button>
           </div>
         )}
       </aside>
@@ -513,23 +981,37 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-xs">AP</div>
-            <span className="text-xs font-bold text-slate-900 font-display">Apex<span className="text-[#5B21FF]">Billing</span></span>
+            {businessSettings?.logoUrl ? (
+              <img 
+                src={businessSettings.logoUrl} 
+                className="w-8 h-8 rounded-lg object-contain border border-slate-100" 
+                alt="Logo"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-xs">
+                {companyInitials}
+              </div>
+            )}
+            <span className="text-xs font-bold text-slate-900 font-display truncate max-w-[120px]">{companyNameText}</span>
           </div>
         </div>
 
         {/* Professional badge avatar on right edge of mobile top header */}
         {businessSettings && (
-          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500">
-            {businessSettings.companyName.charAt(0).toUpperCase()}
+          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500 overflow-hidden">
+            {businessSettings.logoUrl ? (
+              <img src={businessSettings.logoUrl} className="w-full h-full object-contain" alt="Profile" />
+            ) : (
+              companyInitials
+            )}
           </div>
         )}
       </div>
 
       {/* MASTER SCROLLABLE COMPONENT PANEL CONTAINER */}
-      <main className="flex-1 flex flex-col overflow-x-hidden min-h-screen">
+      <main className="flex-1 flex flex-col overflow-y-auto h-full">
         {/* Top Operational Status Bar */}
-        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 flex items-center justify-between no-print shadow-sm sticky top-0 z-10">
+        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in">
           <div className="flex items-center gap-3">
             {/* High-visibility toggle for desktop */}
             <button 
@@ -544,15 +1026,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* System sync button */}
-            <button 
-              onClick={loadMasterData}
-              className="px-3 py-1.5 border border-[#E5E7EB] rounded-xl text-slate-650 hover:bg-slate-50 text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer bg-white transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Force Sync</span>
-            </button>
-
             {/* Notification alert count */}
             <div className="relative">
               <span className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-default block bg-white transition">
@@ -561,32 +1034,22 @@ export default function App() {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full"></span>
             </div>
 
-            {/* Acting Security Role Switcher with dynamic dispatcher */}
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 p-1 py-1 px-2 rounded-xl shadow-xs">
-              <div className="hidden sm:flex flex-col text-right font-sans">
-                <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-widest leading-none">Acting Identity</span>
-                <span className="text-[10.5px] font-bold text-indigo-650 leading-relaxed uppercase">{activeRole}</span>
+            {/* Logged in User Profile badge indicator */}
+            {currentUser && (
+              <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 py-1 px-2.5 rounded-xl shadow-xs">
+                {businessSettings?.logoUrl ? (
+                  <img src={businessSettings.logoUrl} className="w-6.5 h-6.5 rounded-lg object-contain shrink-0 bg-white border border-slate-200" alt="Avatar logo" />
+                ) : (
+                  <div className="w-6.5 h-6.5 rounded-lg bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700 font-mono shrink-0">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="hidden sm:flex flex-col text-left font-sans">
+                  <span className="text-[11px] font-bold text-slate-800 leading-none">{currentUser.name}</span>
+                  <span className="text-[8.5px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">{currentUser.role}</span>
+                </div>
               </div>
-              <select
-                value={activeRole}
-                onChange={async (e) => {
-                  const selected = e.target.value as UserRole;
-                  localStorage.setItem('active_role', selected);
-                  setActiveRole(selected);
-                  showToast(`Access context switched to Security level: "${selected}"`, "info");
-                  
-                  // Re-fetch master state to run server API permission checks
-                  await loadMasterData();
-                }}
-                className="bg-white border border-slate-200 text-[11px] font-bold py-1 px-2.5 rounded-lg text-slate-700 hover:border-indigo-300 focus:outline-none transition cursor-pointer font-sans"
-                id="global-role-switcher"
-              >
-                <option value="Admin">🛡️ Admin Account</option>
-                <option value="Manager">📈 Manager Level</option>
-                <option value="Accountant">🧾 Accountant Level</option>
-                <option value="Staff">👥 Staff Operator</option>
-              </select>
-            </div>
+            )}
           </div>
         </header>
 

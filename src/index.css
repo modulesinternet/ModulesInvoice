@@ -47,3 +47,75 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(91, 33, 255, 0.25);
 }
+
+/* Print optimizations to prevent extra physical blank pages */
+@media print {
+  html, body {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Completely hide all non-print interface components */
+  .no-print,
+  #global-sidebar,
+  aside,
+  header,
+  footer,
+  nav,
+  button,
+  .no-print * {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0 !important;
+    position: absolute !important;
+    top: -9999px !important;
+    left: -9999px !important;
+  }
+
+  /* Main container reset on print page */
+  main,
+  #root,
+  .flex-1,
+  .min-h-screen {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Specific printed areas formatting */
+  #print-invoice-layout,
+  #ledger-printable-payload,
+  #quotation-print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0px !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: black !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Prevent extra trailing blank pages */
+  body::after,
+  div::after,
+  main::after {
+    content: none !important;
+  }
+}
+
