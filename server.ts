@@ -8,6 +8,7 @@ import fs from 'fs';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   getDoc, 
   getDocs, 
@@ -138,7 +139,15 @@ try {
   if (fs.existsSync(firebaseConfigPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
     firebaseApp = initializeApp(firebaseConfig);
-    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    if (firebaseConfig.firestoreDatabaseId) {
+      db = initializeFirestore(firebaseApp, {
+        experimentalForceLongPolling: true,
+      }, firebaseConfig.firestoreDatabaseId);
+    } else {
+      db = initializeFirestore(firebaseApp, {
+        experimentalForceLongPolling: true,
+      });
+    }
     console.log("Firebase initialized successfully on backend with project ID:", firebaseConfig.projectId);
   } else {
     console.warn("firebase-applet-config.json not found in server root. Running in offline cache mode.");
