@@ -17,6 +17,7 @@ import {
   Check
 } from 'lucide-react';
 import { Quotation, Client, Product, QuotationItem } from '../types';
+import Pagination from './Pagination';
 
 interface QuotationsModuleProps {
   quotations: Quotation[];
@@ -40,6 +41,8 @@ export default function QuotationsModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // New quotation wizard states
   const [clientId, setClientId] = useState('');
@@ -58,6 +61,11 @@ export default function QuotationsModule({
   const [currentProductId, setCurrentProductId] = useState('');
   const [currentQty, setCurrentQty] = useState('1');
   const [currentPrice, setCurrentPrice] = useState('');
+
+  const filteredQuotations = quotations.filter(q => 
+    q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    q.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -346,7 +354,7 @@ export default function QuotationsModule({
                 type="text"
                 placeholder="Search estimate number or client..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 id="quote-search-bar"
               />
@@ -378,7 +386,7 @@ export default function QuotationsModule({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {quotations.filter(q => q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || q.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase())).map((q) => (
+                  {filteredQuotations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((q) => (
                     <tr key={q.id} className="hover:bg-slate-50/50 transition">
                       <td className="py-4 px-5 font-mono font-bold text-slate-900">{q.quotationNumber}</td>
                       <td className="py-4 px-5 font-semibold text-slate-700">{q.clientName}</td>
@@ -403,6 +411,14 @@ export default function QuotationsModule({
                 </tbody>
               </table>
             </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredQuotations.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       )}

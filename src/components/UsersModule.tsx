@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, ActivityLog, RolePermissions, UserRole, RoleModulePermission } from '../types';
 import { api } from '../services/api';
+import Pagination from './Pagination';
 
 interface UsersModuleProps {
   users: UserProfile[];
@@ -50,6 +51,10 @@ export default function UsersModule({
   const [activeSubTab, setActiveSubTab] = useState<'members' | 'rbac'>('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
+  const [usersPageSize, setUsersPageSize] = useState(10);
+  const [logsCurrentPage, setLogsCurrentPage] = useState(1);
+  const [logsPageSize, setLogsPageSize] = useState(10);
 
   // Form states for adding member
   const [name, setName] = useState('');
@@ -221,7 +226,7 @@ export default function UsersModule({
             </div>
 
             <div className="space-y-3">
-              {users.map((usr) => (
+              {users.slice((usersCurrentPage - 1) * usersPageSize, usersCurrentPage * usersPageSize).map((usr) => (
                 <div 
                   key={usr.userId} 
                   className="p-3.5 bg-slate-50 border border-[#E5E7EB] rounded-xl flex items-center justify-between hover:border-indigo-100 transition"
@@ -238,7 +243,19 @@ export default function UsersModule({
                   </span>
                 </div>
               ))}
+
+              {users.length === 0 && (
+                <div className="text-center py-6 text-slate-400 italic">No operators enrolled.</div>
+              )}
             </div>
+
+            <Pagination
+              currentPage={usersCurrentPage}
+              totalItems={users.length}
+              pageSize={usersPageSize}
+              onPageChange={setUsersCurrentPage}
+              onPageSizeChange={setUsersPageSize}
+            />
           </div>
 
           {/* COMPREHENSIVE COMPLIANCE SECURITY AUDIT LOG */}
@@ -252,7 +269,7 @@ export default function UsersModule({
             </div>
 
             <div className="overflow-y-auto max-h-[480px] pr-2 divide-y divide-slate-100 text-xs">
-              {logs.map((log) => (
+              {logs.slice((logsCurrentPage - 1) * logsPageSize, logsCurrentPage * logsPageSize).map((log) => (
                 <div key={log.id} className="py-4 flex gap-3 items-start hover:bg-slate-50/20 transition px-2 rounded-xl">
                   <div className="shrink-0 p-1.5 bg-slate-100 rounded-lg text-slate-500 mt-1">
                     <Clock className="w-4 h-4" />
@@ -276,6 +293,14 @@ export default function UsersModule({
                 <div className="text-center py-12 text-slate-400 italic">No operational logs recorded in the last 24h.</div>
               )}
             </div>
+
+            <Pagination
+              currentPage={logsCurrentPage}
+              totalItems={logs.length}
+              pageSize={logsPageSize}
+              onPageChange={setLogsCurrentPage}
+              onPageSizeChange={setLogsPageSize}
+            />
           </div>
         </div>
       ) : (

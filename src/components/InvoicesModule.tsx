@@ -26,6 +26,7 @@ import {
 import { Invoice, Client, Product, InvoiceItem } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import Pagination from './Pagination';
 
 interface InvoicesModuleProps {
   invoices: Invoice[];
@@ -53,6 +54,8 @@ export default function InvoicesModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [invoiceTemplate, setInvoiceTemplate] = useState<InvoiceLayoutTemplate>('navy');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -537,7 +540,7 @@ export default function InvoicesModule({
                 type="text"
                 placeholder="Search serial code or client name..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 id="search-invoices-input"
               />
@@ -548,7 +551,7 @@ export default function InvoicesModule({
               {['All', 'paid', 'partially_paid', 'unpaid', 'overdue'].map((st) => (
                 <button
                   key={st}
-                  onClick={() => setStatusFilter(st)}
+                  onClick={() => { setStatusFilter(st); setCurrentPage(1); }}
                   className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${statusFilter === st ? 'bg-[#5B21FF] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 >
                   {st.replace('_', ' ')}
@@ -585,7 +588,7 @@ export default function InvoicesModule({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredInvoices.map((inv) => (
+                  {filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((inv) => (
                     <tr key={inv.id} className="hover:bg-slate-50/50 transition">
                       <td className="py-4 px-5 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
                       <td className="py-4 px-5 font-semibold text-slate-700">{inv.clientName}</td>
@@ -635,6 +638,14 @@ export default function InvoicesModule({
                 </tbody>
               </table>
             </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredInvoices.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       )}

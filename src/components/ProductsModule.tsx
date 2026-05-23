@@ -15,6 +15,7 @@ import {
   Check
 } from 'lucide-react';
 import { Product } from '../types';
+import Pagination from './Pagination';
 
 interface ProductsModuleProps {
   products: Product[];
@@ -45,6 +46,8 @@ export default function ProductsModule({
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Category Configuration Modal states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -228,7 +231,7 @@ export default function ProductsModule({
               type="text"
               placeholder="Search by name, SKU, HSN/SAC..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
               id="product-search-input"
             />
@@ -243,7 +246,7 @@ export default function ProductsModule({
           {filterCategories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => { setSelectedCategory(cat); setCurrentPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
                 selectedCategory === cat 
                   ? 'bg-purple-50 border border-purple-200 text-purple-700' 
@@ -258,7 +261,7 @@ export default function ProductsModule({
 
       {/* PRODUCT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="products-cards-grid">
-        {filteredProducts.map((p) => (
+        {filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p) => (
           <div 
             key={p.id}
             className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm hover:shadow-md transition overflow-hidden flex flex-col justify-between"
@@ -343,6 +346,14 @@ export default function ProductsModule({
           <p className="text-xs text-slate-400 mt-1">Refine your search tags or register a fresh product scope directly.</p>
         </div>
       )}
+
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filteredProducts.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* FORM MODAL */}
       {isModalOpen && (

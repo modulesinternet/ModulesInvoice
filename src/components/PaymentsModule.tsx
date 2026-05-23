@@ -7,6 +7,7 @@ import {
   X
 } from 'lucide-react';
 import { Payment, Client, Invoice } from '../types';
+import Pagination from './Pagination';
 
 interface PaymentsModuleProps {
   payments: Payment[];
@@ -25,6 +26,13 @@ export default function PaymentsModule({
 }: PaymentsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const filteredPayments = payments.filter(p => 
+    p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.referenceNum && p.referenceNum.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   // New payment form fields
   const [clientId, setClientId] = useState('');
@@ -176,57 +184,65 @@ export default function PaymentsModule({
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
               <Search className="w-4 h-4" />
             </span>
-            <input 
-              type="text"
-              placeholder="Search reference or client..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-              id="payment-search"
-            />
-          </div>
-          <span className="text-xs text-slate-400 font-medium">Reconciled lines: <b className="text-slate-800">{payments.length}</b></span>
+          <input 
+            type="text"
+            placeholder="Search reference or client..."
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+            id="payment-search"
+          />
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
-                <th className="py-3 px-5">Reconciliation Date</th>
-                <th className="py-3 px-5">UPI / bank Reference ID</th>
-                <th className="py-3 px-5">Corporate Partner</th>
-                <th className="py-3 px-5"> Settled Invoice</th>
-                <th className="py-3 px-5">Channel Mode</th>
-                <th className="py-3 px-5 text-right">Receipt Value</th>
-                <th className="py-3 px-5">Notes / Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {payments.filter(p => p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || (p.referenceNum && p.referenceNum.toLowerCase().includes(searchTerm.toLowerCase()))).map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50/5 transition">
-                  <td className="py-4 px-5 text-slate-500 font-mono">{p.paymentDate}</td>
-                  <td className="py-4 px-5 font-mono font-bold text-slate-900">{p.referenceNum}</td>
-                  <td className="py-4 px-5 font-semibold text-slate-700">{p.clientName}</td>
-                  <td className="py-4 px-5 text-indigo-700 font-semibold">{p.invoiceNumber}</td>
-                  <td className="py-4 px-5">
-                    <span className={`px-2 py-0.5 rounded border text-[10.5px] font-bold uppercase ${getModeBadge(p.paymentMode)}`}>
-                      {p.paymentMode}
-                    </span>
-                  </td>
-                  <td className="py-4 px-5 text-right font-mono font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
-                  <td className="py-4 px-5 text-slate-400 italic font-medium">{p.remarks}</td>
-                </tr>
-              ))}
-
-              {payments.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <span className="text-xs text-slate-400 font-medium">Reconciled lines: <b className="text-slate-800">{payments.length}</b></span>
       </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
+              <th className="py-3 px-5">Reconciliation Date</th>
+              <th className="py-3 px-5">UPI / bank Reference ID</th>
+              <th className="py-3 px-5">Corporate Partner</th>
+              <th className="py-3 px-5"> Settled Invoice</th>
+              <th className="py-3 px-5">Channel Mode</th>
+              <th className="py-3 px-5 text-right">Receipt Value</th>
+              <th className="py-3 px-5">Notes / Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-xs">
+            {filteredPayments.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p) => (
+              <tr key={p.id} className="hover:bg-slate-50/5 transition">
+                <td className="py-4 px-5 text-slate-500 font-mono">{p.paymentDate}</td>
+                <td className="py-4 px-5 font-mono font-bold text-slate-900">{p.referenceNum}</td>
+                <td className="py-4 px-5 font-semibold text-slate-700">{p.clientName}</td>
+                <td className="py-4 px-5 text-indigo-700 font-semibold">{p.invoiceNumber}</td>
+                <td className="py-4 px-5">
+                  <span className={`px-2 py-0.5 rounded border text-[10.5px] font-bold uppercase ${getModeBadge(p.paymentMode)}`}>
+                    {p.paymentMode}
+                  </span>
+                </td>
+                <td className="py-4 px-5 text-right font-mono font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
+                <td className="py-4 px-5 text-slate-400 italic font-medium">{p.remarks}</td>
+              </tr>
+            ))}
+
+            {filteredPayments.length === 0 && (
+              <tr>
+                <td colSpan={7} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filteredPayments.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
+    </div>
 
       {/* RECORD PAYMENT MODAL */}
       {isModalOpen && (

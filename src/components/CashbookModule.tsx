@@ -7,6 +7,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { CashbookEntry } from '../types';
+import Pagination from './Pagination';
 
 interface CashbookModuleProps {
   cashbook: CashbookEntry[];
@@ -21,6 +22,13 @@ export default function CashbookModule({
 }: CashbookModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const filteredCashbook = cashbook.filter(c => 
+    c.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   // Form states
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -152,7 +160,7 @@ export default function CashbookModule({
               type="text"
               placeholder="Search details or reference codes..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
               id="cashbook-table-filter"
             />
@@ -172,7 +180,7 @@ export default function CashbookModule({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
-              {cashbook.filter(c => c.description.toLowerCase().includes(searchTerm.toLowerCase()) || (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))).map((row) => (
+              {filteredCashbook.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/20">
                   <td className="py-3.5 px-5 font-mono text-slate-550">{row.date}</td>
                   <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">{row.referenceId || "N/A"}</td>
@@ -190,9 +198,23 @@ export default function CashbookModule({
                   </td>
                 </tr>
               ))}
+
+              {filteredCashbook.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredCashbook.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
 
       {/* FORM MODAL POPOVER */}

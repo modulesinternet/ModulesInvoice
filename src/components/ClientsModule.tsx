@@ -16,6 +16,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { Client } from '../types';
+import Pagination from './Pagination';
 
 interface ClientsModuleProps {
   clients: Client[];
@@ -39,6 +40,8 @@ export default function ClientsModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form states
   const [name, setName] = useState('');
@@ -146,7 +149,7 @@ export default function ClientsModule({
             type="text"
             placeholder="Search by name, GSTIN, email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
             id="client-search-field"
           />
@@ -160,7 +163,7 @@ export default function ClientsModule({
 
       {/* CLIENT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="client-cards-grid">
-        {filteredClients.map((c) => (
+        {filteredClients.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
           <div 
             key={c.id} 
             className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm hover:shadow-md transition duration-200 overflow-hidden flex flex-col justify-between"
@@ -252,6 +255,14 @@ export default function ClientsModule({
           </div>
         )}
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filteredClients.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* SLIDE-OVER FORM MODAL */}
       {isModalOpen && (

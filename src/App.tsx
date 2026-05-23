@@ -24,6 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import { api } from './services/api';
+import { DEFAULT_SETTINGS } from './lib/demoData';
 import { 
   Client, 
   Product, 
@@ -54,6 +55,102 @@ import SettingsModule from './components/SettingsModule';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings';
 
+export function computeLocalDashboardMetrics(
+  clients: Client[],
+  invoices: Invoice[],
+  payments: Payment[],
+  cashbook: CashbookEntry[]
+) {
+  const totalRevenue = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalInvoicesValue = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const unpaidInvoicesValue = invoices.reduce((sum, inv) => sum + (inv.dueAmount || 0), 0);
+  const totalOutstanding = clients.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
+
+  const totalClientsCount = clients.length;
+  const totalInvoicesCount = invoices.length;
+  const pendingInvoicesCount = invoices.filter(i => i.status !== 'paid').length;
+
+  const monthlyDataMap = new Map<string, { month: string; billed: number; collected: number }>();
+  const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+  months.forEach(m => {
+    monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
+  });
+
+  invoices.forEach(inv => {
+    if (!inv.date) return;
+    const monthIndex = new Date(inv.date).getMonth();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const name = monthNames[monthIndex];
+    if (monthlyDataMap.has(name)) {
+      const existing = monthlyDataMap.get(name)!;
+      existing.billed += (inv.total || 0);
+    }
+  });
+
+  payments.forEach(pay => {
+    if (!pay.paymentDate) return;
+    const monthIndex = new Date(pay.paymentDate).getMonth();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const name = monthNames[monthIndex];
+    if (monthlyDataMap.has(name)) {
+      const existing = monthlyDataMap.get(name)!;
+      existing.collected += (pay.amount || 0);
+    }
+  });
+
+  const chartData = Array.from(monthlyDataMap.values());
+
+  const recentInvoices = invoices.slice(0, 5).map(inv => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    clientName: inv.clientName,
+    total: inv.total,
+    status: inv.status,
+    date: inv.date
+  }));
+
+  const clientBilled: { [key: string]: { name: string; amount: number } } = {};
+  invoices.forEach(inv => {
+    if (!clientBilled[inv.clientId]) {
+      clientBilled[inv.clientId] = { name: inv.clientName, amount: 0 };
+    }
+    clientBilled[inv.clientId].amount += (inv.total || 0);
+  });
+  const topClients = Object.values(clientBilled)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  const upiCollected = payments.filter(p => p.paymentMode === 'UPI').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const bankCollected = payments.filter(p => p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const cashCollected = payments.filter(p => p.paymentMode === 'Cash').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const otherCollected = payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const latestCashbook = cashbook[cashbook.length - 1] || { runningCashBalance: 250000, runningBankBalance: 2005400 };
+
+  return {
+    metrics: {
+      totalRevenue,
+      totalInvoicesValue,
+      unpaidInvoicesValue,
+      totalOutstanding,
+      totalClientsCount,
+      totalInvoicesCount,
+      pendingInvoicesCount,
+      cashBalance: latestCashbook.runningCashBalance || 250000,
+      bankBalance: latestCashbook.runningBankBalance || 2005400
+    },
+    paymentMethods: [
+      { name: 'UPI Collections', value: upiCollected, color: '#8B5CF6' },
+      { name: 'Bank Wire / EFT', value: bankCollected, color: '#3B82F6' },
+      { name: 'Over Counter Cash', value: cashCollected, color: '#10B981' },
+      { name: 'Paper Cheque/Card', value: otherCollected, color: '#F59E0B' }
+    ],
+    chartData,
+    recentInvoices,
+    topClients
+  };
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -72,7 +169,9 @@ export default function App() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsPageSize, setNotificationsPageSize] = useState(5);
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
   const [categories, setCategories] = useState<string[]>([]);
   
   // User login status tracking
@@ -166,6 +265,16 @@ export default function App() {
   const loadMasterData = async () => {
     try {
       setLoading(true);
+
+      const safeFetch = async <T,>(promise: Promise<T>, fallback: T): Promise<T> => {
+        try {
+          return await promise;
+        } catch (err: any) {
+          console.warn("Intermediate load failure: ", err);
+          return fallback;
+        }
+      };
+
       const [
         dashData,
         clientsData,
@@ -182,36 +291,66 @@ export default function App() {
         rolesData,
         categoriesData
       ] = await Promise.all([
-        api.getDashboard(),
-        api.getClients(),
-        api.getProducts(),
-        api.getInvoices(),
-        api.getQuotations(),
-        api.getPayments(),
-        api.getLedgers(),
-        api.getCashbook(),
-        api.getUsers(),
-        api.getLogs(),
-        api.getNotifications(),
-        api.getSettings(),
-        api.getRoles(),
-        api.getCategories()
+        safeFetch(api.getDashboard(), null),
+        safeFetch(api.getClients(), []),
+        safeFetch(api.getProducts(), []),
+        safeFetch(api.getInvoices(), []),
+        safeFetch(api.getQuotations(), []),
+        safeFetch(api.getPayments(), []),
+        safeFetch(api.getLedgers(), []),
+        safeFetch(api.getCashbook(), []),
+        safeFetch(api.getUsers(), []),
+        safeFetch(api.getLogs(), []),
+        safeFetch(api.getNotifications(), []),
+        safeFetch(api.getSettings(), null),
+        safeFetch(api.getRoles(), []),
+        safeFetch(api.getCategories(), [])
       ]);
 
-      setDashboardMetrics(dashData);
-      setClients(clientsData);
-      setProducts(productsData);
-      setInvoices(invoicesData);
-      setQuotations(quotationsData);
-      setPayments(paymentsData);
-      setLedger(ledgerData);
-      setCashbook(cashbookData);
-      setUsers(usersData);
-      setLogs(logsData);
-      setNotifications(notificationsData);
-      setBusinessSettings(settingsData);
-      setAppRoles(rolesData);
-      setCategories(categoriesData);
+      const clientsFinal = clientsData || [];
+      const productsFinal = productsData || [];
+      const invoicesFinal = invoicesData || [];
+      const quotationsFinal = quotationsData || [];
+      const paymentsFinal = paymentsData || [];
+      const ledgerFinal = ledgerData || [];
+      const cashbookFinal = cashbookData || [];
+      const usersFinal = usersData || [];
+      const logsFinal = logsData || [];
+      const notificationsFinal = notificationsData || [];
+      const rolesFinal = rolesData || [];
+      const categoriesFinal = categoriesData || [];
+
+      setClients(clientsFinal);
+      setProducts(productsFinal);
+      setInvoices(invoicesFinal);
+      setQuotations(quotationsFinal);
+      setPayments(paymentsFinal);
+      setLedger(ledgerFinal);
+      setCashbook(cashbookFinal);
+      setUsers(usersFinal);
+      setLogs(logsFinal);
+      setNotifications(notificationsFinal);
+      
+      if (settingsData) {
+        setBusinessSettings(settingsData);
+      } else if (!businessSettings) {
+        setBusinessSettings(DEFAULT_SETTINGS);
+      }
+      
+      setAppRoles(rolesFinal);
+      setCategories(categoriesFinal);
+
+      if (dashData) {
+        setDashboardMetrics(dashData);
+      } else {
+        const locallyComputed = computeLocalDashboardMetrics(
+          clientsFinal,
+          invoicesFinal,
+          paymentsFinal,
+          cashbookFinal
+        );
+        setDashboardMetrics(locallyComputed);
+      }
     } catch (e: any) {
       console.error("Fetch pipeline error: ", e);
       // If permission is denied because they shifted tab, keep loading other states graceful
@@ -455,34 +594,13 @@ export default function App() {
     };
   };
 
-  // Define fallback demo users list if data fetching hasn't primed 'users' state yet
+  // Define fallback admin user profile if fetching is pending
   const loginUsersList = users.length > 0 ? users : [
     {
-      userId: "demo-admin",
-      email: "admin@demo.com",
-      name: "Karan Sharma (Director)",
+      userId: "admin-modulesinternet",
+      email: "modulesinternet@gmail.com",
+      name: "Admin",
       role: "Admin" as UserRole,
-      status: "active" as const
-    },
-    {
-      userId: "demo-manager",
-      email: "manager@demo.com",
-      name: "Sonia Rao (Operations)",
-      role: "Manager" as UserRole,
-      status: "active" as const
-    },
-    {
-      userId: "demo-acc",
-      email: "accountant@demo.com",
-      name: "Ramanathan Iyer (Lead Accountant)",
-      role: "Accountant" as UserRole,
-      status: "active" as const
-    },
-    {
-      userId: "demo-staff",
-      email: "staff@demo.com",
-      name: "Arjun Mehta (Staff Operator)",
-      role: "Staff" as UserRole,
       status: "active" as const
     }
   ];
@@ -651,31 +769,6 @@ export default function App() {
               >
                 Unlock Access Securely
               </button>
-
-              {/* Sandbox Quick Select Helper */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
-                <p className="text-[10px] font-bold text-slate-450 uppercase tracking-widest text-center">Dev Credentials Auto-loader</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {loginUsersList.slice(0, 4).map((user) => {
-                    const pass = userPasswords[user.email.toLowerCase()] || "admin123";
-                    return (
-                      <button
-                        type="button"
-                        key={user.userId}
-                        onClick={() => {
-                          setLoginEmail(user.email);
-                          setLoginPassword(pass);
-                          showToast(`Autofilled: ${user.name}`);
-                        }}
-                        className="p-1 px-2 border border-slate-200 hover:border-indigo-300 rounded-lg text-left bg-white text-[9.5px] truncate cursor-pointer transition select-none flex flex-col justify-center"
-                      >
-                        <span className="font-bold text-slate-800 leading-tight block truncate">{user.name.split(" ")[0]}</span>
-                        <span className="text-[8px] font-mono text-slate-400 mt-0.5 block italic truncate">Pass: {pass}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             </form>
           )}
 
@@ -1026,12 +1119,74 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Notification alert count */}
+            {/* Notification alert count with interactive dropdown */}
             <div className="relative">
-              <span className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-default block bg-white transition">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none"
+                title="View System Notifications"
+              >
                 <Bell className="w-4 h-4 text-slate-600" />
-              </span>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full"></span>
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full animate-pulse"></span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left animate-fade-in divide-y divide-slate-100 font-sans">
+                  <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-slate-100">
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
+                    {notifications.some(n => !n.isRead) && (
+                      <button 
+                        onClick={() => {
+                          const updated = notifications.map(n => ({ ...n, isRead: true }));
+                          setNotifications(updated);
+                          showToast("Assigned read clearance to logs", "success");
+                        }}
+                        className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
+                      >
+                        Clear Unread
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-xs">
+                        No active network notices.
+                      </div>
+                    ) : (
+                      notifications.slice(0, notificationsPageSize).map((item) => (
+                        <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
+                            <span className="text-[8px] font-mono text-slate-400 shrink-0">{new Date(item.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 leading-relaxed block">{item.message}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {notifications.length > 5 && (
+                    <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
+                      {notificationsPageSize < notifications.length ? (
+                        <button 
+                          onClick={() => setNotificationsPageSize(prev => Math.min(prev + 5, notifications.length))}
+                          className="w-full text-center py-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-[10px] font-bold uppercase text-slate-600 cursor-pointer transition"
+                        >
+                          View More (+5)
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => setNotificationsPageSize(5)}
+                          className="w-full text-center py-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-[10px] font-bold uppercase text-slate-600 cursor-pointer transition"
+                        >
+                          Show Less
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Logged in User Profile badge indicator */}

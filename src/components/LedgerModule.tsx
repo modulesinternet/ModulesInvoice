@@ -12,6 +12,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { LedgerEntry, Client } from '../types';
+import Pagination from './Pagination';
 
 interface LedgerModuleProps {
   ledger: LedgerEntry[];
@@ -25,6 +26,8 @@ export default function LedgerModule({
   initialSelectedClientId = ''
 }: LedgerModuleProps) {
   const [selectedClientId, setSelectedClientId] = useState(initialSelectedClientId || (clients[0]?.id || ''));
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -59,7 +62,7 @@ export default function LedgerModule({
           <span className="text-xs text-slate-400 font-semibold uppercase">Select Customer A/C:</span>
           <select
             value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
+            onChange={(e) => { setSelectedClientId(e.target.value); setCurrentPage(1); }}
             className="text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
             id="ledger-client-dropdown"
           >
@@ -140,7 +143,7 @@ export default function LedgerModule({
                   </td>
                 </tr>
 
-                {clientLedger.map((row) => (
+                {clientLedger.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/20">
                     <td className="py-3.5 px-5 text-slate-500 font-mono">{row.date}</td>
                     <td className="py-3.5 px-5 font-mono font-bold text-slate-800 uppercase">{row.referenceId}</td>
@@ -170,6 +173,14 @@ export default function LedgerModule({
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={clientLedger.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-[#E5E7EB] p-12 text-center">

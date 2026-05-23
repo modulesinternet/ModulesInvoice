@@ -589,6 +589,36 @@ async function bootstrapFromFirestore() {
       db_users = usersSnap.docs.map(d => d.data() as UserProfile);
     }
 
+    // Ensure modulesinternet@gmail.com is in db_users and stale demo users are removed
+    const finalUsers: UserProfile[] = [];
+    const demoEmails = ['admin@demo.com', 'manager@demo.com', 'accountant@demo.com', 'staff@demo.com'];
+    const hasAdmin = db_users.some(u => u.email.toLowerCase() === 'modulesinternet@gmail.com');
+    
+    if (!hasAdmin) {
+      finalUsers.push({
+        userId: "admin-modulesinternet",
+        email: "modulesinternet@gmail.com",
+        name: "Admin",
+        role: "Admin",
+        status: "active",
+        createdAt: "2026-05-01T10:00:00Z",
+        lastLoginAt: ""
+      });
+    }
+
+    db_users.forEach(u => {
+      const emailLower = u.email.toLowerCase();
+      if (demoEmails.includes(emailLower)) {
+        return; // Remove older demo templates
+      }
+      if (emailLower === 'modulesinternet@gmail.com') {
+        u.role = 'Admin';
+      }
+      finalUsers.push(u);
+    });
+    db_users = finalUsers;
+    saveStateToLocalCache();
+
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
     console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap.");
