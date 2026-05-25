@@ -75,13 +75,79 @@ export default function SettingsModule({
     }
   }, [settings]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("File size exceeds 2MB limit. Please upload compact images.");
-        return;
+  const compressImage = (
+    fileOrBase64: File | string,
+    maxWidth: number,
+    maxHeight: number,
+    quality: number = 0.8
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Scale preserving aspect ratio
+        if (width > maxWidth || height > maxHeight) {
+          if (width / maxWidth > height / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(typeof fileOrBase64 === 'string' ? fileOrBase64 : '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const isPng = typeof fileOrBase64 === 'string' 
+          ? fileOrBase64.startsWith('data:image/png') 
+          : fileOrBase64.type === 'image/png';
+
+        const format = isPng ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(format, isPng ? undefined : quality));
+      };
+
+      img.onerror = () => {
+        reject(new Error('Failed to load image for optimization'));
+      };
+
+      if (typeof fileOrBase64 === 'string') {
+        img.src = fileOrBase64;
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          img.src = reader.result as string;
+        };
+        reader.onerror = () => reject(new Error('Failed to read image file'));
+        reader.readAsDataURL(fileOrBase64);
       }
+    });
+  };
+
+  const processImageUpload = async (
+    file: File,
+    setter: (val: string) => void,
+    maxWidth: number,
+    maxHeight: number
+  ) => {
+    try {
+      const compressedBase64 = await compressImage(file, maxWidth, maxHeight);
+      setter(compressedBase64);
+    } catch (err: any) {
+      console.error("Optimization failed: ", err);
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
@@ -185,17 +251,7 @@ export default function SettingsModule({
                     setIsDragging(false);
                     const file = e.dataTransfer.files?.[0];
                     if (file) {
-                      if (file.size > 2 * 1024 * 1024) {
-                        alert("File size exceeds 2MB limit. Please upload compact images.");
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        if (typeof reader.result === 'string') {
-                          setLogoUrl(reader.result);
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                      processImageUpload(file, setLogoUrl, 400, 150);
                     }
                   }}
                 >
@@ -253,7 +309,12 @@ export default function SettingsModule({
                     type="file"
                     accept="image/*"
                     id="logo-file-picker"
-                    onChange={(e) => handleFileChange(e, setLogoUrl)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        processImageUpload(file, setLogoUrl, 400, 150);
+                      }
+                    }}
                     className="hidden"
                   />
                 </div>
@@ -292,17 +353,7 @@ export default function SettingsModule({
                     setIsDragging(false);
                     const file = e.dataTransfer.files?.[0];
                     if (file) {
-                      if (file.size > 2 * 1024 * 1024) {
-                        alert("File size exceeds 2MB limit. Please upload compact images.");
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        if (typeof reader.result === 'string') {
-                          setFaviconUrl(reader.result);
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                      processImageUpload(file, setFaviconUrl, 128, 128);
                     }
                   }}
                 >
@@ -360,7 +411,12 @@ export default function SettingsModule({
                     type="file"
                     accept="image/*"
                     id="favicon-file-picker"
-                    onChange={(e) => handleFileChange(e, setFaviconUrl)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        processImageUpload(file, setFaviconUrl, 128, 128);
+                      }
+                    }}
                     className="hidden"
                   />
                 </div>
@@ -575,13 +631,7 @@ export default function SettingsModule({
                       setIsDragging(false);
                       const file = e.dataTransfer.files?.[0];
                       if (file && file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          if (typeof reader.result === 'string') {
-                            setSignatureUrl(reader.result);
-                          }
-                        };
-                        reader.readAsDataURL(file);
+                        processImageUpload(file, setSignatureUrl, 350, 120);
                       }
                     }}
                     className={`border-2 border-dashed rounded-2xl p-6 text-center transition flex flex-col items-center justify-center gap-2 cursor-pointer ${
@@ -602,13 +652,7 @@ export default function SettingsModule({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === 'string') {
-                              setSignatureUrl(reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
+                          processImageUpload(file, setSignatureUrl, 350, 120);
                         }
                       }}
                     />

@@ -484,7 +484,6 @@ export const DEMO_LEDGER: LedgerEntry[] = [
 ];
 
 export const DEMO_CASHBOOK: CashbookEntry[] = [
-  { id: "cb1", date: "2026-05-02", description: "Opening Cash Book Balance setup", type: "adjustment", paymentMode: "Bank Transfer", amount: 1545000, runningCashBalance: 250000, runningBankBalance: 1295000, createdAt: "2026-05-02T09:00:00Z" },
   { id: "cb2", date: "2026-05-02", description: "Receipt for HDFC translation Cheque clear", type: "income", paymentMode: "Bank Transfer", amount: 16800, runningCashBalance: 250000, runningBankBalance: 1311800, referenceId: "pay6", createdAt: "2026-05-02T16:45:00Z" },
   { id: "cb3", date: "2026-05-05", description: "Server Deploy payoff from Tata (NEFT)", type: "income", paymentMode: "Bank Transfer", amount: 88500, runningCashBalance: 250000, runningBankBalance: 1400300, referenceId: "pay1", createdAt: "2026-05-05T12:00:00Z" },
   { id: "cb4", date: "2026-05-10", description: "SaaS Phase 1 signoff Infosys Bank Net", type: "income", paymentMode: "Bank Transfer", amount: 344000, runningCashBalance: 250000, runningBankBalance: 1744300, referenceId: "pay2", createdAt: "2026-05-10T14:00:00Z" },

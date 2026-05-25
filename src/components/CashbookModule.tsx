@@ -101,10 +101,7 @@ export default function CashbookModule({
 
   sortedCashbook.forEach(c => {
     const amount = c.amount || 0;
-    if (c.type === 'adjustment') {
-      if (c.runningCashBalance !== undefined) cashBalance = c.runningCashBalance;
-      if (c.runningBankBalance !== undefined) bankBalance = c.runningBankBalance;
-    } else if (c.type === 'income') {
+    if (c.type === 'income') {
       if (c.paymentMode === 'Cash') {
         cashReceipts += amount;
         cashBalance += amount;

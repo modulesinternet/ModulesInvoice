@@ -144,10 +144,7 @@ export function computeLocalDashboardMetrics(
     let bank = 0;
     sortedCashbook.forEach(c => {
       const amount = c.amount || 0;
-      if (c.type === 'adjustment') {
-        if (c.runningCashBalance !== undefined) cash = c.runningCashBalance;
-        if (c.runningBankBalance !== undefined) bank = c.runningBankBalance;
-      } else if (c.type === 'income') {
+      if (c.type === 'income') {
         if (c.paymentMode === 'Cash') cash += amount;
         else bank += amount;
       } else if (c.type === 'expense') {
