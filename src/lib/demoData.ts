@@ -505,13 +505,13 @@ export const DEMO_LOGS: ActivityLog[] = [
 
 export const DEMO_NOTIFICATIONS: Notification[] = [
   { id: "n1", title: "Enterprise Overdue Alert", message: "Invoice APX/26-27/010 from HDFC Life is pending final validation signoff check.", type: "warning", isRead: false, createdAt: "2026-05-23T07:15:00Z" },
-  { id: "n2", title: "Low Stock Warning", message: "Premium Network Routers (p7) has dropped down to 24 units in the Mumbai hub.", type: "warning", isRead: false, createdAt: "2026-05-23T05:30:00Z" },
+  { id: "n2", title: "Configuration Update", message: "System metadata and business registration settings fully synchronized with G-Ledger.", type: "info", isRead: false, createdAt: "2026-05-23T05:30:00Z" },
   { id: "n3", title: "Successful Payment Sync", message: "Infosys Ltd settled APX/26-27/002 fully (INR 3,44,000 auto synced with G-Ledger and Cashbook).", type: "success", isRead: true, createdAt: "2026-05-22T14:02:00Z" },
   { id: "n4", title: "Quotation Accepted", message: "Hindustan Unilever officially approved quotation EST/26-27/004.", type: "success", isRead: true, createdAt: "2026-05-22T09:05:00Z" },
   { id: "n5", title: "Client Created", message: "Tata Consultancy Services Ltd registered in client index successfully.", type: "info", isRead: false, createdAt: "2026-05-21T11:00:00Z" },
   { id: "n6", title: "Invoice Draft Saved", message: "Invoice for Reliance Retail has been securely cached in local storage.", type: "info", isRead: false, createdAt: "2026-05-21T10:15:00Z" },
   { id: "n7", title: "Security Policy Hardened", message: "All API communication limits checked and restricted to Authorized Roles.", type: "success", isRead: false, createdAt: "2026-05-20T16:00:00Z" },
   { id: "n8", title: "Weekly Ledger Reconciled", message: "Cashbook entries fully balance with verified bank accounts ledger.", type: "success", isRead: true, createdAt: "2026-05-19T18:30:00Z" },
-  { id: "n9", title: "GST Audit Configured", message: "HSN validation routines automated for new quotes & billings.", type: "info", isRead: true, createdAt: "2026-05-19T11:45:00Z" },
+  { id: "n9", title: "System Compliance Reconciled", message: "Compliance and taxation validation routines automated for new quotes & billings.", type: "info", isRead: true, createdAt: "2026-05-19T11:45:00Z" },
   { id: "n10", title: "Team Privileges Aligned", message: "Manager write and delete scopes restricted based on updated security directives.", type: "warning", isRead: false, createdAt: "2026-05-18T14:20:00Z" }
 ];

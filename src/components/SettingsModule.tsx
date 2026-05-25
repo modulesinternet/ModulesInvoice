@@ -38,21 +38,42 @@ export default function SettingsModule({
   const [success, setSuccess] = useState(false);
 
   // Form parameters
-  const [companyName, setCompanyName] = useState(settings.companyName);
-  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
-  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
-  const [gstIn, setGstIn] = useState(settings.gstIn || '');
-  const [address, setAddress] = useState(settings.address);
-  const [phone, setPhone] = useState(settings.phone);
-  const [email, setEmail] = useState(settings.email);
-  const [bankName, setBankName] = useState(settings.bankName);
-  const [accountNum, setAccountNum] = useState(settings.accountNum);
-  const [ifscCode, setIfscCode] = useState(settings.ifscCode);
-  const [upiId, setUpiId] = useState(settings.upiId);
-  const [signatureUrl, setSignatureUrl] = useState(settings.signatureUrl);
-  const [timezone, setTimezone] = useState(settings.timezone || 'Asia/Kolkata');
-  const [gstOption, setGstOption] = useState(settings.gstOption || 'standard');
-  const [titleBarText, setTitleBarText] = useState(settings.titleBarText || '');
+  const [companyName, setCompanyName] = useState(settings?.companyName || '');
+  const [logoUrl, setLogoUrl] = useState(settings?.logoUrl || '');
+  const [faviconUrl, setFaviconUrl] = useState(settings?.faviconUrl || '');
+  const [gstIn, setGstIn] = useState(settings?.gstIn || '');
+  const [address, setAddress] = useState(settings?.address || '');
+  const [phone, setPhone] = useState(settings?.phone || '');
+  const [email, setEmail] = useState(settings?.email || '');
+  const [bankName, setBankName] = useState(settings?.bankName || '');
+  const [accountNum, setAccountNum] = useState(settings?.accountNum || '');
+  const [ifscCode, setIfscCode] = useState(settings?.ifscCode || '');
+  const [upiId, setUpiId] = useState(settings?.upiId || '');
+  const [signatureUrl, setSignatureUrl] = useState(settings?.signatureUrl || '');
+  const [timezone, setTimezone] = useState(settings?.timezone || 'Asia/Kolkata');
+  const [gstOption, setGstOption] = useState(settings?.gstOption || 'standard');
+  const [titleBarText, setTitleBarText] = useState(settings?.titleBarText || '');
+
+  // Synchronize internal state when settings prop updates (important when loaded after mounting)
+  React.useEffect(() => {
+    if (settings) {
+      setCompanyName(settings.companyName || '');
+      setLogoUrl(settings.logoUrl || '');
+      setFaviconUrl(settings.faviconUrl || '');
+      setGstIn(settings.gstIn || '');
+      setAddress(settings.address || '');
+      setPhone(settings.phone || '');
+      setEmail(settings.email || '');
+      setBankName(settings.bankName || '');
+      setAccountNum(settings.accountNum || '');
+      setIfscCode(settings.ifscCode || '');
+      setUpiId(settings.upiId || '');
+      setSignatureUrl(settings.signatureUrl || '');
+      setTimezone(settings.timezone || 'Asia/Kolkata');
+      setGstOption(settings.gstOption || 'standard');
+      setTitleBarText(settings.titleBarText || '');
+    }
+  }, [settings]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
@@ -72,41 +93,45 @@ export default function SettingsModule({
   };
 
   const [sigMode, setSigMode] = useState<'draw' | 'upload' | 'link'>(() => {
-    if (settings.signatureUrl && settings.signatureUrl.startsWith('data:image')) {
+    if (settings?.signatureUrl && settings.signatureUrl.startsWith('data:image')) {
       return 'draw';
     }
-    return settings.signatureUrl ? 'link' : 'draw';
+    return settings?.signatureUrl ? 'link' : 'draw';
   });
   const [isDragging, setIsDragging] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName || !bankName || !accountNum || !ifscCode || !upiId) {
-      alert("All specified settings parameters must be fully documented!");
+    if (!companyName) {
+      alert("Registered Firm Name is a required setting!");
       return;
     }
 
-    const payload: Partial<BusinessSettings> = {
-      companyName,
-      gstIn: gstIn ? gstIn.toUpperCase() : '',
-      address,
-      phone,
-      email,
-      bankName,
-      accountNum,
-      ifscCode: ifscCode.toUpperCase(),
-      upiId,
-      signatureUrl,
-      timezone,
-      gstOption,
-      logoUrl,
-      faviconUrl,
-      titleBarText
-    };
+    try {
+      const payload: Partial<BusinessSettings> = {
+        companyName,
+        gstIn: gstIn ? gstIn.toUpperCase() : '',
+        address,
+        phone,
+        email,
+        bankName,
+        accountNum,
+        ifscCode: ifscCode ? ifscCode.toUpperCase() : '',
+        upiId,
+        signatureUrl,
+        timezone,
+        gstOption,
+        logoUrl,
+        faviconUrl,
+        titleBarText
+      };
 
-    await onSaveSettings(payload);
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 3000);
+      await onSaveSettings(payload);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      alert("Error saving settings: " + (err.message || err));
+    }
   };
 
   return (

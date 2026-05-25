@@ -490,6 +490,15 @@ export default function App() {
     }
   };
 
+  const handleMarkInvoiceRead = async (id: string) => {
+    try {
+      await api.markInvoiceRead(id);
+      setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, readCount: 1 } : inv));
+    } catch (err: any) {
+      console.error("Error marking invoice read on server", err);
+    }
+  };
+
   const handleDeleteInvoice = async (id: string) => {
     try {
       await api.deleteInvoice(id);
@@ -1307,6 +1316,7 @@ export default function App() {
                   products={products}
                   onAddInvoice={handleAddInvoice}
                   onDeleteInvoice={handleDeleteInvoice}
+                  onMarkInvoiceRead={handleMarkInvoiceRead}
                   businessSettings={businessSettings}
                   canWrite={getModulePermissions('invoices').write}
                   canDelete={getModulePermissions('invoices').delete}

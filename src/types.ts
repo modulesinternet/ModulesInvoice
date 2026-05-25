@@ -70,6 +70,7 @@ export interface Invoice {
   status: "unpaid" | "partially_paid" | "paid" | "overdue";
   createdAt: string;
   notes?: string;
+  readCount?: number;
 }
 
 export interface QuotationItem {

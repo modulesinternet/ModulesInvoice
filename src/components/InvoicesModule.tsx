@@ -34,6 +34,7 @@ interface InvoicesModuleProps {
   products: Product[];
   onAddInvoice: (inv: Partial<Invoice>) => Promise<void>;
   onDeleteInvoice: (id: string) => Promise<void>;
+  onMarkInvoiceRead?: (id: string) => Promise<void>;
   businessSettings: any;
   canWrite?: boolean;
   canDelete?: boolean;
@@ -47,6 +48,7 @@ export default function InvoicesModule({
   products,
   onAddInvoice,
   onDeleteInvoice,
+  onMarkInvoiceRead,
   businessSettings,
   canWrite = true,
   canDelete = true
@@ -54,6 +56,17 @@ export default function InvoicesModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  const handleSelectInvoice = async (inv: Invoice) => {
+    setSelectedInvoice({ ...inv, readCount: 1 });
+    if (onMarkInvoiceRead) {
+      try {
+        await onMarkInvoiceRead(inv.id);
+      } catch (err) {
+        console.error("Failed to mark invoice as read", err);
+      }
+    }
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -106,7 +119,7 @@ export default function InvoicesModule({
 
   const handleAddItemToWizard = () => {
     if (!currentProductId || Number(currentQty) <= 0 || Number(currentPrice) < 0) {
-      alert("Please select a target catalog SKU and positive quantites.");
+      alert("Please select a target catalog item and positive quantities.");
       return;
     }
     setAddedItems([
@@ -401,9 +414,14 @@ export default function InvoicesModule({
               <div className="text-right space-y-1">
                 <span className="text-[10px] uppercase font-bold text-slate-400">tax invoice</span>
                 <h1 className="text-2xl font-mono font-bold text-slate-800 mt-1">{selectedInvoice.invoiceNumber}</h1>
-                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
-                  {selectedInvoice.status.replace('_', ' ')}
-                </span>
+                <div className="flex items-center justify-end gap-1.5 mt-1 relative">
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
+                    {selectedInvoice.status.replace('_', ' ')}
+                  </span>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border no-print ${(selectedInvoice.readCount || 0) > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'} uppercase font-sans`}>
+                    Read: {selectedInvoice.readCount || 0}/1
+                  </span>
+                </div>
                 <div className="text-xs text-slate-500 font-mono pt-3 space-y-0.5">
                   <p>Invoiced Date: <b>{selectedInvoice.date}</b></p>
                   <p>Due By: <b className="text-rose-600">{selectedInvoice.dueDate}</b></p>
@@ -588,7 +606,15 @@ export default function InvoicesModule({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((inv) => (
                     <tr key={inv.id} className="hover:bg-slate-50/50 transition">
-                      <td className="py-4 px-5 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
+                      <td className="py-4 px-5">
+                        <div className="font-mono font-bold text-slate-900">{inv.invoiceNumber}</div>
+                        <div className="flex items-center gap-1 mt-1 text-[9px] font-sans font-semibold tracking-wide uppercase select-none">
+                          <span className={`w-1.5 h-1.5 rounded-full ${inv.readCount && inv.readCount >= 1 ? 'bg-emerald-500' : 'bg-slate-350 bg-slate-400 animate-pulse'}`} />
+                          <span className={inv.readCount && inv.readCount >= 1 ? 'text-emerald-700 font-bold' : 'text-slate-400'}>
+                            {inv.readCount && inv.readCount >= 1 ? 'READ 1/1' : 'UNREAD 0/1'}
+                          </span>
+                        </div>
+                      </td>
                       <td className="py-4 px-5 font-semibold text-slate-700">{inv.clientName}</td>
                       <td className="py-4 px-5 text-slate-500">{inv.date}</td>
                       <td className="py-4 px-5 text-rose-500 font-mono select-none">{inv.dueDate}</td>
@@ -607,7 +633,7 @@ export default function InvoicesModule({
                       </td>
                       <td className="py-4 px-5 text-center flex items-center justify-center gap-1.5 pt-3">
                         <button 
-                          onClick={() => setSelectedInvoice(inv)}
+                          onClick={() => handleSelectInvoice(inv)}
                           className="px-2 py-1 border border-slate-200 hover:border-[#5B21FF] rounded-lg text-slate-600 hover:text-[#5B21FF] font-semibold hover:bg-purple-50 transition"
                         >
                           Review Bill
@@ -723,7 +749,7 @@ export default function InvoicesModule({
                 <span className="text-[11px] font-extrabold text-[#5B21FF] uppercase tracking-wider block">Include Deliverable Line Items</span>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Select Catalog SKU</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Select Catalog Item</label>
                     <select 
                       value={currentProductId}
                       onChange={(e) => handleProductSelect(e.target.value)}

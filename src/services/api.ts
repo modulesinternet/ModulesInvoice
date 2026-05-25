@@ -110,6 +110,10 @@ export const api = {
     return request<Invoice>('/api/invoices', 'POST', invoice);
   },
 
+  markInvoiceRead: (id: string) => {
+    return request<Invoice>(`/api/invoices/${id}/read`, 'POST');
+  },
+
   deleteInvoice: (id: string) => {
     return request<{ success: boolean }>(`/api/invoices/${id}`, 'DELETE');
   },

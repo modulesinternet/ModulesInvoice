@@ -981,7 +981,8 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
     dueAmount: Number(data.dueAmount ?? total),
     status: data.status || "unpaid",
     createdAt: new Date().toISOString(),
-    notes: data.notes || ""
+    notes: data.notes || "",
+    readCount: 0
   };
 
   db_invoices.unshift(newInvoice);
@@ -1015,6 +1016,22 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
 
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
+});
+
+app.post('/api/invoices/:id/read', checkPermission('invoices', 'read'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const invoice = db_invoices.find(v => v.id === id);
+  if (!invoice) {
+    return res.status(404).json({ error: "Invoice not found" });
+  }
+
+  // Set readCount to 1 (enforces the max 1 read count for 1 document limitation requested)
+  if (!invoice.readCount || invoice.readCount < 1) {
+    invoice.readCount = 1;
+    syncStateToFirestore('invoices', invoice.id);
+  }
+
+  res.json(invoice);
 });
 
 app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), (req: Request, res: Response) => {
