@@ -125,7 +125,45 @@ export function computeLocalDashboardMetrics(
   const cashCollected = payments.filter(p => p.paymentMode === 'Cash').reduce((sum, p) => sum + (p.amount || 0), 0);
   const otherCollected = payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
 
-  const latestCashbook = cashbook[cashbook.length - 1] || { runningCashBalance: 250000, runningBankBalance: 2005400 };
+  // Compute cashbook running balances sequentially for true current operating liquidity
+  const sortedCashbook = [...cashbook].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
+
+  let computedCash = 0;
+  let computedBank = 0;
+
+  if (sortedCashbook.length > 0) {
+    let cash = 0;
+    let bank = 0;
+    sortedCashbook.forEach(c => {
+      const amount = c.amount || 0;
+      if (c.type === 'adjustment') {
+        if (c.runningCashBalance !== undefined) cash = c.runningCashBalance;
+        if (c.runningBankBalance !== undefined) bank = c.runningBankBalance;
+      } else if (c.type === 'income') {
+        if (c.paymentMode === 'Cash') cash += amount;
+        else bank += amount;
+      } else if (c.type === 'expense') {
+        if (c.paymentMode === 'Cash') cash -= amount;
+        else bank -= amount;
+      } else if (c.type === 'bank_deposit') {
+        cash -= amount;
+        bank += amount;
+      } else if (c.type === 'withdrawal') {
+        cash += amount;
+        bank -= amount;
+      }
+    });
+    computedCash = cash;
+    computedBank = bank;
+  }
 
   return {
     metrics: {
@@ -136,8 +174,8 @@ export function computeLocalDashboardMetrics(
       totalClientsCount,
       totalInvoicesCount,
       pendingInvoicesCount,
-      cashBalance: latestCashbook.runningCashBalance || 250000,
-      bankBalance: latestCashbook.runningBankBalance || 2005400
+      cashBalance: computedCash,
+      bankBalance: computedBank
     },
     paymentMethods: [
       { name: 'UPI Collections', value: upiCollected, color: '#8B5CF6' },

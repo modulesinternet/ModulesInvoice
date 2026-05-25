@@ -25,10 +25,20 @@ export default function CashbookModule({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const filteredCashbook = cashbook.filter(c => 
-    c.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredCashbook = [...cashbook]
+    .filter(c => 
+      c.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      if (dateA !== dateB) return dateB - dateA;
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeB - timeA;
+      return b.id.localeCompare(a.id);
+    });
 
   // Form states
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -71,14 +81,57 @@ export default function CashbookModule({
     setReference('');
   };
 
-  // Compute stats on-the-fly
-  const bankReceipts = cashbook.filter(c => c.paymentMode !== 'Cash' && c.type === 'income').reduce((sum, c) => sum + c.amount, 0);
-  const bankPayments = cashbook.filter(c => c.paymentMode !== 'Cash' && (c.type === 'expense' || c.type === 'withdrawal')).reduce((sum, c) => sum + c.amount, 0);
-  const bankBalance = bankReceipts - bankPayments;
+  // Compute stats on-the-fly with robust chronological sorting and adjustment tracking
+  const sortedCashbook = [...cashbook].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
 
-  const cashReceipts = cashbook.filter(c => c.paymentMode === 'Cash' && c.type === 'income').reduce((sum, c) => sum + c.amount, 0);
-  const cashPayments = cashbook.filter(c => c.paymentMode === 'Cash' && c.type === 'expense').reduce((sum, c) => sum + c.amount, 0);
-  const cashBalance = cashReceipts - cashPayments;
+  let bankBalance = 0;
+  let cashBalance = 0;
+  let bankReceipts = 0;
+  let bankPayments = 0;
+  let cashReceipts = 0;
+  let cashPayments = 0;
+
+  sortedCashbook.forEach(c => {
+    const amount = c.amount || 0;
+    if (c.type === 'adjustment') {
+      if (c.runningCashBalance !== undefined) cashBalance = c.runningCashBalance;
+      if (c.runningBankBalance !== undefined) bankBalance = c.runningBankBalance;
+    } else if (c.type === 'income') {
+      if (c.paymentMode === 'Cash') {
+        cashReceipts += amount;
+        cashBalance += amount;
+      } else {
+        bankReceipts += amount;
+        bankBalance += amount;
+      }
+    } else if (c.type === 'expense') {
+      if (c.paymentMode === 'Cash') {
+        cashPayments += amount;
+        cashBalance -= amount;
+      } else {
+        bankPayments += amount;
+        bankBalance -= amount;
+      }
+    } else if (c.type === 'bank_deposit') {
+      cashBalance -= amount;
+      bankBalance += amount;
+      cashPayments += amount;
+      bankReceipts += amount;
+    } else if (c.type === 'withdrawal') {
+      cashBalance += amount;
+      bankBalance -= amount;
+      cashReceipts += amount;
+      bankPayments += amount;
+    }
+  });
 
   return (
     <div className="space-y-6" id="cashbook-container">

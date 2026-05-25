@@ -752,8 +752,45 @@ app.get('/api/dashboard', checkPermission('dashboard', 'read'), (req: Request, r
   const cashCollected = db_payments.filter(p => p.paymentMode === 'Cash').reduce((sum, p) => sum + p.amount, 0);
   const otherCollected = db_payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
 
-  // Latest closing balances from cashbook
-  const latestCashbook = db_cashbook[db_cashbook.length - 1] || { runningCashBalance: 250000, runningBankBalance: 2005400 };
+  // Compute cashbook running balances sequentially for true current operating liquidity
+  const sortedCashbook = [...db_cashbook].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
+
+  let computedCash = 0;
+  let computedBank = 0;
+
+  if (sortedCashbook.length > 0) {
+    let cash = 0;
+    let bank = 0;
+    sortedCashbook.forEach(c => {
+      const amount = c.amount || 0;
+      if (c.type === 'adjustment') {
+        if (c.runningCashBalance !== undefined) cash = c.runningCashBalance;
+        if (c.runningBankBalance !== undefined) bank = c.runningBankBalance;
+      } else if (c.type === 'income') {
+        if (c.paymentMode === 'Cash') cash += amount;
+        else bank += amount;
+      } else if (c.type === 'expense') {
+        if (c.paymentMode === 'Cash') cash -= amount;
+        else bank -= amount;
+      } else if (c.type === 'bank_deposit') {
+        cash -= amount;
+        bank += amount;
+      } else if (c.type === 'withdrawal') {
+        cash += amount;
+        bank -= amount;
+      }
+    });
+    computedCash = cash;
+    computedBank = bank;
+  }
 
   res.json({
     metrics: {
@@ -764,8 +801,8 @@ app.get('/api/dashboard', checkPermission('dashboard', 'read'), (req: Request, r
       totalClientsCount,
       totalInvoicesCount,
       pendingInvoicesCount,
-      cashBalance: latestCashbook.runningCashBalance,
-      bankBalance: latestCashbook.runningBankBalance
+      cashBalance: computedCash,
+      bankBalance: computedBank
     },
     paymentMethods: [
       { name: 'UPI Collections', value: upiCollected, color: '#8B5CF6' },
@@ -1237,7 +1274,16 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
   db_ledger.unshift(newLedger);
 
   // AUTOMATION TRIGGER 4: Cashbook auto synchronizer running bank & cash accounts
-  const lastCashbookEntry = db_cashbook[0] || { runningCashBalance: 250000, runningBankBalance: 2005400 };
+  const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
+  const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
   let cashChange = 0;
   let bankChange = 0;
 
@@ -1291,7 +1337,16 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), (req: Request, r
   const type = data.type || "income"; // income, expense, bank_deposit, withdrawal, adjustment
   const mode = data.paymentMode || "Cash";
 
-  const lastEntry = db_cashbook[0] || { runningCashBalance: 250000, runningBankBalance: 2000000 };
+  const sortedCashForEntry = [...db_cashbook].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
+  });
+  const lastEntry = sortedCashForEntry[sortedCashForEntry.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
   
   let newCash = lastEntry.runningCashBalance;
   let newBank = lastEntry.runningBankBalance;
@@ -1377,10 +1432,15 @@ app.get('/api/settings', checkPermission('settings', 'read'), (req: Request, res
 });
 
 app.post('/api/settings', checkPermission('settings', 'write'), (req: Request, res: Response) => {
-  db_settings = { ...db_settings, ...req.body };
-  syncStateToFirestore('settings');
-  logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", "Updated corporate profile settings & banking info");
-  res.json(db_settings);
+  try {
+    db_settings = { ...db_settings, ...req.body };
+    syncStateToFirestore('settings');
+    logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", "Updated corporate profile settings & banking info");
+    res.json(db_settings);
+  } catch (err: any) {
+    console.error("Error saving global corporate settings:", err);
+    res.status(500).json({ error: `Settings update failed: ${err.message}` });
+  }
 });
 
 // 12. Roles & Permissions Management
