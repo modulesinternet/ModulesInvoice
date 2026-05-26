@@ -601,7 +601,7 @@ export default function App() {
 
   const handleImportBackup = async (backup: any) => {
     try {
-      api.importDatabase(backup);
+      await api.importDatabase(backup);
       showToast("Approved: In-browser database backup restored successfully!");
       await loadMasterData();
     } catch (err: any) {

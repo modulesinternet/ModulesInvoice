@@ -574,7 +574,7 @@ bootstrapFromFirestore();
 
 function checkPermission(module: keyof RolePermissions['modules'], action: 'read' | 'write' | 'delete') {
   return (req: Request, res: Response, next: any) => {
-    const roleHeader = req.headers['x-user-role'] as string;
+    const roleHeader = (req.headers['x-user-role'] as string || '').trim();
     const role: UserRole = (roleHeader || 'Admin') as UserRole;
     const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
     
@@ -583,15 +583,18 @@ function checkPermission(module: keyof RolePermissions['modules'], action: 'read
       return next();
     }
     
-    const roleConfig = db_roles.find(r => r.role.toLowerCase() === role.toLowerCase());
+    const roleConfig = db_roles.find(r => r.role.trim().toLowerCase() === role.toLowerCase());
     if (!roleConfig) {
-      return res.status(403).json({ error: `Security failure: Unknown system role ${role}` });
+      return res.status(403).json({ 
+        error: `Security fail: Acting role "${role}" is not registered in the system role permissions list.` 
+      });
     }
     
     const allowed = roleConfig.modules[module]?.[action];
     if (!allowed) {
+      console.warn(`[DENIED] Blocked request for role: ${role}, user: ${userEmail || 'anonymous'}, module: ${module}, action: ${action}`);
       return res.status(403).json({ 
-        error: `Access Denied: Role "${role}" does not have "${action}" permission for the "${module}" module.` 
+        error: `Access Denied: Your acting role "${role}" does not have "${action}" permissions for the "${module}" module. Please verify permissions in Team Access.` 
       });
     }
     next();
