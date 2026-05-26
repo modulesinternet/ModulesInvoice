@@ -455,170 +455,68 @@ async function bootstrapFromFirestore() {
       await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
     }
 
-    // 4. Clients
-    const clientsSnap = await withTimeout(getDocs(collection(db, 'clients')), 5000);
-    if (clientsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_clients) {
-          batch.set(doc(db, 'clients', item.id), item);
+    // Modern Self-healing Collection Bootstrapper Utility
+    const syncCollectionOnStartup = async <T extends { id?: string; userId?: string }>(
+      collectionName: string,
+      currentList: T[],
+      demoSeedList: T[],
+      idKey: 'id' | 'userId' = 'id'
+    ): Promise<T[]> => {
+      const snap = await withTimeout(getDocs(collection(db, collectionName)), 5000);
+      if (snap.empty) {
+        if (currentList.length > 0) {
+          console.log(`Firestore '${collectionName}' collection is empty. Back-syncing local cache (${currentList.length} records) to cloud...`);
+          const batch = writeBatch(db);
+          for (const item of currentList) {
+            const docId = idKey === 'id' ? item.id : item.userId;
+            if (docId) batch.set(doc(db, collectionName, docId), item);
+          }
+          await withTimeout(batch.commit(), 5000);
+          return currentList;
+        } else {
+          console.log(`Firestore '${collectionName}' empty. Seeding with default demo dataset...`);
+          const batch = writeBatch(db);
+          for (const item of demoSeedList) {
+            const docId = idKey === 'id' ? item.id : item.userId;
+            if (docId) batch.set(doc(db, collectionName, docId), item);
+          }
+          await withTimeout(batch.commit(), 5000);
+          return demoSeedList;
         }
-        await withTimeout(batch.commit(), 5000);
       } else {
-        db_clients = [];
+        return snap.docs.map(d => d.data() as T);
       }
-    } else {
-      db_clients = clientsSnap.docs.map(d => d.data() as Client);
-    }
+    };
+
+    // 4. Clients
+    db_clients = await syncCollectionOnStartup('clients', db_clients, DEMO_CLIENTS);
 
     // 5. Products
-    const productsSnap = await withTimeout(getDocs(collection(db, 'products')), 5000);
-    if (productsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_products) {
-          batch.set(doc(db, 'products', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_products = [];
-      }
-    } else {
-      db_products = productsSnap.docs.map(d => d.data() as Product);
-    }
+    db_products = await syncCollectionOnStartup('products', db_products, DEMO_PRODUCTS);
 
     // 6. Invoices
-    const invoicesSnap = await withTimeout(getDocs(collection(db, 'invoices')), 5000);
-    if (invoicesSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_invoices) {
-          batch.set(doc(db, 'invoices', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_invoices = [];
-      }
-    } else {
-      db_invoices = invoicesSnap.docs.map(d => d.data() as Invoice);
-    }
+    db_invoices = await syncCollectionOnStartup('invoices', db_invoices, DEMO_INVOICES);
 
     // 7. Quotations
-    const quotationsSnap = await withTimeout(getDocs(collection(db, 'quotations')), 5000);
-    if (quotationsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_quotations) {
-          batch.set(doc(db, 'quotations', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_quotations = [];
-      }
-    } else {
-      db_quotations = quotationsSnap.docs.map(d => d.data() as Quotation);
-    }
+    db_quotations = await syncCollectionOnStartup('quotations', db_quotations, DEMO_QUOTATIONS);
 
     // 8. Payments
-    const paymentsSnap = await withTimeout(getDocs(collection(db, 'payments')), 5000);
-    if (paymentsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_payments) {
-          batch.set(doc(db, 'payments', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_payments = [];
-      }
-    } else {
-      db_payments = paymentsSnap.docs.map(d => d.data() as Payment);
-    }
+    db_payments = await syncCollectionOnStartup('payments', db_payments, DEMO_PAYMENTS);
 
     // 9. Ledger
-    const ledgerSnap = await withTimeout(getDocs(collection(db, 'ledger')), 5000);
-    if (ledgerSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_ledger) {
-          batch.set(doc(db, 'ledger', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_ledger = [];
-      }
-    } else {
-      db_ledger = ledgerSnap.docs.map(d => d.data() as LedgerEntry);
-    }
+    db_ledger = await syncCollectionOnStartup('ledger', db_ledger, DEMO_LEDGER);
 
     // 10. Cashbook
-    const cashbookSnap = await withTimeout(getDocs(collection(db, 'cashbook')), 5000);
-    if (cashbookSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_cashbook) {
-          batch.set(doc(db, 'cashbook', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_cashbook = [];
-      }
-    } else {
-      db_cashbook = cashbookSnap.docs.map(d => d.data() as CashbookEntry);
-    }
+    db_cashbook = await syncCollectionOnStartup('cashbook', db_cashbook, DEMO_CASHBOOK);
 
     // 11. Activity Logs
-    const logsSnap = await withTimeout(getDocs(collection(db, 'activityLogs')), 5000);
-    if (logsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_logs) {
-          batch.set(doc(db, 'activityLogs', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_logs = [];
-      }
-    } else {
-      db_logs = logsSnap.docs.map(d => d.data() as ActivityLog);
-    }
+    db_logs = await syncCollectionOnStartup('activityLogs', db_logs, DEMO_LOGS);
 
     // 12. Notifications
-    const notificationsSnap = await withTimeout(getDocs(collection(db, 'notifications')), 5000);
-    if (notificationsSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_notifications) {
-          batch.set(doc(db, 'notifications', item.id), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        db_notifications = [];
-      }
-    } else {
-      db_notifications = notificationsSnap.docs.map(d => d.data() as Notification);
-    }
+    db_notifications = await syncCollectionOnStartup('notifications', db_notifications, DEMO_NOTIFICATIONS);
 
     // 13. Users
-    const usersSnap = await withTimeout(getDocs(collection(db, 'users')), 5000);
-    if (usersSnap.empty) {
-      if (isFirstSeed) {
-        const batch = writeBatch(db);
-        for (const item of db_users) {
-          batch.set(doc(db, 'users', item.userId), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      } else {
-        // Essential demo fallback profiles if user table is fully deleted, to ensure login remains functional
-        const batch = writeBatch(db);
-        for (const item of db_users) {
-          batch.set(doc(db, 'users', item.userId), item);
-        }
-        await withTimeout(batch.commit(), 5000);
-      }
-    } else {
-      db_users = usersSnap.docs.map(d => d.data() as UserProfile);
-    }
+    db_users = await syncCollectionOnStartup('users', db_users, DEMO_USERS, 'userId');
 
     // Ensure modulesinternet@gmail.com is in db_users and stale demo users are removed
     const finalUsers: UserProfile[] = [];

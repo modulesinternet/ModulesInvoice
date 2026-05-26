@@ -26,6 +26,7 @@ interface UsersModuleProps {
   onCreateUser: (u: Partial<UserProfile>) => Promise<void>;
   canWrite?: boolean;
   canDelete?: boolean;
+  appRoles?: RolePermissions[];
 }
 
 const MODULE_LABELS: Record<string, { label: string; desc: string }> = {
@@ -46,7 +47,8 @@ export default function UsersModule({
   logs,
   onCreateUser,
   canWrite = true,
-  canDelete = true
+  canDelete = true,
+  appRoles
 }: UsersModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'members' | 'rbac'>('members');
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,8 +83,12 @@ export default function UsersModule({
   };
 
   useEffect(() => {
-    loadRoles();
-  }, []);
+    if (appRoles && appRoles.length > 0) {
+      setServerRoles(appRoles);
+    } else {
+      loadRoles();
+    }
+  }, [appRoles]);
 
   const formatRole = (r: string) => {
     switch(r.toLowerCase()) {
