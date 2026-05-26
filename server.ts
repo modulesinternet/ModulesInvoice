@@ -135,7 +135,7 @@ let firebaseApp;
 let db: any;
 
 try {
-  const firebaseConfigPath = path.join(__dirname, 'firebase-applet-config.json');
+  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
   if (fs.existsSync(firebaseConfigPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
     firebaseApp = initializeApp(firebaseConfig);
@@ -218,7 +218,7 @@ async function testConnection() {
 }
 
 // Define path for local persistent backup
-const LOCAL_CACHE_PATH = path.join(__dirname, 'local-db-cache.json');
+const LOCAL_CACHE_PATH = path.join(process.cwd(), 'local-db-cache.json');
 
 // Self-contained file database persistent helpers
 function saveStateToLocalCache() {
