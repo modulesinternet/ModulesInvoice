@@ -569,6 +569,11 @@ function checkPermission(module: keyof RolePermissions['modules'], action: 'read
     const roleHeader = req.headers['x-user-role'] as string;
     const role: UserRole = (roleHeader || 'Admin') as UserRole;
     
+    // Auto-bypass for Admin roles to prevent any operational lockout or config discrepancies
+    if (role.toLowerCase() === 'admin') {
+      return next();
+    }
+    
     const roleConfig = db_roles.find(r => r.role.toLowerCase() === role.toLowerCase());
     if (!roleConfig) {
       return res.status(403).json({ error: `Security failure: Unknown system role ${role}` });
