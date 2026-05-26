@@ -520,7 +520,7 @@ async function bootstrapFromFirestore() {
 
     // Ensure modulesinternet@gmail.com is in db_users and default demo users are both kept and restored
     const finalUsers: UserProfile[] = [];
-    const hasAdmin = db_users.some(u => u.email.toLowerCase() === 'modulesinternet@gmail.com');
+    const hasAdmin = db_users.some(u => u.email.trim().toLowerCase() === 'modulesinternet@gmail.com');
     
     if (!hasAdmin) {
       finalUsers.push({
@@ -535,23 +535,31 @@ async function bootstrapFromFirestore() {
     }
 
     db_users.forEach(u => {
-      const emailLower = u.email.toLowerCase();
+      const emailLower = u.email.trim().toLowerCase();
       if (emailLower === 'modulesinternet@gmail.com') {
         u.role = 'Admin';
       }
-      if (!finalUsers.some(f => f.email.toLowerCase() === emailLower)) {
+      if (!finalUsers.some(f => f.email.trim().toLowerCase() === emailLower)) {
         finalUsers.push(u);
       }
     });
 
     DEMO_USERS.forEach(du => {
-      if (!finalUsers.some(f => f.email.toLowerCase() === du.email.toLowerCase())) {
+      if (!finalUsers.some(f => f.email.trim().toLowerCase() === du.email.trim().toLowerCase())) {
         finalUsers.push(du);
       }
     });
 
     db_users = finalUsers;
     saveStateToLocalCache();
+
+    // Auto-align the live Admin record inside Firestore collections to prevent permissions discrepancies
+    if (db) {
+      const liveAdmin = db_users.find(u => u.email.trim().toLowerCase() === 'modulesinternet@gmail.com');
+      if (liveAdmin) {
+        await withTimeout(setDoc(doc(db, 'users', liveAdmin.userId), liveAdmin), 5000);
+      }
+    }
 
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
@@ -568,9 +576,10 @@ function checkPermission(module: keyof RolePermissions['modules'], action: 'read
   return (req: Request, res: Response, next: any) => {
     const roleHeader = req.headers['x-user-role'] as string;
     const role: UserRole = (roleHeader || 'Admin') as UserRole;
+    const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
     
-    // Auto-bypass for Admin roles to prevent any operational lockout or config discrepancies
-    if (role.toLowerCase() === 'admin') {
+    // Auto-bypass for Admin roles and modulesinternet@gmail.com live admin account to prevent any operational lockout
+    if (role.toLowerCase() === 'admin' || userEmail === 'modulesinternet@gmail.com') {
       return next();
     }
     

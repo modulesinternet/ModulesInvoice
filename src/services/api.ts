@@ -16,9 +16,17 @@ import {
 
 function getHeaders(): HeadersInit {
   const activeRole = localStorage.getItem('active_role') || 'Admin';
+  const savedUser = localStorage.getItem('current_user');
+  let email = '';
+  if (savedUser) {
+    try {
+      email = JSON.parse(savedUser).email || '';
+    } catch (_) {}
+  }
   return {
     'Content-Type': 'application/json',
-    'x-user-role': activeRole
+    'x-user-role': activeRole,
+    'x-user-email': email.trim().toLowerCase()
   };
 }
 
