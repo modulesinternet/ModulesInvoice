@@ -201,11 +201,24 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Helper to wrap promise-based Firestore actions with an active timeout limit
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("Firestore action timed out"));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
 // Validate Firebase Connection on Setup using getDocFromServer
 async function testConnection() {
   if (!db) return;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await withTimeout(getDocFromServer(doc(db, 'test', 'connection')), 5000);
     console.log("Firestore secure connection check: OK (Connected)");
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
@@ -279,11 +292,11 @@ async function syncStateToFirestore(topic: string, id?: string) {
   if (!db) return;
   try {
     if (topic === 'settings') {
-      await setDoc(doc(db, 'businessSettings', 'global'), db_settings);
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
     } else if (topic === 'categories') {
-      await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
     } else if (topic === 'roles') {
-      await setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles });
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
     } else if (topic === 'clients') {
       if (id) {
         const item = db_clients.find(c => c.id === id);
@@ -405,43 +418,52 @@ async function bootstrapFromFirestore() {
     console.log("Synchronizing memory database and seeding Firestore if required...");
     
     // 1. Settings
-    const settingsDoc = await getDoc(doc(db, 'businessSettings', 'global'));
+    const settingsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'global')), 5000);
     const isFirstSeed = !settingsDoc.exists();
     if (!isFirstSeed) {
-      db_settings = settingsDoc.data() as BusinessSettings;
+      const settingsData = settingsDoc.data();
+      if (settingsData && Object.keys(settingsData).length > 0) {
+        db_settings = settingsData as BusinessSettings;
+      }
     } else {
-      await setDoc(doc(db, 'businessSettings', 'global'), db_settings);
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
     }
 
     // 2. Categories
-    const categoriesDoc = await getDoc(doc(db, 'businessSettings', 'categories'));
+    const categoriesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'categories')), 5000);
     if (categoriesDoc.exists()) {
-      db_categories = (categoriesDoc.data() as { list: string[] }).list;
+      const listData = (categoriesDoc.data() as { list?: string[] }).list;
+      if (Array.isArray(listData)) {
+        db_categories = listData;
+      }
     } else {
       if (isFirstSeed) {
-        await setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories });
-      } else {
-        db_categories = [];
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
       }
     }
 
     // 3. Roles
-    const rolesDoc = await getDoc(doc(db, 'businessSettings', 'roles'));
+    const rolesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'roles')), 5000);
     if (rolesDoc.exists()) {
-      db_roles = (rolesDoc.data() as { list: RolePermissions[] }).list;
+      const listData = (rolesDoc.data() as { list?: RolePermissions[] }).list;
+      if (Array.isArray(listData) && listData.length > 0) {
+        db_roles = listData;
+      } else {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
+      }
     } else {
-      await setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles });
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
     }
 
     // 4. Clients
-    const clientsSnap = await getDocs(collection(db, 'clients'));
+    const clientsSnap = await withTimeout(getDocs(collection(db, 'clients')), 5000);
     if (clientsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_clients) {
           batch.set(doc(db, 'clients', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_clients = [];
       }
@@ -450,14 +472,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 5. Products
-    const productsSnap = await getDocs(collection(db, 'products'));
+    const productsSnap = await withTimeout(getDocs(collection(db, 'products')), 5000);
     if (productsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_products) {
           batch.set(doc(db, 'products', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_products = [];
       }
@@ -466,14 +488,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 6. Invoices
-    const invoicesSnap = await getDocs(collection(db, 'invoices'));
+    const invoicesSnap = await withTimeout(getDocs(collection(db, 'invoices')), 5000);
     if (invoicesSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_invoices) {
           batch.set(doc(db, 'invoices', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_invoices = [];
       }
@@ -482,14 +504,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 7. Quotations
-    const quotationsSnap = await getDocs(collection(db, 'quotations'));
+    const quotationsSnap = await withTimeout(getDocs(collection(db, 'quotations')), 5000);
     if (quotationsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_quotations) {
           batch.set(doc(db, 'quotations', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_quotations = [];
       }
@@ -498,14 +520,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 8. Payments
-    const paymentsSnap = await getDocs(collection(db, 'payments'));
+    const paymentsSnap = await withTimeout(getDocs(collection(db, 'payments')), 5000);
     if (paymentsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_payments) {
           batch.set(doc(db, 'payments', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_payments = [];
       }
@@ -514,14 +536,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 9. Ledger
-    const ledgerSnap = await getDocs(collection(db, 'ledger'));
+    const ledgerSnap = await withTimeout(getDocs(collection(db, 'ledger')), 5000);
     if (ledgerSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_ledger) {
           batch.set(doc(db, 'ledger', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_ledger = [];
       }
@@ -530,14 +552,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 10. Cashbook
-    const cashbookSnap = await getDocs(collection(db, 'cashbook'));
+    const cashbookSnap = await withTimeout(getDocs(collection(db, 'cashbook')), 5000);
     if (cashbookSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_cashbook) {
           batch.set(doc(db, 'cashbook', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_cashbook = [];
       }
@@ -546,14 +568,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 11. Activity Logs
-    const logsSnap = await getDocs(collection(db, 'activityLogs'));
+    const logsSnap = await withTimeout(getDocs(collection(db, 'activityLogs')), 5000);
     if (logsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_logs) {
           batch.set(doc(db, 'activityLogs', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_logs = [];
       }
@@ -562,14 +584,14 @@ async function bootstrapFromFirestore() {
     }
 
     // 12. Notifications
-    const notificationsSnap = await getDocs(collection(db, 'notifications'));
+    const notificationsSnap = await withTimeout(getDocs(collection(db, 'notifications')), 5000);
     if (notificationsSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_notifications) {
           batch.set(doc(db, 'notifications', item.id), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         db_notifications = [];
       }
@@ -578,21 +600,21 @@ async function bootstrapFromFirestore() {
     }
 
     // 13. Users
-    const usersSnap = await getDocs(collection(db, 'users'));
+    const usersSnap = await withTimeout(getDocs(collection(db, 'users')), 5000);
     if (usersSnap.empty) {
       if (isFirstSeed) {
         const batch = writeBatch(db);
         for (const item of db_users) {
           batch.set(doc(db, 'users', item.userId), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       } else {
         // Essential demo fallback profiles if user table is fully deleted, to ensure login remains functional
         const batch = writeBatch(db);
         for (const item of db_users) {
           batch.set(doc(db, 'users', item.userId), item);
         }
-        await batch.commit();
+        await withTimeout(batch.commit(), 5000);
       }
     } else {
       db_users = usersSnap.docs.map(d => d.data() as UserProfile);

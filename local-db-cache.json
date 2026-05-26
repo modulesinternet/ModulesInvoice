@@ -1,443 +1,451 @@
 {
   "db_settings": {
-    "accountNum": "50200049182312",
+    "ifscCode": "HDFC0000060",
+    "address": "Suite 405, Dynasty Business Park, Andheri-Kurla Road, Andheri East, Mumbai, Maharashtra 400059",
     "phone": "+91 22 4912 3000",
     "gstIn": "27AAZCA4312R1ZX",
-    "invoicePrefix": "APX/26-27/",
-    "companyName": "Dynamic Test Corp",
-    "pan": "AAZCA4312R",
-    "ifscCode": "HDFC0000060",
-    "currency": "INR",
-    "titleBarText": "Apex Digital",
-    "timezone": "Asia/Kolkata",
-    "bankName": "HDFC Bank Ltd",
-    "logoUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
     "website": "www.apexdigital.in",
     "gstOption": "standard",
-    "quotationPrefix": "EST/26-27/",
-    "faviconUrl": "",
-    "address": "Suite 405, Dynasty Business Park, Andheri-Kurla Road, Andheri East, Mumbai, Maharashtra 400059",
-    "signatureUrl": "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
+    "bankName": "HDFC Bank Ltd",
+    "accountNum": "50200049182312",
+    "timezone": "Asia/Kolkata",
+    "titleBarText": "Apex Digital",
+    "pan": "AAZCA4312R",
+    "companyName": "Apex Digital Solutions Test",
     "email": "billing@local.com",
-    "upiId": "apexcorp@hdfcbank"
+    "quotationPrefix": "EST/26-27/",
+    "signatureUrl": "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
+    "upiId": "apexcorp@hdfcbank",
+    "faviconUrl": "",
+    "invoicePrefix": "APX/26-27/",
+    "currency": "INR",
+    "logoUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80"
   },
   "db_clients": [
     {
-      "id": "c-1779715467675",
-      "name": "Test API Client",
-      "email": "client@test.com",
-      "phone": "",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:24:27.675Z"
-    },
-    {
-      "id": "c-1779715195553",
-      "name": "Permission client",
-      "email": "",
-      "phone": "",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:19:55.553Z"
-    },
-    {
-      "id": "c-1779715195549",
-      "name": "Permission client",
-      "email": "",
-      "phone": "",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:19:55.549Z"
-    },
-    {
-      "id": "c-1779715195545",
-      "name": "Permission client",
-      "email": "",
-      "phone": "",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:19:55.545Z"
-    },
-    {
-      "id": "c-1779715195529",
-      "name": "Permission client",
-      "email": "",
-      "phone": "",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:19:55.529Z"
-    },
-    {
-      "id": "c-1779715135593",
-      "name": "Test Client Local",
       "email": "test@local.com",
-      "phone": "+91 99999 99999",
-      "gstIn": "",
-      "pan": "",
       "billingAddress": "Local Address",
-      "shippingAddress": "Local Address",
+      "pan": "",
+      "id": "c-1779715135593",
       "outstandingBalance": 0,
-      "createdAt": "2026-05-25T13:18:55.593Z"
+      "createdAt": "2026-05-25T13:18:55.593Z",
+      "name": "Test Client Local",
+      "gstIn": "",
+      "phone": "+91 99999 99999",
+      "shippingAddress": "Local Address"
+    },
+    {
+      "outstandingBalance": 0,
+      "id": "c-1779715195529",
+      "pan": "",
+      "billingAddress": "",
+      "email": "",
+      "shippingAddress": "",
+      "gstIn": "",
+      "phone": "",
+      "createdAt": "2026-05-25T13:19:55.529Z",
+      "name": "Permission client"
+    },
+    {
+      "phone": "",
+      "gstIn": "",
+      "shippingAddress": "",
+      "createdAt": "2026-05-25T13:19:55.545Z",
+      "name": "Permission client",
+      "billingAddress": "",
+      "pan": "",
+      "id": "c-1779715195545",
+      "outstandingBalance": 0,
+      "email": ""
+    },
+    {
+      "email": "",
+      "id": "c-1779715195549",
+      "outstandingBalance": 0,
+      "billingAddress": "",
+      "pan": "",
+      "createdAt": "2026-05-25T13:19:55.549Z",
+      "name": "Permission client",
+      "shippingAddress": "",
+      "gstIn": "",
+      "phone": ""
+    },
+    {
+      "name": "Permission client",
+      "createdAt": "2026-05-25T13:19:55.553Z",
+      "gstIn": "",
+      "phone": "",
+      "shippingAddress": "",
+      "email": "",
+      "pan": "",
+      "billingAddress": "",
+      "outstandingBalance": 0,
+      "id": "c-1779715195553"
+    },
+    {
+      "gstIn": "",
+      "phone": "",
+      "shippingAddress": "",
+      "createdAt": "2026-05-25T13:24:27.675Z",
+      "name": "Test API Client",
+      "billingAddress": "",
+      "pan": "",
+      "id": "c-1779715467675",
+      "outstandingBalance": 0,
+      "email": "client@test.com"
     },
     {
       "email": "finance@tcs.com",
       "id": "c1",
-      "billingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
       "outstandingBalance": 45000,
-      "shippingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
-      "gstIn": "27AAATT1234F1Z1",
-      "phone": "+91 22 6778 9999",
+      "billingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
       "pan": "AAATT1234F",
+      "createdAt": "2026-05-01T10:00:00Z",
       "name": "Tata Consultancy Services Ltd",
-      "createdAt": "2026-05-01T10:00:00Z"
+      "shippingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
+      "phone": "+91 22 6778 9999",
+      "gstIn": "27AAATT1234F1Z1"
     },
     {
-      "outstandingBalance": 0,
-      "billingAddress": "HUL House, B.D. Sawant Marg, Chakala, Andheri East, Mumbai 400099",
-      "id": "c10",
       "email": "finance.hul@unilever.com",
+      "pan": "AAACH8091A",
+      "billingAddress": "HUL House, B.D. Sawant Marg, Chakala, Andheri East, Mumbai 400099",
+      "outstandingBalance": 0,
+      "id": "c10",
       "createdAt": "2026-05-08T09:30:00Z",
       "name": "Hindustan Unilever Ltd",
-      "pan": "AAACH8091A",
+      "gstIn": "27AAACH8091A1ZR",
       "phone": "+91 22 3983 0000",
-      "shippingAddress": "HUL Warehousing Hub, Bhiwandi, Thane 421302",
-      "gstIn": "27AAACH8091A1ZR"
+      "shippingAddress": "HUL Warehousing Hub, Bhiwandi, Thane 421302"
     },
     {
-      "email": "vendor.billing@reliance.com",
-      "id": "c2",
-      "billingAddress": "Court House, Lokmanya Tilak Marg, Dhobi Talao, Mumbai 400002",
       "outstandingBalance": 128000,
+      "id": "c2",
+      "pan": "AAACR1039K",
+      "billingAddress": "Court House, Lokmanya Tilak Marg, Dhobi Talao, Mumbai 400002",
+      "email": "vendor.billing@reliance.com",
       "shippingAddress": "Reliance Corporate Park, Ghansoli, Navi Mumbai 400701",
       "gstIn": "27AAACR1039K1ZM",
       "phone": "+91 22 4477 0000",
-      "pan": "AAACR1039K",
       "createdAt": "2026-05-01T11:00:00Z",
       "name": "Reliance Retail Ltd"
     },
     {
-      "shippingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100",
-      "gstIn": "29AAACI4321A1ZB",
-      "phone": "+91 80 2852 0261",
-      "name": "Infosys Limited",
       "createdAt": "2026-05-02T09:00:00Z",
-      "pan": "AAACI4321A",
-      "id": "c3",
+      "name": "Infosys Limited",
+      "shippingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100",
+      "phone": "+91 80 2852 0261",
+      "gstIn": "29AAACI4321A1ZB",
       "email": "accounts.payable@infosys.com",
+      "id": "c3",
       "outstandingBalance": 0,
-      "billingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100"
+      "billingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100",
+      "pan": "AAACI4321A"
     },
     {
-      "shippingAddress": "Doddakannelli, Sarjapur Road, Bengaluru, Karnataka 560035",
-      "gstIn": "29AAACW5678C1Z0",
-      "phone": "+91 80 2844 0011",
-      "pan": "AAACW5678C",
-      "name": "Wipro Limited",
       "createdAt": "2026-05-02T10:30:00Z",
+      "name": "Wipro Limited",
+      "shippingAddress": "Doddakannelli, Sarjapur Road, Bengaluru, Karnataka 560035",
+      "phone": "+91 80 2844 0011",
+      "gstIn": "29AAACW5678C1Z0",
       "email": "billing.services@wipro.com",
       "id": "c4",
+      "outstandingBalance": 15400,
       "billingAddress": "Doddakannelli, Sarjapur Road, Bengaluru, Karnataka 560035",
-      "outstandingBalance": 15400
+      "pan": "AAACW5678C"
     },
     {
-      "phone": "+91 22 2490 1441",
-      "shippingAddress": "M&M Automotive Plant, Kandivali East, Mumbai 400101",
-      "gstIn": "27AAACM2345K1ZK",
       "createdAt": "2026-05-03T12:00:00Z",
       "name": "Mahindra & Mahindra Ltd",
+      "phone": "+91 22 2490 1441",
+      "gstIn": "27AAACM2345K1ZK",
+      "shippingAddress": "M&M Automotive Plant, Kandivali East, Mumbai 400101",
+      "email": "accounts@mahindra.co.in",
+      "billingAddress": "Gateway Building, Apollo Bunder, Colaba, Mumbai 400001",
       "pan": "AAACM2345K",
       "id": "c5",
-      "email": "accounts@mahindra.co.in",
-      "outstandingBalance": 89000,
-      "billingAddress": "Gateway Building, Apollo Bunder, Colaba, Mumbai 400001"
+      "outstandingBalance": 89000
     },
     {
-      "outstandingBalance": 0,
-      "billingAddress": "13th Floor, Lodha Excelus, Apollo Mills Compound, Mahalaxmi, Mumbai 400011",
-      "id": "c6",
-      "email": "vendorpayments@hdfclife.com",
+      "shippingAddress": "13th Floor, Lodha Excelus, Mahalaxmi, Mumbai 400011",
+      "phone": "+91 22 6751 6666",
+      "gstIn": "27AABCH1209D1ZH",
       "createdAt": "2026-05-04T14:00:00Z",
       "name": "HDFC Life Insurance Co Ltd",
+      "id": "c6",
+      "outstandingBalance": 0,
+      "billingAddress": "13th Floor, Lodha Excelus, Apollo Mills Compound, Mahalaxmi, Mumbai 400011",
       "pan": "AABCH1209D",
-      "phone": "+91 22 6751 6666",
-      "shippingAddress": "13th Floor, Lodha Excelus, Mahalaxmi, Mumbai 400011",
-      "gstIn": "27AABCH1209D1ZH"
+      "email": "vendorpayments@hdfclife.com"
     },
     {
-      "email": "finance.corporate@adani.com",
-      "id": "c7",
-      "billingAddress": "Adani Corporate House, Shantigram, SG Highway, Ahmedabad, Gujarat 382421",
-      "outstandingBalance": 245000,
-      "phone": "+91 79 2656 5555",
+      "createdAt": "2026-05-05T10:00:00Z",
+      "name": "Adani Enterprises Ltd",
       "shippingAddress": "Adani Corporate House, Ahmedabad 382421",
       "gstIn": "24AAACA1290B1ZZ",
+      "phone": "+91 79 2656 5555",
+      "email": "finance.corporate@adani.com",
+      "outstandingBalance": 245000,
+      "id": "c7",
       "pan": "AAACA1290B",
-      "createdAt": "2026-05-05T10:00:00Z",
-      "name": "Adani Enterprises Ltd"
+      "billingAddress": "Adani Corporate House, Shantigram, SG Highway, Ahmedabad, Gujarat 382421"
     },
     {
-      "pan": "AAACL3409E",
-      "name": "Larsen & Toubro Ltd",
       "createdAt": "2026-05-06T15:00:00Z",
-      "shippingAddress": "L&T Gate No 1, Powai, Saki Vihar Road, Mumbai 400072",
-      "gstIn": "27AAACL3409E1ZT",
+      "name": "Larsen & Toubro Ltd",
       "phone": "+91 22 6752 5656",
+      "gstIn": "27AAACL3409E1ZT",
+      "shippingAddress": "L&T Gate No 1, Powai, Saki Vihar Road, Mumbai 400072",
+      "email": "billdesk@lntecc.com",
+      "pan": "AAACL3409E",
       "billingAddress": "L&T House, Ballard Estate, Mumbai 400001",
       "outstandingBalance": 75000,
-      "email": "billdesk@lntecc.com",
       "id": "c8"
     },
     {
-      "pan": "ACA2304K",
       "createdAt": "2026-05-07T11:00:00Z",
       "name": "Airtel Business Solutions",
+      "shippingAddress": "Bharti Crescent, Vasant Kunj, New Delhi 110070",
       "phone": "+91 11 4666 1000",
       "gstIn": "07AAACA2304K1ZC",
-      "shippingAddress": "Bharti Crescent, Vasant Kunj, New Delhi 110070",
-      "billingAddress": "Bharti Crescent, 1 Nelson Mandela Road, Vasant Kunj, New Delhi 110070",
-      "outstandingBalance": 12000,
       "email": "partner.payables@airtel.com",
-      "id": "c9"
+      "outstandingBalance": 12000,
+      "id": "c9",
+      "pan": "ACA2304K",
+      "billingAddress": "Bharti Crescent, 1 Nelson Mandela Road, Vasant Kunj, New Delhi 110070"
     }
   ],
   "db_products": [
     {
+      "stockQty": 100,
       "id": "p-1779715467693",
-      "name": "Test API Product",
-      "sku": "SKU-1779715467693",
+      "gstPercent": 18,
       "category": "Software Services",
       "price": 1500,
-      "gstPercent": 18,
-      "hsnSac": "",
-      "stockQty": 100,
-      "unit": "PCS"
+      "unit": "PCS",
+      "sku": "SKU-1779715467693",
+      "name": "Test API Product",
+      "hsnSac": ""
     }
   ],
   "db_invoices": [
     {
-      "id": "inv-1779715467703",
-      "invoiceNumber": "APX/26-27/001",
-      "clientId": "c-1",
-      "clientName": "Test API Client",
-      "clientGst": "",
-      "date": "2026-05-25",
-      "dueDate": "2026-06-09",
-      "items": [],
-      "subtotal": 5000,
-      "discount": 0,
+      "notes": "",
+      "createdAt": "2026-05-25T13:24:27.703Z",
       "taxType": "CGST_SGST",
+      "clientName": "Test API Client",
+      "clientId": "c-1",
       "taxAmount": 0,
       "total": 5000,
-      "paidAmount": 0,
-      "dueAmount": 5000,
+      "readCount": 0,
+      "invoiceNumber": "APX/26-27/001",
       "status": "unpaid",
-      "createdAt": "2026-05-25T13:24:27.703Z",
-      "notes": "",
-      "readCount": 0
+      "clientGst": "",
+      "dueAmount": 5000,
+      "id": "inv-1779715467703",
+      "paidAmount": 0,
+      "subtotal": 5000,
+      "items": [],
+      "dueDate": "2026-06-09",
+      "discount": 0,
+      "date": "2026-05-25"
     }
   ],
   "db_quotations": [
     {
-      "id": "q-1779715467707",
-      "quotationNumber": "EST/26-27/001",
       "clientId": "c-1",
+      "createdAt": "2026-05-25T13:24:27.707Z",
       "clientName": "Test API Client",
-      "date": "2026-05-25",
-      "expiryDate": "2026-06-24",
-      "items": [],
-      "subtotal": 0,
-      "discount": 0,
+      "quotationNumber": "EST/26-27/001",
+      "notes": "",
+      "status": "draft",
       "taxAmount": 0,
       "total": 4500,
-      "status": "draft",
-      "createdAt": "2026-05-25T13:24:27.707Z",
-      "notes": ""
+      "expiryDate": "2026-06-24",
+      "items": [],
+      "date": "2026-05-25",
+      "discount": 0,
+      "id": "q-1779715467707",
+      "subtotal": 0
     }
   ],
   "db_payments": [],
   "db_ledger": [
     {
-      "id": "led-1779715467703",
-      "clientId": "c-1",
-      "clientName": "Test API Client",
-      "date": "2026-05-25",
-      "description": "Invoice Raised: APX/26-27/001",
       "type": "debit",
-      "amount": 5000,
-      "runningBalance": 5000,
+      "date": "2026-05-25",
+      "id": "led-1779715467703",
+      "description": "Invoice Raised: APX/26-27/001",
       "referenceType": "invoice",
+      "clientId": "c-1",
+      "createdAt": "2026-05-25T13:24:27.703Z",
+      "clientName": "Test API Client",
+      "runningBalance": 5000,
       "referenceId": "inv-1779715467703",
-      "createdAt": "2026-05-25T13:24:27.703Z"
+      "amount": 5000
     }
   ],
   "db_cashbook": [
     {
-      "id": "cb-1779715467712",
-      "date": "2026-05-25",
       "description": "Test income cash",
-      "type": "income",
+      "id": "cb-1779715467712",
       "paymentMode": "Cash",
-      "amount": 300,
+      "type": "income",
+      "date": "2026-05-25",
       "runningCashBalance": 300,
-      "runningBankBalance": 0,
-      "createdAt": "2026-05-25T13:24:27.712Z"
+      "amount": 300,
+      "createdAt": "2026-05-25T13:24:27.712Z",
+      "runningBankBalance": 0
     }
   ],
   "db_logs": [
     {
-      "id": "log-1779715467715-914",
+      "id": "log-1779779979252-51",
       "userId": "demo-admin",
       "userName": "Karan Sharma",
       "action": "SETTINGS_WRITE",
       "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-25T13:24:27.715Z"
+      "timestamp": "2026-05-26T07:19:39.252Z"
     },
     {
-      "id": "log-1779715467712-566",
       "userId": "demo-admin",
+      "id": "log-1779711755562-585",
+      "action": "SETTINGS_WRITE",
       "userName": "Karan Sharma",
-      "action": "CASHBOOK_ENTRY",
-      "details": "Created manual transactional log: Test income cash for INR 300",
-      "timestamp": "2026-05-25T13:24:27.712Z"
+      "details": "Updated corporate profile settings & banking info",
+      "timestamp": "2026-05-25T12:22:35.562Z"
     },
     {
-      "id": "log-1779715467708-201",
+      "id": "log-1779714488581-219",
+      "action": "SETTINGS_WRITE",
       "userId": "demo-admin",
       "userName": "Karan Sharma",
-      "action": "QUOTATION_CREATE",
-      "details": "Prepared estimate EST/26-27/001 for Test API Client",
-      "timestamp": "2026-05-25T13:24:27.708Z"
+      "details": "Updated corporate profile settings & banking info",
+      "timestamp": "2026-05-25T13:08:08.581Z"
     },
     {
-      "id": "log-1779715467704-945",
       "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "INVOICE_CREATE",
-      "details": "Generated invoice APX/26-27/001 for Test API Client (INR 5000)",
-      "timestamp": "2026-05-25T13:24:27.704Z"
+      "id": "log-1779714511579-49",
+      "action": "SETTINGS_WRITE",
+      "details": "Updated corporate profile settings & banking info",
+      "timestamp": "2026-05-25T13:08:31.579Z",
+      "userName": "Karan Sharma"
     },
     {
-      "id": "log-1779715467699-491",
       "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "CATEGORY_CREATE",
-      "details": "Created new product category: New Test Category",
-      "timestamp": "2026-05-25T13:24:27.699Z"
-    },
-    {
-      "id": "log-1779715467694-438",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "PRODUCT_CREATE",
-      "details": "Added catalogue work item: Test API Product at GST 18%",
-      "timestamp": "2026-05-25T13:24:27.694Z"
-    },
-    {
-      "id": "log-1779715467676-156",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
       "action": "CLIENT_CREATE",
-      "details": "Registered new client: Test API Client",
-      "timestamp": "2026-05-25T13:24:27.676Z"
+      "id": "log-1779715135596-971",
+      "details": "Registered new client: Test Client Local",
+      "timestamp": "2026-05-25T13:18:55.596Z",
+      "userName": "Karan Sharma"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "SETTINGS_WRITE",
+      "id": "log-1779715147678-792",
+      "details": "Updated corporate profile settings & banking info",
+      "timestamp": "2026-05-25T13:19:07.678Z",
+      "userName": "Karan Sharma"
+    },
+    {
+      "details": "Registered new client: Permission client",
+      "timestamp": "2026-05-25T13:19:55.530Z",
+      "userName": "Karan Sharma",
+      "userId": "demo-admin",
+      "action": "CLIENT_CREATE",
+      "id": "log-1779715195530-729"
+    },
+    {
+      "id": "log-1779715195545-939",
+      "action": "CLIENT_CREATE",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "timestamp": "2026-05-25T13:19:55.545Z",
+      "details": "Registered new client: Permission client"
+    },
+    {
+      "userId": "demo-admin",
+      "id": "log-1779715195550-368",
+      "action": "CLIENT_CREATE",
+      "userName": "Karan Sharma",
+      "timestamp": "2026-05-25T13:19:55.550Z",
+      "details": "Registered new client: Permission client"
     },
     {
       "id": "log-1779715195553-978",
+      "action": "CLIENT_CREATE",
       "userId": "demo-admin",
       "userName": "Karan Sharma",
-      "action": "CLIENT_CREATE",
       "details": "Registered new client: Permission client",
       "timestamp": "2026-05-25T13:19:55.553Z"
     },
     {
-      "id": "log-1779715195550-368",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
+      "id": "log-1779715467676-156",
       "action": "CLIENT_CREATE",
-      "details": "Registered new client: Permission client",
-      "timestamp": "2026-05-25T13:19:55.550Z"
-    },
-    {
-      "id": "log-1779715195545-939",
       "userId": "demo-admin",
       "userName": "Karan Sharma",
-      "action": "CLIENT_CREATE",
-      "details": "Registered new client: Permission client",
-      "timestamp": "2026-05-25T13:19:55.545Z"
+      "details": "Registered new client: Test API Client",
+      "timestamp": "2026-05-25T13:24:27.676Z"
     },
     {
-      "id": "log-1779715195530-729",
+      "userName": "Karan Sharma",
+      "details": "Added catalogue work item: Test API Product at GST 18%",
+      "timestamp": "2026-05-25T13:24:27.694Z",
       "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "CLIENT_CREATE",
-      "details": "Registered new client: Permission client",
-      "timestamp": "2026-05-25T13:19:55.530Z"
+      "action": "PRODUCT_CREATE",
+      "id": "log-1779715467694-438"
     },
     {
-      "id": "log-1779715147678-792",
       "userId": "demo-admin",
+      "id": "log-1779715467699-491",
+      "action": "CATEGORY_CREATE",
       "userName": "Karan Sharma",
-      "action": "SETTINGS_WRITE",
-      "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-25T13:19:07.678Z"
-    },
-    {
-      "id": "log-1779715135596-971",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "CLIENT_CREATE",
-      "details": "Registered new client: Test Client Local",
-      "timestamp": "2026-05-25T13:18:55.596Z"
+      "timestamp": "2026-05-25T13:24:27.699Z",
+      "details": "Created new product category: New Test Category"
     },
     {
       "userName": "Karan Sharma",
-      "userId": "demo-admin",
-      "action": "SETTINGS_WRITE",
-      "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-25T12:22:35.562Z",
-      "id": "log-1779711755562-585"
-    },
-    {
-      "id": "log-1779714488581-219",
-      "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-25T13:08:08.581Z",
-      "userName": "Karan Sharma",
-      "action": "SETTINGS_WRITE",
+      "details": "Generated invoice APX/26-27/001 for Test API Client (INR 5000)",
+      "timestamp": "2026-05-25T13:24:27.704Z",
+      "id": "log-1779715467704-945",
+      "action": "INVOICE_CREATE",
       "userId": "demo-admin"
     },
     {
-      "id": "log-1779714511579-49",
-      "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-25T13:08:31.579Z",
-      "action": "SETTINGS_WRITE",
+      "details": "Prepared estimate EST/26-27/001 for Test API Client",
+      "timestamp": "2026-05-25T13:24:27.708Z",
+      "userName": "Karan Sharma",
       "userId": "demo-admin",
-      "userName": "Karan Sharma"
+      "id": "log-1779715467708-201",
+      "action": "QUOTATION_CREATE"
+    },
+    {
+      "timestamp": "2026-05-25T13:24:27.712Z",
+      "details": "Created manual transactional log: Test income cash for INR 300",
+      "userName": "Karan Sharma",
+      "id": "log-1779715467712-566",
+      "action": "CASHBOOK_ENTRY",
+      "userId": "demo-admin"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Updated corporate profile settings & banking info",
+      "timestamp": "2026-05-25T13:24:27.715Z",
+      "userId": "demo-admin",
+      "action": "SETTINGS_WRITE",
+      "id": "log-1779715467715-914"
     }
   ],
   "db_notifications": [],
   "db_users": [
     {
       "userId": "admin-modulesinternet",
-      "status": "active",
       "lastLoginAt": "2026-05-23T07:00:00Z",
       "role": "Admin",
       "email": "modulesinternet@gmail.com",
       "name": "Admin",
-      "createdAt": "2026-05-01T10:00:00Z"
+      "createdAt": "2026-05-01T10:00:00Z",
+      "status": "active"
     }
   ],
   "db_categories": [
@@ -453,54 +461,54 @@
   "db_roles": [
     {
       "modules": {
-        "invoices": {
+        "products": {
+          "write": true,
+          "read": true,
+          "delete": true
+        },
+        "quotations": {
+          "write": true,
+          "read": true,
+          "delete": true
+        },
+        "clients": {
+          "write": true,
+          "delete": true,
+          "read": true
+        },
+        "dashboard": {
           "read": true,
           "delete": true,
           "write": true
-        },
-        "products": {
-          "delete": true,
-          "write": true,
-          "read": true
         },
         "users": {
           "read": true,
           "delete": true,
           "write": true
         },
-        "quotations": {
+        "payments": {
+          "write": true,
           "read": true,
+          "delete": true
+        },
+        "invoices": {
+          "write": true,
+          "read": true,
+          "delete": true
+        },
+        "cashbook": {
+          "write": true,
           "delete": true,
-          "write": true
+          "read": true
         },
         "ledger": {
           "write": true,
-          "delete": true,
-          "read": true
-        },
-        "cashbook": {
-          "delete": true,
-          "write": true,
-          "read": true
+          "read": true,
+          "delete": true
         },
         "settings": {
           "write": true,
-          "delete": true,
-          "read": true
-        },
-        "clients": {
           "read": true,
-          "write": true,
-          "delete": true
-        },
-        "payments": {
-          "delete": true,
-          "write": true,
-          "read": true
-        },
-        "dashboard": {
-          "read": true,
-          "write": true,
           "delete": true
         }
       },
@@ -508,32 +516,32 @@
     },
     {
       "modules": {
+        "payments": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "users": {
+          "delete": false,
+          "read": true,
+          "write": true
+        },
+        "invoices": {
+          "write": true,
+          "delete": false,
+          "read": true
+        },
         "cashbook": {
-          "read": true,
-          "write": true,
-          "delete": false
-        },
-        "ledger": {
-          "write": true,
           "delete": false,
-          "read": true
-        },
-        "quotations": {
           "read": true,
-          "write": true,
-          "delete": false
-        },
-        "clients": {
-          "write": true,
-          "delete": false,
-          "read": true
+          "write": true
         },
         "settings": {
           "delete": false,
-          "write": true,
-          "read": true
+          "read": true,
+          "write": true
         },
-        "payments": {
+        "ledger": {
           "write": true,
           "delete": false,
           "read": true
@@ -543,19 +551,19 @@
           "delete": false,
           "read": true
         },
-        "invoices": {
+        "products": {
+          "write": true,
+          "read": true,
+          "delete": false
+        },
+        "quotations": {
           "write": true,
           "delete": false,
           "read": true
         },
-        "products": {
-          "read": true,
+        "clients": {
           "write": true,
-          "delete": false
-        },
-        "users": {
           "delete": false,
-          "write": true,
           "read": true
         }
       },
@@ -563,110 +571,110 @@
     },
     {
       "modules": {
+        "settings": {
+          "delete": false,
+          "read": false,
+          "write": false
+        },
+        "ledger": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "cashbook": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "invoices": {
+          "write": true,
+          "read": true,
+          "delete": false
+        },
         "users": {
           "write": false,
           "delete": false,
           "read": true
         },
-        "products": {
-          "read": true,
-          "write": false,
-          "delete": false
-        },
-        "invoices": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "dashboard": {
-          "read": true,
-          "write": false,
-          "delete": false
-        },
         "payments": {
           "read": true,
-          "write": true,
-          "delete": false
+          "delete": false,
+          "write": true
         },
-        "settings": {
-          "read": false,
+        "dashboard": {
           "write": false,
+          "read": true,
           "delete": false
         },
         "clients": {
-          "read": true,
           "write": true,
-          "delete": false
+          "delete": false,
+          "read": true
         },
         "quotations": {
           "write": false,
           "delete": false,
           "read": true
         },
-        "cashbook": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "ledger": {
-          "write": true,
-          "delete": false,
-          "read": true
+        "products": {
+          "write": false,
+          "read": true,
+          "delete": false
         }
       },
       "role": "Accountant"
     },
     {
       "modules": {
-        "dashboard": {
-          "delete": false,
+        "users": {
           "write": false,
-          "read": true
+          "delete": false,
+          "read": false
         },
         "payments": {
           "write": false,
-          "delete": false,
-          "read": false
+          "read": false,
+          "delete": false
         },
-        "clients": {
-          "write": false,
+        "invoices": {
           "delete": false,
-          "read": true
+          "read": true,
+          "write": false
+        },
+        "cashbook": {
+          "delete": false,
+          "read": false,
+          "write": false
+        },
+        "ledger": {
+          "delete": false,
+          "read": false,
+          "write": false
         },
         "settings": {
           "delete": false,
-          "write": false,
-          "read": false
-        },
-        "cashbook": {
           "read": false,
-          "write": false,
-          "delete": false
+          "write": false
         },
-        "ledger": {
-          "read": false,
-          "write": false,
-          "delete": false
-        },
-        "quotations": {
-          "read": true,
+        "dashboard": {
           "delete": false,
-          "write": true
-        },
-        "users": {
-          "read": false,
-          "write": false,
-          "delete": false
+          "read": true,
+          "write": false
         },
         "products": {
           "write": false,
           "delete": false,
           "read": true
         },
-        "invoices": {
+        "quotations": {
+          "write": true,
           "delete": false,
-          "write": false,
           "read": true
+        },
+        "clients": {
+          "read": true,
+          "delete": false,
+          "write": false
         }
       },
       "role": "Staff"
