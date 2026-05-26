@@ -518,9 +518,8 @@ async function bootstrapFromFirestore() {
     // 13. Users
     db_users = await syncCollectionOnStartup('users', db_users, DEMO_USERS, 'userId');
 
-    // Ensure modulesinternet@gmail.com is in db_users and stale demo users are removed
+    // Ensure modulesinternet@gmail.com is in db_users and default demo users are both kept and restored
     const finalUsers: UserProfile[] = [];
-    const demoEmails = ['admin@demo.com', 'manager@demo.com', 'accountant@demo.com', 'staff@demo.com'];
     const hasAdmin = db_users.some(u => u.email.toLowerCase() === 'modulesinternet@gmail.com');
     
     if (!hasAdmin) {
@@ -537,14 +536,20 @@ async function bootstrapFromFirestore() {
 
     db_users.forEach(u => {
       const emailLower = u.email.toLowerCase();
-      if (demoEmails.includes(emailLower)) {
-        return; // Remove older demo templates
-      }
       if (emailLower === 'modulesinternet@gmail.com') {
         u.role = 'Admin';
       }
-      finalUsers.push(u);
+      if (!finalUsers.some(f => f.email.toLowerCase() === emailLower)) {
+        finalUsers.push(u);
+      }
     });
+
+    DEMO_USERS.forEach(du => {
+      if (!finalUsers.some(f => f.email.toLowerCase() === du.email.toLowerCase())) {
+        finalUsers.push(du);
+      }
+    });
+
     db_users = finalUsers;
     saveStateToLocalCache();
 

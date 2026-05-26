@@ -32,6 +32,42 @@ export const DEMO_USERS: UserProfile[] = [
     status: "active",
     createdAt: "2026-05-01T10:00:00Z",
     lastLoginAt: "2026-05-23T07:00:00Z"
+  },
+  {
+    userId: "u-admin-demo",
+    email: "admin@demo.com",
+    name: "Karan Sharma",
+    role: "Admin",
+    status: "active",
+    createdAt: "2026-05-01T10:00:00Z",
+    lastLoginAt: ""
+  },
+  {
+    userId: "u-manager-demo",
+    email: "manager@demo.com",
+    name: "Meera Nair",
+    role: "Manager",
+    status: "active",
+    createdAt: "2026-05-01T10:00:00Z",
+    lastLoginAt: ""
+  },
+  {
+    userId: "u-accountant-demo",
+    email: "accountant@demo.com",
+    name: "Rajesh Patel",
+    role: "Accountant",
+    status: "active",
+    createdAt: "2026-05-01T10:00:00Z",
+    lastLoginAt: ""
+  },
+  {
+    userId: "u-staff-demo",
+    email: "staff@demo.com",
+    name: "Amit Sen",
+    role: "Staff",
+    status: "active",
+    createdAt: "2026-05-01T10:00:00Z",
+    lastLoginAt: ""
   }
 ];
 

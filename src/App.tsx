@@ -239,6 +239,7 @@ export default function App() {
       try { return JSON.parse(saved); } catch (_) {}
     }
     const defaults = {
+      "modulesinternet@gmail.com": "admin123",
       "admin@demo.com": "admin123",
       "manager@demo.com": "manager123",
       "accountant@demo.com": "acc123",
