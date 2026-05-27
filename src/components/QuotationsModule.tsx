@@ -527,7 +527,7 @@ export default function QuotationsModule({
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-purple-400" />
-                <h3 className="font-bold text-base font-display">Create Smart Proposal Estimate</h3>
+                <h3 className="font-bold text-base font-display">{isEditing ? "Edit Proposal Estimate" : "Create Smart Proposal Estimate"}</h3>
               </div>
               <button 
                 onClick={() => {
@@ -733,7 +733,7 @@ export default function QuotationsModule({
                   type="submit"
                   className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md"
                 >
-                  Dispatch Proposal Estimate
+                  {isEditing ? "Save Proposal Changes" : "Dispatch Proposal Estimate"}
                 </button>
               </div>
             </form>

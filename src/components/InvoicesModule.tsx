@@ -21,7 +21,8 @@ import {
   Clock,
   ExternalLink,
   ChevronDown,
-  Globe
+  Globe,
+  Edit3
 } from 'lucide-react';
 import { Invoice, Client, Product, InvoiceItem } from '../types';
 import jsPDF from 'jspdf';
@@ -33,6 +34,7 @@ interface InvoicesModuleProps {
   clients: Client[];
   products: Product[];
   onAddInvoice: (inv: Partial<Invoice>) => Promise<void>;
+  onUpdateInvoice?: (id: string, inv: Partial<Invoice>) => Promise<void>;
   onDeleteInvoice: (id: string) => Promise<void>;
   onMarkInvoiceRead?: (id: string) => Promise<void>;
   businessSettings: any;
@@ -47,6 +49,7 @@ export default function InvoicesModule({
   clients,
   products,
   onAddInvoice,
+  onUpdateInvoice,
   onDeleteInvoice,
   onMarkInvoiceRead,
   businessSettings,
@@ -82,12 +85,25 @@ export default function InvoicesModule({
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
 
+  // Editing states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+
   // Form states inside new invoice wizard
   const [clientId, setClientId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 15*24*60*60*1000).toISOString().split('T')[0]);
   const [notes, setNotes] = useState('Humble warning: Please quote our invoice serial number in all bank payouts.');
   const [discount, setDiscount] = useState('0');
+
+  React.useEffect(() => {
+    if (isCreateOpen && !isEditing) {
+      const computedPrefix = businessSettings?.invoicePrefix || 'INV-';
+      const autoNum = `${computedPrefix}${String(invoices.length + 1).padStart(3, '0')}`;
+      setInvoiceNumber(autoNum);
+    }
+  }, [isCreateOpen, isEditing, businessSettings, invoices]);
 
   // Multi item table adding states for invoice wizard
   const [addedItems, setAddedItems] = useState<Array<{
@@ -189,6 +205,17 @@ export default function InvoicesModule({
       };
     });
 
+    const finalPaidAmount = isEditing && editingInvoiceId 
+      ? (invoices.find(inv => inv.id === editingInvoiceId)?.paidAmount || 0) 
+      : 0;
+    const finalDueAmount = Math.max(0, draftTotal - finalPaidAmount);
+    let finalStatus: 'paid' | 'partially_paid' | 'unpaid' = 'unpaid';
+    if (finalDueAmount <= 0) {
+      finalStatus = 'paid';
+    } else if (finalPaidAmount > 0) {
+      finalStatus = 'partially_paid';
+    }
+
     const payload: Partial<Invoice> = {
       clientId,
       clientName: clientObj.name,
@@ -201,14 +228,21 @@ export default function InvoicesModule({
       taxType: (clientObj.gstIn || '').startsWith(homeStateCode) ? "CGST_SGST" : "IGST",
       taxAmount: draftTax,
       total: draftTotal,
-      paidAmount: 0,
-      dueAmount: draftTotal,
-      status: 'unpaid',
-      notes
+      paidAmount: finalPaidAmount,
+      dueAmount: finalDueAmount,
+      status: finalStatus,
+      notes,
+      invoiceNumber
     };
 
-    await onAddInvoice(payload);
+    if (isEditing && editingInvoiceId && onUpdateInvoice) {
+      await onUpdateInvoice(editingInvoiceId, payload);
+    } else {
+      await onAddInvoice(payload);
+    }
     setIsCreateOpen(false);
+    setIsEditing(false);
+    setEditingInvoiceId(null);
     setAddedItems([]);
     setDiscount('0');
   };
@@ -372,6 +406,38 @@ export default function InvoicesModule({
 
             {/* Print/Download triggers */}
             <div className="flex items-center gap-2">
+              {canWrite && (
+                <button 
+                  onClick={() => {
+                    const inv = selectedInvoice;
+                    setIsEditing(true);
+                    setEditingInvoiceId(inv.id);
+                    setClientId(inv.clientId);
+                    setDate(inv.date);
+                    setDueDate(inv.dueDate);
+                    setNotes(inv.notes || '');
+                    setDiscount(String(inv.discount || 0));
+                    setInvoiceNumber(inv.invoiceNumber);
+                    
+                    const mappedItems = inv.items.map(item => {
+                      const prod = products.find(p => p.id === item.productId || p.name === item.name);
+                      return {
+                        productId: prod ? prod.id : '',
+                        qty: item.qty,
+                        price: item.price
+                      };
+                    }).filter(v => v.productId !== '');
+                    
+                    setAddedItems(mappedItems);
+                    setIsCreateOpen(true);
+                    setSelectedInvoice(null);
+                  }}
+                  className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-4 h-4 text-indigo-500" />
+                  <span>Edit Bill</span>
+                </button>
+              )}
               <button 
                 onClick={() => handleOpenEmail(selectedInvoice)}
                 className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5"
@@ -481,12 +547,6 @@ export default function InvoicesModule({
                         GSTIN: {selectedInvoice.clientGst || invoiceClient?.gstIn || 'URP (Unregistered)'}
                       </span>
                     )}
-                    
-                    {((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice.notes) && (
-                      <p className="text-[11px] text-indigo-600/80 bg-indigo-50/40 p-2 rounded-lg italic mt-2 max-w-xs leading-normal">
-                        Note: {selectedInvoice.notes}
-                      </p>
-                    )}
                   </div>
 
                   <div className="md:text-right space-y-1">
@@ -510,43 +570,51 @@ export default function InvoicesModule({
             <div className="overflow-x-auto">
               <table className={`w-full text-left border-collapse border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl overflow-hidden`}>
                 <thead>
-                  <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b ${activeTheme?.borderTheme || 'border-slate-200'}`}>
-                    <th className="py-3 px-4">Standard Deliverables Line Item</th>
-                    <th className="py-3 px-3 text-center col-span-1">Qty</th>
-                    <th className="py-3 px-3 text-right">Unit Rate (INR)</th>
-                    {businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false && (
-                      <th className="py-3 px-3 text-center">Tax Split</th>
-                    )}
-                    <th className="py-3 px-4 text-right">Amount (Gross)</th>
-                  </tr>
+                  {(() => {
+                    const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
+                    return (
+                      <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b ${activeTheme?.borderTheme || 'border-slate-200'}`}>
+                        <th className={`py-3 px-4 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>Standard Deliverables Line Item</th>
+                        <th className={`py-3 px-3 text-center ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>Qty</th>
+                        <th className={`py-3 px-3 text-right ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>Unit Rate (INR)</th>
+                        {hasTaxSplit && (
+                          <th className="py-3 px-3 text-center w-[15%]">Tax Split</th>
+                        )}
+                        <th className={`py-3 px-4 text-right ${hasTaxSplit ? 'w-[20%]' : 'w-[17%]'}`}>Amount (Gross)</th>
+                      </tr>
+                    );
+                  })()}
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {selectedInvoice.items.map((item, index) => (
-                    <tr key={index} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-4 font-semibold text-slate-800">
-                        <div>{item.name}</div>
-                        {((businessSettings?.showInvoiceHsn ?? true) !== false && item.hsnSac) && (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">HSN: {item.hsnSac}</div>
-                        )}
-                      </td>
-                      <td className="py-4 px-3 text-center font-mono font-bold text-slate-600">{item.qty}</td>
-                      <td className="py-4 px-3 text-right font-mono text-slate-600">{formatCurrency(item.price)}</td>
-                      {businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false && (
-                        <td className="py-4 px-3 text-center">
-                          {selectedInvoice.taxType === 'CGST_SGST' ? (
-                            <span className="text-[10px] text-slate-500">
-                              CGST {(item.gstPercent/2)}% + SGST {(item.gstPercent/2)}%
-                            </span>
-                          ) : (
-                            <span className={`text-[10px] ${activeTheme?.accentText || 'text-indigo-600'} font-bold`}>
-                              IGST {item.gstPercent}%
-                            </span>
+                  {selectedInvoice.items.map((item, index) => {
+                    const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
+                    return (
+                      <tr key={index} className="hover:bg-slate-50/50">
+                        <td className={`py-4 px-4 font-semibold text-slate-800 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>
+                          <div>{item.name}</div>
+                          {((businessSettings?.showInvoiceHsn ?? true) !== false && item.hsnSac) && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">HSN: {item.hsnSac}</div>
                           )}
                         </td>
-                      )}
-                      <td className="py-4 px-4 text-right font-semibold font-mono text-slate-900">{formatCurrency(item.totalAmount)}</td>
-                    </tr>
-                  ))}
+                        <td className={`py-4 px-3 text-center font-mono font-bold text-slate-600 ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>{item.qty}</td>
+                        <td className={`py-4 px-3 text-right font-mono text-slate-600 ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>{formatCurrency(item.price)}</td>
+                        {hasTaxSplit && (
+                          <td className="py-4 px-3 text-center w-[15%]">
+                            {selectedInvoice.taxType === 'CGST_SGST' ? (
+                              <span className="text-[10px] text-slate-500">
+                                CGST {(item.gstPercent/2)}% + SGST {(item.gstPercent/2)}%
+                              </span>
+                            ) : (
+                              <span className={`text-[10px] ${activeTheme?.accentText || 'text-indigo-600'} font-bold`}>
+                                IGST {item.gstPercent}%
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        <td className={`py-4 px-4 text-right font-semibold font-mono text-slate-900 ${hasTaxSplit ? 'w-[20%]' : 'w-[17%]'}`}>{formatCurrency(item.totalAmount)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -615,6 +683,22 @@ export default function InvoicesModule({
                 </div>
               </div>
             </div>
+
+            {/* Wide Bottom Notes section & Electronically Generated warning */}
+            <div className={`mt-8 pt-6 border-t ${activeTheme?.borderTheme || 'border-slate-200'} space-y-4`}>
+              {((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice.notes) && (
+                <div className="text-xs text-slate-500 bg-slate-50/50 p-4 rounded-xl border border-slate-100 text-left">
+                  <span className="font-bold text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Invoice Notes &amp; Terms</span>
+                  <p className="italic leading-normal text-slate-600 font-sans">{selectedInvoice.notes}</p>
+                </div>
+              )}
+              <div className="text-center py-2 shrink-0">
+                <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase font-sans">
+                  This is an electronically generated document, manual signature not required.
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
       ) : (
@@ -712,6 +796,36 @@ export default function InvoicesModule({
                         >
                           Review Bill
                         </button>
+                        {canWrite && (
+                          <button
+                            onClick={() => {
+                              setIsEditing(true);
+                              setEditingInvoiceId(inv.id);
+                              setClientId(inv.clientId);
+                              setDate(inv.date);
+                              setDueDate(inv.dueDate);
+                              setNotes(inv.notes || '');
+                              setDiscount(String(inv.discount || 0));
+                              setInvoiceNumber(inv.invoiceNumber);
+                              
+                              const mappedItems = inv.items.map(item => {
+                                const prod = products.find(p => p.id === item.productId || p.name === item.name);
+                                return {
+                                  productId: prod ? prod.id : '',
+                                  qty: item.qty,
+                                  price: item.price
+                                };
+                              }).filter(v => v.productId !== '');
+                              
+                              setAddedItems(mappedItems);
+                              setIsCreateOpen(true);
+                            }}
+                            className="p-1 px-1.5 border border-slate-250 border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"
+                            title="Edit Invoice / Bill"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {canDelete && (
                           <button 
                             onClick={async () => {
@@ -755,11 +869,13 @@ export default function InvoicesModule({
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-base font-display">Generate Professional Tax Invoice</h3>
+                <h3 className="font-bold text-base font-display">{isEditing ? "Edit Tax Invoice / Bill Details" : "Generate Professional Tax Invoice"}</h3>
               </div>
               <button 
                 onClick={() => {
                   setIsCreateOpen(false);
+                  setIsEditing(false);
+                  setEditingInvoiceId(null);
                   setAddedItems([]);
                 }} 
                 className="text-slate-400 hover:text-white transition"
@@ -770,7 +886,7 @@ export default function InvoicesModule({
 
             <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto">
               {/* Form details top row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Corporate Client *</label>
                   <select 
@@ -784,6 +900,17 @@ export default function InvoicesModule({
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Invoice Number / Series *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value)}
+                    placeholder="e.g. INV-001"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 font-mono font-bold"
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Billing Date *</label>
@@ -957,6 +1084,8 @@ export default function InvoicesModule({
                   type="button" 
                   onClick={() => {
                     setIsCreateOpen(false);
+                    setIsEditing(false);
+                    setEditingInvoiceId(null);
                     setAddedItems([]);
                   }}
                   className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition animate-hover"
@@ -967,7 +1096,7 @@ export default function InvoicesModule({
                   type="submit"
                   className="gradient-btn px-5 py-2.5 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
-                  Authorize &amp; Post Invoice
+                  {isEditing ? "Save & Update Invoice" : "Authorize & Post Invoice"}
                 </button>
               </div>
             </form>

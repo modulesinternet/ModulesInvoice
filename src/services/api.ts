@@ -613,6 +613,53 @@ export const api = {
     return request<Invoice>('/api/invoices', 'POST', invoice);
   },
 
+  updateInvoice: (id: string, invoice: Partial<Invoice>) => {
+    if (isLocalOnly) {
+      const db_invoices = getLocalItem<Invoice[]>('db_invoices', []);
+      const db_clients = getLocalItem<Client[]>('db_clients', []);
+      const db_ledger = getLocalItem<LedgerEntry[]>('db_ledger', []);
+
+      const index = db_invoices.findIndex(inv => inv.id === id);
+      if (index !== -1) {
+        const oldInv = db_invoices[index];
+        const newTotal = Number(invoice.total ?? oldInv.total);
+        const newPaidAmount = Number(invoice.paidAmount ?? oldInv.paidAmount);
+        const newDueAmount = Number(invoice.dueAmount ?? (newTotal - newPaidAmount));
+
+        // Adjust client outstanding balance safely
+        const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
+        if (clientIndex !== -1) {
+          db_clients[clientIndex].outstandingBalance = Math.max(0, (db_clients[clientIndex].outstandingBalance || 0) - oldInv.dueAmount + newDueAmount);
+          setLocalItem('db_clients', db_clients);
+        }
+
+        // Adjust ledger entry if it exists
+        const ledgerIndex = db_ledger.findIndex(led => led.referenceType === "invoice" && led.referenceId === id);
+        if (ledgerIndex !== -1) {
+          db_ledger[ledgerIndex].amount = newTotal;
+          db_ledger[ledgerIndex].description = `Invoice Modified: ${invoice.invoiceNumber || oldInv.invoiceNumber}`;
+          if (clientIndex !== -1) {
+            db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
+          }
+          setLocalItem('db_ledger', db_ledger);
+        }
+
+        db_invoices[index] = {
+          ...oldInv,
+          ...invoice,
+          total: newTotal,
+          paidAmount: newPaidAmount,
+          dueAmount: newDueAmount
+        };
+        setLocalItem('db_invoices', db_invoices);
+        logLocalActivity("INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber}`);
+        return Promise.resolve(db_invoices[index]);
+      }
+      return Promise.reject(new Error("Invoice not found"));
+    }
+    return request<Invoice>(`/api/invoices/${id}`, 'PUT', invoice);
+  },
+
   markInvoiceRead: (id: string) => {
     if (isLocalOnly) {
       const invoices = getLocalItem<Invoice[]>('db_invoices', []);

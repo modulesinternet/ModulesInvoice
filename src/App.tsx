@@ -528,6 +528,16 @@ export default function App() {
     }
   };
 
+  const handleUpdateInvoice = async (id: string, inv: Partial<Invoice>) => {
+    try {
+      await api.updateInvoice(id, inv);
+      showToast(`Maturity/bill items updated successfully!`);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleMarkInvoiceRead = async (id: string) => {
     try {
       await api.markInvoiceRead(id);
@@ -1416,6 +1426,7 @@ export default function App() {
                   clients={clients}
                   products={products}
                   onAddInvoice={handleAddInvoice}
+                  onUpdateInvoice={handleUpdateInvoice}
                   onDeleteInvoice={handleDeleteInvoice}
                   onMarkInvoiceRead={handleMarkInvoiceRead}
                   businessSettings={businessSettings}

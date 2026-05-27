@@ -994,6 +994,51 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
   res.status(201).json(newInvoice);
 });
 
+app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const index = db_invoices.findIndex(inv => inv.id === id);
+  if (index !== -1) {
+    const oldInv = db_invoices[index];
+    const data = req.body;
+    
+    const newTotal = Number(data.total ?? oldInv.total);
+    const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
+    const newDueAmount = Number(data.dueAmount ?? (newTotal - newPaidAmount));
+    
+    // Adjust client outstanding balance safely
+    const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
+    if (clientIndex !== -1) {
+      db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - oldInv.dueAmount + newDueAmount);
+      syncStateToFirestore('clients', oldInv.clientId);
+    }
+    
+    // Adjust ledger entry if it exists
+    const ledgerIndex = db_ledger.findIndex(led => led.referenceType === "invoice" && led.referenceId === id);
+    if (ledgerIndex !== -1) {
+      db_ledger[ledgerIndex].amount = newTotal;
+      db_ledger[ledgerIndex].description = `Invoice Modified: ${data.invoiceNumber || oldInv.invoiceNumber}`;
+      if (clientIndex !== -1) {
+        db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
+      }
+      syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
+    }
+
+    db_invoices[index] = {
+      ...oldInv,
+      ...data,
+      total: newTotal,
+      paidAmount: newPaidAmount,
+      dueAmount: newDueAmount,
+    };
+    
+    syncStateToFirestore('invoices', id);
+    logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
+    res.json(db_invoices[index]);
+  } else {
+    res.status(404).json({ error: "Invoice not found" });
+  }
+});
+
 app.post('/api/invoices/:id/read', checkPermission('invoices', 'read'), (req: Request, res: Response) => {
   const { id } = req.params;
   const invoice = db_invoices.find(v => v.id === id);
