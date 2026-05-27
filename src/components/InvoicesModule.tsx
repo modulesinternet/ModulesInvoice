@@ -652,34 +652,34 @@ export default function InvoicesModule({
               </div>
 
               {/* Right mathematical sums */}
-              <div className="w-full md:w-80 space-y-2.5 text-xs text-slate-600 font-mono">
-                <div className="flex justify-between font-sans">
-                  <span>Net Ledger Value:</span>
-                  <span className="font-mono text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
+              <div className="w-full md:w-80 bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Net Ledger Value:</span>
+                  <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
                 </div>
                 {businessSettings.gstOption !== 'zero_tax' && (
-                  <div className="flex justify-between font-sans">
-                    <span>CGST/SGST/IGST Taxes:</span>
-                    <span className="font-mono text-slate-800">+{formatCurrency(selectedInvoice.taxAmount)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-medium">CGST/SGST/IGST Taxes:</span>
+                    <span className="font-mono font-bold text-slate-800">+{formatCurrency(selectedInvoice.taxAmount)}</span>
                   </div>
                 )}
                 {selectedInvoice.discount > 0 && (
-                  <div className="flex justify-between font-sans text-emerald-600 font-bold">
+                  <div className="flex justify-between text-emerald-600 font-medium">
                     <span>Discount applied:</span>
-                    <span>-{formatCurrency(selectedInvoice.discount)}</span>
+                    <span className="font-mono font-bold">-{formatCurrency(selectedInvoice.discount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-sans text-slate-900 border-t border-[#E5E7EB] pt-2.5">
-                  <span className="font-semibold">Cumulative Total:</span>
+                <div className="flex justify-between text-slate-900 border-t border-slate-200 pt-2.5 font-bold">
+                  <span>Cumulative Total:</span>
                   <span className="font-mono font-extrabold">{formatCurrency(selectedInvoice.total)}</span>
                 </div>
-                <div className="flex justify-between font-sans text-emerald-600 bg-emerald-50 p-2 rounded-lg font-bold">
+                <div className="flex justify-between text-emerald-700 pt-1 font-semibold">
                   <span>Amount Cleared:</span>
-                  <span>{formatCurrency(selectedInvoice.paidAmount)}</span>
+                  <span className="font-mono font-bold text-emerald-600">{formatCurrency(selectedInvoice.paidAmount)}</span>
                 </div>
-                <div className="flex justify-between font-sans text-rose-600 bg-rose-50 p-2 rounded-lg font-bold">
+                <div className="flex justify-between text-rose-700 border-t border-slate-200/60 pt-2.5 font-bold">
                   <span>Pending Outstanding:</span>
-                  <span>{formatCurrency(selectedInvoice.dueAmount)}</span>
+                  <span className="font-mono font-extrabold text-rose-600">{formatCurrency(selectedInvoice.dueAmount)}</span>
                 </div>
               </div>
             </div>
@@ -902,14 +902,14 @@ export default function InvoicesModule({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Invoice Number / Series *</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Invoice Number (Auto-Captured)</label>
                   <input 
                     type="text"
-                    required
+                    readOnly
+                    disabled
                     value={invoiceNumber}
-                    onChange={(e) => setInvoiceNumber(e.target.value)}
-                    placeholder="e.g. INV-001"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 font-mono font-bold"
+                    placeholder="Auto-generating..."
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-500 font-mono font-bold cursor-not-allowed select-none animate-pulse-subtle"
                   />
                 </div>
                 <div className="space-y-1">
