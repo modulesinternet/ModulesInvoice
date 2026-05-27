@@ -824,7 +824,15 @@ export default function App() {
             
             <div className="space-y-1">
               <h1 className="text-xl font-bold tracking-tight text-slate-900 font-display">
-                {companyNameText}
+                {(() => {
+                  if (companyNameText.includes('Modules')) {
+                    const parts = companyNameText.split(/(Modules)/g);
+                    return parts.map((part, i) => 
+                      part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                    );
+                  }
+                  return companyNameText;
+                })()}
               </h1>
               <p className="text-xs text-slate-400 font-sans tracking-wide uppercase">
                 Enterprise Central Security Node
@@ -1085,7 +1093,17 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden">
-                  <h1 className="text-sm font-bold tracking-tight text-slate-900 font-display truncate">{companyNameText}</h1>
+                  <h1 className="text-sm font-bold tracking-tight text-slate-900 font-display truncate">
+                    {(() => {
+                      if (companyNameText.includes('Modules')) {
+                        const parts = companyNameText.split(/(Modules)/g);
+                        return parts.map((part, i) => 
+                          part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                        );
+                      }
+                      return companyNameText;
+                    })()}
+                  </h1>
                   <span className="text-[10px] font-mono text-purple-600 block leading-tight font-semibold truncate">
                     {businessSettings?.gstIn || "Active Portal"}
                   </span>
@@ -1202,7 +1220,17 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-            <span className="text-xs font-bold text-slate-900 font-display truncate max-w-[120px]">{companyNameText}</span>
+              <span className="text-xs font-bold text-slate-900 font-display truncate max-w-[120px]">
+                {(() => {
+                  if (companyNameText.includes('Modules')) {
+                    const parts = companyNameText.split(/(Modules)/g);
+                    return parts.map((part, i) => 
+                      part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                    );
+                  }
+                  return companyNameText;
+                })()}
+              </span>
           </div>
         </div>
 

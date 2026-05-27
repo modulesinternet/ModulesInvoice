@@ -297,8 +297,23 @@ export default function QuotationsModule({
                     A
                   </div>
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">{businessSettings.companyName}</h2>
-                    <span className="text-[11px] font-semibold text-indigo-600 tracking-wider block mt-1 uppercase font-mono">GSTIN: {businessSettings.gstIn}</span>
+                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">
+                      {(() => {
+                        const name = businessSettings?.companyName || '';
+                        if (name.includes('Modules')) {
+                          const parts = name.split(/(Modules)/g);
+                          return parts.map((part, index) => 
+                            part === 'Modules' 
+                              ? <span key={index} className="text-purple-600">Modules</span> 
+                              : part
+                          );
+                        }
+                        return name;
+                      })()}
+                    </h2>
+                    {businessSettings.gstIn && (
+                      <span className="text-[11px] font-semibold text-indigo-600 tracking-wider block mt-1 uppercase font-mono">GSTIN: {businessSettings.gstIn}</span>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 max-w-xs">{businessSettings.address}</p>

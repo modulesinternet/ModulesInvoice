@@ -281,15 +281,28 @@ export default function SettingsModule({
               <span>Corporate Branding &amp; Tax Registration</span>
             </h3>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
-              <input 
-                type="text"
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
+                <input 
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Company GSTIN (Optional / Leave blank to hide)</label>
+                <input 
+                  type="text"
+                  value={gstIn}
+                  onChange={(e) => setGstIn(e.target.value)}
+                  placeholder="e.g. 27AAZCA4312R1ZX"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono uppercase font-semibold"
+                />
+              </div>
             </div>
 
             {/* Logo and Favicon uploads with previews and drag-and-drop triggers */}

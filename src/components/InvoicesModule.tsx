@@ -291,10 +291,22 @@ export default function InvoicesModule({
         format: 'a4'
       });
       
-      const imgWidth = 210; // A4 standard width
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgWidth = 210; // A4 standard width in mm
+      const pageHeight = 297; // A4 standard height in mm
+      let renderedWidth = imgWidth;
+      let renderedHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // If the rendered height exceeds the A4 page height, scale down so it fits on a single page
+      if (renderedHeight > pageHeight - 12) { // 6mm margins top and bottom
+        const scale = (pageHeight - 12) / renderedHeight;
+        renderedWidth = renderedWidth * scale;
+        renderedHeight = pageHeight - 12;
+      }
       
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      const xOffset = (imgWidth - renderedWidth) / 2;
+      const yOffset = 6;
+      
+      pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
       pdf.save(`Invoice_${selectedInvoice?.invoiceNumber.replace('/', '_')}.pdf`);
     } catch (e) {
       console.error(e);
@@ -486,7 +498,20 @@ export default function InvoicesModule({
                     </div>
                   )}
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">{businessSettings?.companyName}</h2>
+                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">
+                      {(() => {
+                        const name = businessSettings?.companyName || '';
+                        if (name.includes('Modules')) {
+                          const parts = name.split(/(Modules)/g);
+                          return parts.map((part, index) => 
+                            part === 'Modules' 
+                              ? <span key={index} className={activeTheme?.accentText || 'text-indigo-600'}>Modules</span> 
+                              : part
+                          );
+                        }
+                        return name;
+                      })()}
+                    </h2>
                     {(businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false) && (
                       <span className={`text-[11px] font-semibold ${activeTheme?.accentText || 'text-indigo-600'} tracking-wider block mt-1 uppercase font-mono`}>
                         GSTIN: {businessSettings.gstIn}

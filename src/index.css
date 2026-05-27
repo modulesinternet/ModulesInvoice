@@ -101,6 +101,23 @@
     page-break-inside: avoid !important;
   }
 
+  #invoice-footer-row {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+  }
+
+  #invoice-totals-card {
+    width: 320px !important;
+    min-width: 320px !important;
+    background-color: #f8fafc !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+  }
+
   /* Hide custom elements explicitly just in case */
   .no-print,
   #global-sidebar,
