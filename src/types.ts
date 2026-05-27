@@ -110,7 +110,7 @@ export interface Payment {
   clientName: string;
   amount: number;
   paymentDate: string;
-  paymentMode: "Cash" | "UPI" | "Bank Transfer" | "Card" | "Cheque";
+  paymentMode: "Cash" | "UPI" | "Bank Transfer" | "Card" | "Cheque" | "UPI/Bank Transfer";
   referenceNum: string;
   remarks: string;
   createdAt: string;
@@ -138,6 +138,7 @@ export interface CashbookEntry {
   paymentMode: string; // e.g. 'Cash', 'UPI', 'Bank Transfer', etc.
   amount: number;
   referenceId?: string;
+  category?: string;
   runningCashBalance: number;
   runningBankBalance: number;
   createdAt: string;
@@ -164,6 +165,24 @@ export interface BusinessSettings {
   timezone?: string;
   gstOption?: "standard" | "zero_tax";
   titleBarText?: string;
+  invoiceTheme?: "navy" | "minimal" | "emerald";
+  moharSize?: number;
+  showInvoiceGst?: boolean;
+  showInvoiceLogo?: boolean;
+  showInvoicePhone?: boolean;
+  showInvoiceEmail?: boolean;
+  showInvoiceAddress?: boolean;
+  showInvoiceClientAddress?: boolean;
+  showInvoiceClientPhone?: boolean;
+  showInvoiceClientEmail?: boolean;
+  showInvoiceClientGst?: boolean;
+  showInvoiceHsn?: boolean;
+  showInvoiceTaxSplit?: boolean;
+  showInvoiceBankDetails?: boolean;
+  showInvoiceUpiId?: boolean;
+  showInvoiceQrCode?: boolean;
+  showInvoiceSignature?: boolean;
+  showInvoiceNotes?: boolean;
 }
 
 export interface ActivityLog {

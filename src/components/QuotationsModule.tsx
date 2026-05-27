@@ -14,7 +14,8 @@ import {
   User,
   ShoppingBag,
   Paperclip,
-  Check
+  Check,
+  Edit3
 } from 'lucide-react';
 import { Quotation, Client, Product, QuotationItem } from '../types';
 import Pagination from './Pagination';
@@ -24,9 +25,12 @@ interface QuotationsModuleProps {
   clients: Client[];
   products: Product[];
   onCreateQuotation: (q: Partial<Quotation>) => Promise<void>;
+  onUpdateQuotation?: (id: string, q: Partial<Quotation>) => Promise<void>;
+  onDeleteQuotation?: (id: string) => Promise<void>;
   onConvertQuotation: (id: string) => Promise<void>;
   businessSettings: any;
   canWrite?: boolean;
+  canDelete?: boolean;
 }
 
 export default function QuotationsModule({
@@ -34,15 +38,22 @@ export default function QuotationsModule({
   clients,
   products,
   onCreateQuotation,
+  onUpdateQuotation,
+  onDeleteQuotation,
   onConvertQuotation,
   businessSettings,
-  canWrite = true
+  canWrite = true,
+  canDelete = true
 }: QuotationsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // States to keep track of quotation edits
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
 
   // New quotation wizard states
   const [clientId, setClientId] = useState('');
@@ -163,12 +174,20 @@ export default function QuotationsModule({
       discount: draftDiscountNum,
       taxAmount: draftTax,
       total: draftTotal,
-      status: 'sent',
+      status: isEditing ? undefined : 'sent',
       notes
     };
 
-    await onCreateQuotation(payload);
+    if (isEditing && onUpdateQuotation) {
+      await onUpdateQuotation(editingQuotationId!, payload);
+    } else {
+      await onCreateQuotation(payload);
+    }
+    
     setIsCreateOpen(false);
+    setIsEditing(false);
+    setEditingQuotationId(null);
+    setClientId('');
     setAddedItems([]);
     setDiscount('0');
   };
@@ -209,6 +228,47 @@ export default function QuotationsModule({
                 <Printer className="w-4 h-4" />
                 <span>Print Quotation</span>
               </button>
+
+              {canWrite && (
+                <button 
+                  onClick={() => {
+                    const q = selectedQuotation;
+                    setIsEditing(true);
+                    setEditingQuotationId(q.id);
+                    setClientId(q.clientId);
+                    setDate(q.date);
+                    setExpiryDate(q.expiryDate);
+                    setNotes(q.notes || '');
+                    setDiscount(String(q.discount || 0));
+                    setAddedItems(q.items.map(item => ({
+                      productId: item.productId,
+                      qty: item.qty,
+                      price: item.price
+                    })));
+                    setIsCreateOpen(true);
+                    setSelectedQuotation(null);
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-705 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 class-print-hide"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit</span>
+                </button>
+              )}
+
+              {canDelete && onDeleteQuotation && (
+                <button 
+                  onClick={async () => {
+                    if (confirm(`Are you sure you want to delete quotation ${selectedQuotation.quotationNumber}?`)) {
+                      await onDeleteQuotation(selectedQuotation.id);
+                      setSelectedQuotation(null);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-lg text-xs font-medium flex items-center gap-1.5 class-print-hide"
+                >
+                  <Trash className="w-4 h-4" />
+                  <span>Delete</span>
+                </button>
+              )}
               
               {canWrite && selectedQuotation.status !== 'converted' && selectedQuotation.status !== 'declined' && (
                 <button 
@@ -397,12 +457,50 @@ export default function QuotationsModule({
                         </span>
                       </td>
                       <td className="py-4 px-5 text-center">
-                        <button 
-                          onClick={() => setSelectedQuotation(q)}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-[#5B21FF] bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100/50 transition"
-                        >
-                          Review &amp; Sign
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button 
+                            onClick={() => setSelectedQuotation(q)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-[#5B21FF] bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100/50 transition whitespace-nowrap"
+                          >
+                            Review &amp; Sign
+                          </button>
+                          {canWrite && q.status !== 'converted' && q.status !== 'declined' && (
+                            <button
+                              onClick={() => {
+                                setIsEditing(true);
+                                setEditingQuotationId(q.id);
+                                setClientId(q.clientId);
+                                setDate(q.date);
+                                setExpiryDate(q.expiryDate);
+                                setNotes(q.notes || '');
+                                setDiscount(String(q.discount || 0));
+                                setAddedItems(q.items.map(item => ({
+                                  productId: item.productId,
+                                  qty: item.qty,
+                                  price: item.price
+                                })));
+                                setIsCreateOpen(true);
+                              }}
+                              className="p-1 px-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded border border-slate-100 transition"
+                              title="Edit Estimate"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canDelete && onDeleteQuotation && (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Are you sure you want to delete quotation ${q.quotationNumber}?`)) {
+                                  await onDeleteQuotation(q.id);
+                                }
+                              }}
+                              className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-50 rounded border border-slate-100 transition"
+                              title="Delete Estimate"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

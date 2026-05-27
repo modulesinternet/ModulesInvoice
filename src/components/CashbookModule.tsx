@@ -17,6 +17,8 @@ interface CashbookModuleProps {
   onUpdateCashbookEntry?: (id: string, entry: Partial<CashbookEntry>) => Promise<void>;
   onDeleteCashbookEntry?: (id: string) => Promise<void>;
   canWrite?: boolean;
+  categories: string[];
+  onAddCategory?: (category: string) => Promise<void>;
 }
 
 export default function CashbookModule({
@@ -24,7 +26,9 @@ export default function CashbookModule({
   onCreateCashbookEntry,
   onUpdateCashbookEntry,
   onDeleteCashbookEntry,
-  canWrite = true
+  canWrite = true,
+  categories = [],
+  onAddCategory
 }: CashbookModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,10 +36,16 @@ export default function CashbookModule({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Categories states
+  const [category, setCategory] = useState('General');
+  const [newCatName, setNewCatName] = useState('');
+  const [isAddingNewCat, setIsAddingNewCat] = useState(false);
+
   const filteredCashbook = [...cashbook]
     .filter(c => 
       c.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase()))
+      (c.referenceId && c.referenceId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (c.category && c.category.toLowerCase().includes(searchTerm.toLowerCase()))
     )
     .sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -75,8 +85,9 @@ export default function CashbookModule({
       description,
       type: 'expense', // Forced Cash Out
       amount: Number(amount),
-      paymentMode: account === 'bank' ? 'Bank Transfer' : 'Cash',
+      paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
       referenceId: reference,
+      category: category || 'General'
     };
 
     await onCreateCashbookEntry(payload);
@@ -86,6 +97,7 @@ export default function CashbookModule({
     setDescription('');
     setAmount('');
     setReference('');
+    setCategory('General');
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -102,8 +114,9 @@ export default function CashbookModule({
       description,
       type: 'expense', // Forced Cash Out
       amount: Number(amount),
-      paymentMode: account === 'bank' ? 'Bank Transfer' : 'Cash',
+      paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
       referenceId: reference,
+      category: category || 'General'
     };
 
     if (onUpdateCashbookEntry) {
@@ -115,15 +128,17 @@ export default function CashbookModule({
     setDescription('');
     setAmount('');
     setReference('');
+    setCategory('General');
   };
 
   const startEdit = (entry: CashbookEntry) => {
     setEditingEntry(entry);
     setDate(entry.date);
     setDescription(entry.description);
-    setAccount(entry.paymentMode === 'Bank Transfer' ? 'bank' : 'cash');
+    setAccount(entry.paymentMode === 'UPI/Bank Transfer' || entry.paymentMode === 'Bank Transfer' ? 'bank' : 'cash');
     setAmount(String(entry.amount));
     setReference(entry.referenceId || '');
+    setCategory(entry.category || 'General');
   };
 
   const handleDelete = async (id: string, desc: string) => {
@@ -288,10 +303,19 @@ export default function CashbookModule({
                 <tr key={row.id} className="hover:bg-slate-50/20">
                   <td className="py-3.5 px-5 font-mono text-slate-550">{row.date}</td>
                   <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">{row.referenceId || "N/A"}</td>
-                  <td className="py-3.5 px-5 text-slate-650">{row.description}</td>
+                  <td className="py-3.5 px-5 text-slate-650">
+                    <div className="flex flex-col">
+                      <span>{row.description}</span>
+                      {row.type === 'expense' && (
+                        <span className="text-[10px] text-indigo-500 font-bold font-mono bg-indigo-50/75 py-0.5 px-1.5 rounded w-max mt-1 border border-indigo-100/40">
+                          {row.category || 'General'}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3.5 px-4 text-center">
                     <span className={`px-2 py-0.5 rounded text-[10.5px] font-bold uppercase ${row.paymentMode !== 'Cash' ? 'bg-blue-50 border border-blue-100 text-blue-700' : 'bg-purple-50 border border-purple-100 text-purple-700'}`}>
-                      {row.paymentMode}
+                      {row.paymentMode === 'Bank Transfer' ? 'UPI/Bank Transfer' : row.paymentMode}
                     </span>
                   </td>
                   <td className="py-3.5 px-5 text-right font-mono font-bold text-emerald-600">
@@ -376,6 +400,70 @@ export default function CashbookModule({
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center mb-0.5">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+                  {!isAddingNewCat ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCat(true)}
+                      className="text-[10px] text-indigo-600 font-bold hover:underline"
+                    >
+                      + Create Category
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCat(false)}
+                      className="text-[10px] text-slate-500 font-bold hover:underline"
+                    >
+                      Use Dropdown
+                    </button>
+                  )}
+                </div>
+                
+                {!isAddingNewCat ? (
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                    required
+                  >
+                    <option value="General">General</option>
+                    {categories.filter(c => c !== 'General').map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. AWS Cloud, Rent, Wages"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-200 rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const trimmed = newCatName.trim();
+                        if (trimmed && onAddCategory) {
+                          await onAddCategory(trimmed);
+                          setCategory(trimmed);
+                          setIsAddingNewCat(false);
+                          setNewCatName('');
+                        } else {
+                          alert('Please specify a valid category name.');
+                        }
+                      }}
+                      className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -476,6 +564,70 @@ export default function CashbookModule({
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center mb-0.5">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+                  {!isAddingNewCat ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCat(true)}
+                      className="text-[10px] text-indigo-600 font-bold hover:underline"
+                    >
+                      + Create Category
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCat(false)}
+                      className="text-[10px] text-slate-500 font-bold hover:underline"
+                    >
+                      Use Dropdown
+                    </button>
+                  )}
+                </div>
+                
+                {!isAddingNewCat ? (
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                    required
+                  >
+                    <option value="General">General</option>
+                    {categories.filter(c => c !== 'General').map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. AWS Cloud, Rent, Wages"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-200 rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const trimmed = newCatName.trim();
+                        if (trimmed && onAddCategory) {
+                          await onAddCategory(trimmed);
+                          setCategory(trimmed);
+                          setIsAddingNewCat(false);
+                          setNewCatName('');
+                        } else {
+                          alert('Please specify a valid category name.');
+                        }
+                      }}
+                      className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

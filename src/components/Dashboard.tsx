@@ -144,7 +144,7 @@ export default function Dashboard({
             <h3 className="text-2xl font-bold text-slate-900 font-display">{metrics.totalClientsCount}</h3>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-              <span>10 major Indian enterprises</span>
+              <span>{metrics.totalClientsCount} registered client accounts</span>
             </div>
           </div>
           <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">

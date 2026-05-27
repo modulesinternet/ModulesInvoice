@@ -53,6 +53,28 @@ export default function SettingsModule({
   const [timezone, setTimezone] = useState(settings?.timezone || 'Asia/Kolkata');
   const [gstOption, setGstOption] = useState(settings?.gstOption || 'standard');
   const [titleBarText, setTitleBarText] = useState(settings?.titleBarText || '');
+  const [invoicePrefix, setInvoicePrefix] = useState(settings?.invoicePrefix || 'INV-');
+  const [quotationPrefix, setQuotationPrefix] = useState(settings?.quotationPrefix || 'EST-');
+  const [invoiceTheme, setInvoiceTheme] = useState<'navy' | 'minimal' | 'emerald'>(settings?.invoiceTheme || 'navy');
+  const [moharSize, setMoharSize] = useState<number>(settings?.moharSize || 40);
+
+  // Field/Section Level Visibility States
+  const [showInvoiceGst, setShowInvoiceGst] = useState<boolean>(settings?.showInvoiceGst ?? true);
+  const [showInvoiceLogo, setShowInvoiceLogo] = useState<boolean>(settings?.showInvoiceLogo ?? true);
+  const [showInvoicePhone, setShowInvoicePhone] = useState<boolean>(settings?.showInvoicePhone ?? true);
+  const [showInvoiceEmail, setShowInvoiceEmail] = useState<boolean>(settings?.showInvoiceEmail ?? true);
+  const [showInvoiceAddress, setShowInvoiceAddress] = useState<boolean>(settings?.showInvoiceAddress ?? true);
+  const [showInvoiceClientAddress, setShowInvoiceClientAddress] = useState<boolean>(settings?.showInvoiceClientAddress ?? true);
+  const [showInvoiceClientPhone, setShowInvoiceClientPhone] = useState<boolean>(settings?.showInvoiceClientPhone ?? true);
+  const [showInvoiceClientEmail, setShowInvoiceClientEmail] = useState<boolean>(settings?.showInvoiceClientEmail ?? true);
+  const [showInvoiceClientGst, setShowInvoiceClientGst] = useState<boolean>(settings?.showInvoiceClientGst ?? true);
+  const [showInvoiceHsn, setShowInvoiceHsn] = useState<boolean>(settings?.showInvoiceHsn ?? true);
+  const [showInvoiceTaxSplit, setShowInvoiceTaxSplit] = useState<boolean>(settings?.showInvoiceTaxSplit ?? true);
+  const [showInvoiceBankDetails, setShowInvoiceBankDetails] = useState<boolean>(settings?.showInvoiceBankDetails ?? true);
+  const [showInvoiceUpiId, setShowInvoiceUpiId] = useState<boolean>(settings?.showInvoiceUpiId ?? true);
+  const [showInvoiceQrCode, setShowInvoiceQrCode] = useState<boolean>(settings?.showInvoiceQrCode ?? true);
+  const [showInvoiceSignature, setShowInvoiceSignature] = useState<boolean>(settings?.showInvoiceSignature ?? true);
+  const [showInvoiceNotes, setShowInvoiceNotes] = useState<boolean>(settings?.showInvoiceNotes ?? true);
 
   // Synchronize internal state when settings prop updates (important when loaded after mounting)
   React.useEffect(() => {
@@ -72,6 +94,26 @@ export default function SettingsModule({
       setTimezone(settings.timezone || 'Asia/Kolkata');
       setGstOption(settings.gstOption || 'standard');
       setTitleBarText(settings.titleBarText || '');
+      setInvoicePrefix(settings.invoicePrefix || 'INV-');
+      setQuotationPrefix(settings.quotationPrefix || 'EST-');
+      setInvoiceTheme(settings.invoiceTheme || 'navy');
+      setMoharSize(settings.moharSize || 40);
+      setShowInvoiceGst(settings.showInvoiceGst ?? true);
+      setShowInvoiceLogo(settings.showInvoiceLogo ?? true);
+      setShowInvoicePhone(settings.showInvoicePhone ?? true);
+      setShowInvoiceEmail(settings.showInvoiceEmail ?? true);
+      setShowInvoiceAddress(settings.showInvoiceAddress ?? true);
+      setShowInvoiceClientAddress(settings.showInvoiceClientAddress ?? true);
+      setShowInvoiceClientPhone(settings.showInvoiceClientPhone ?? true);
+      setShowInvoiceClientEmail(settings.showInvoiceClientEmail ?? true);
+      setShowInvoiceClientGst(settings.showInvoiceClientGst ?? true);
+      setShowInvoiceHsn(settings.showInvoiceHsn ?? true);
+      setShowInvoiceTaxSplit(settings.showInvoiceTaxSplit ?? true);
+      setShowInvoiceBankDetails(settings.showInvoiceBankDetails ?? true);
+      setShowInvoiceUpiId(settings.showInvoiceUpiId ?? true);
+      setShowInvoiceQrCode(settings.showInvoiceQrCode ?? true);
+      setShowInvoiceSignature(settings.showInvoiceSignature ?? true);
+      setShowInvoiceNotes(settings.showInvoiceNotes ?? true);
     }
   }, [settings]);
 
@@ -189,7 +231,27 @@ export default function SettingsModule({
         gstOption,
         logoUrl,
         faviconUrl,
-        titleBarText
+        titleBarText,
+        invoicePrefix,
+        quotationPrefix,
+        invoiceTheme,
+        moharSize: Number(moharSize || 40),
+        showInvoiceGst,
+        showInvoiceLogo,
+        showInvoicePhone,
+        showInvoiceEmail,
+        showInvoiceAddress,
+        showInvoiceClientAddress,
+        showInvoiceClientPhone,
+        showInvoiceClientEmail,
+        showInvoiceClientGst,
+        showInvoiceHsn,
+        showInvoiceTaxSplit,
+        showInvoiceBankDetails,
+        showInvoiceUpiId,
+        showInvoiceQrCode,
+        showInvoiceSignature,
+        showInvoiceNotes
       };
 
       await onSaveSettings(payload);
@@ -717,6 +779,253 @@ export default function SettingsModule({
                       <span className="text-[10px] font-medium text-slate-400 font-sans mt-1">No signature registered yet</span>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 4: Invoice Template & Output Settings */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-5">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              <span>Invoice Template &amp; Output Settings</span>
+            </h3>
+
+            {/* Prefix formats (Invoice & Quotation Series Setup) */}
+            <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">1. Prefixes &amp; Series Setup</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Invoice Series Prefix</label>
+                    <input 
+                      type="text"
+                      value={invoicePrefix}
+                      onChange={(e) => setInvoicePrefix(e.target.value)}
+                      placeholder="e.g. INV-"
+                      className="w-full text-xs p-2 border border-slate-200 rounded-lg font-mono focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Quotation Prefix</label>
+                    <input 
+                      type="text"
+                      value={quotationPrefix}
+                      onChange={(e) => setQuotationPrefix(e.target.value)}
+                      placeholder="e.g. EST-"
+                      className="w-full text-xs p-2 border border-slate-200 rounded-lg font-mono focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400">Newly raised documents will automatically generate series serial codes prefixed with these parameters.</p>
+              </div>
+
+              {/* Design Theme selection */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Default Invoice Theme Color</label>
+                <select
+                  value={invoiceTheme}
+                  onChange={(e) => setInvoiceTheme(e.target.value as any)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="navy">Classic Navy Slate (Corporate)</option>
+                  <option value="minimal">Swiss Minimalist (Monochrome)</option>
+                  <option value="emerald">Executive Teal (Modern Mint)</option>
+                </select>
+                <p className="text-[9px] text-slate-400">Determines the default design theme applied when loading customer invoices for review.</p>
+              </div>
+
+              {/* Mohar / Signature size controller */}
+              <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Mohar Stamp &amp; Sign Height</label>
+                  <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{moharSize}px</span>
+                </div>
+                <input 
+                  type="range"
+                  min="25"
+                  max="150"
+                  value={moharSize}
+                  onChange={(e) => setMoharSize(Number(e.target.value))}
+                  className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <p className="text-[9px] text-slate-400">Adjusts the scale (height) of the official company stamp image on exported vouchers.</p>
+              </div>
+
+              {/* Customizable visible fields */}
+              <div className="space-y-3 font-sans">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block border-b border-slate-100 pb-1.5">2. Template Field Visibilities</span>
+
+                {/* Section: Header */}
+                <div className="space-y-2">
+                  <span className="text-[9px] font-extrabold text-indigo-500 block">Header / Seller Info</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceGst}
+                        onChange={(e) => setShowInvoiceGst(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Company GST</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceLogo}
+                        onChange={(e) => setShowInvoiceLogo(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Corporate Logo</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoicePhone}
+                        onChange={(e) => setShowInvoicePhone(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Phone No</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceEmail}
+                        onChange={(e) => setShowInvoiceEmail(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Email Address</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent col-span-2">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceAddress}
+                        onChange={(e) => setShowInvoiceAddress(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Registered Postal Address</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section: Client */}
+                <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <span className="text-[9px] font-extrabold text-indigo-500 block">Recipient (Billed-to) Particulars</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceClientAddress}
+                        onChange={(e) => setShowInvoiceClientAddress(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Street Address</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceClientPhone}
+                        onChange={(e) => setShowInvoiceClientPhone(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Phone No</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceClientEmail}
+                        onChange={(e) => setShowInvoiceClientEmail(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Email</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceClientGst}
+                        onChange={(e) => setShowInvoiceClientGst(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Client GSTIN</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section: Items Table */}
+                <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <span className="text-[9px] font-extrabold text-indigo-500 block">Deliverables Table Columns</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceHsn}
+                        onChange={(e) => setShowInvoiceHsn(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show SKU/HSN Code</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceTaxSplit}
+                        onChange={(e) => setShowInvoiceTaxSplit(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Tax Split Rate</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section: Sign off & QR Code */}
+                <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <span className="text-[9px] font-extrabold text-indigo-500 block">Signatures &amp; Settlements</span>
+                  <div className="grid grid-cols-2 gap-2 font-medium">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceBankDetails}
+                        onChange={(e) => setShowInvoiceBankDetails(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Bank Details</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceUpiId}
+                        onChange={(e) => setShowInvoiceUpiId(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show UPI ID Line</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceQrCode}
+                        onChange={(e) => setShowInvoiceQrCode(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Scan-to-Pay QR</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceSignature}
+                        onChange={(e) => setShowInvoiceSignature(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Stamp signature</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent col-span-2">
+                      <input 
+                        type="checkbox"
+                        checked={showInvoiceNotes}
+                        onChange={(e) => setShowInvoiceNotes(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>Show Ledger Notes / Warnings</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

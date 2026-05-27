@@ -45,7 +45,7 @@ export default function PaymentsModule({
   const [clientId, setClientId] = useState('');
   const [invoiceId, setInvoiceId] = useState('');
   const [amount, setAmount] = useState('');
-  const [mode, setMode] = useState<'UPI' | 'Bank Transfer' | 'Cash'>('UPI');
+  const [mode, setMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('Payment matched and credited instantly.');
 
@@ -186,10 +186,14 @@ export default function PaymentsModule({
 
   const getModeBadge = (m: string) => {
     switch (m) {
-      case 'UPI': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'Bank Transfer': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'Cash': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      default: return 'bg-slate-100 text-slate-700';
+      case 'UPI/Bank Transfer':
+      case 'UPI':
+      case 'Bank Transfer': 
+        return 'bg-purple-100 text-purple-705 border-purple-200';
+      case 'Cash': 
+        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      default: 
+        return 'bg-slate-100 text-slate-705 border-slate-200';
     }
   };
 
@@ -214,27 +218,15 @@ export default function PaymentsModule({
       </div>
 
       {/* QUICK TOTALS OVERVIEW */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="payments-metric-strip">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="payments-metric-strip">
         <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">UPI &amp; Digital Settle</span>
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">UPI &amp; Bank Transfer Receipts</span>
             <h3 className="text-xl font-bold text-emerald-950 font-mono">
-              {formatCurrency(payments.filter(p => p.paymentMode === 'UPI').reduce((sum, p) => sum + p.amount, 0))}
+              {formatCurrency(payments.filter(p => p.paymentMode === 'UPI/Bank Transfer' || p.paymentMode === 'UPI' || p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0))}
             </h3>
           </div>
           <div className="p-2 rounded-xl bg-white text-emerald-600 border border-emerald-200/50">
-            <Check className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">NEFT / RTGS Transfers</span>
-            <h3 className="text-xl font-bold text-indigo-950 font-mono">
-              {formatCurrency(payments.filter(p => p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0))}
-            </h3>
-          </div>
-          <div className="p-2 rounded-xl bg-white text-indigo-600 border border-indigo-200/50">
             <Check className="w-5 h-5" />
           </div>
         </div>
@@ -409,8 +401,7 @@ export default function PaymentsModule({
                     onChange={(e) => setMode(e.target.value as any)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white"
                   >
-                    <option value="UPI">BHIM UPI</option>
-                    <option value="Bank Transfer">Bank Transfer (IMPS/NEFT)</option>
+                    <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
                     <option value="Cash">Cash Registry</option>
                   </select>
                 </div>
@@ -520,8 +511,7 @@ export default function PaymentsModule({
                     onChange={(e) => setMode(e.target.value as any)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white"
                   >
-                    <option value="UPI">BHIM UPI</option>
-                    <option value="Bank Transfer">Bank Transfer (IMPS/NEFT)</option>
+                    <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
                     <option value="Cash">Cash Registry</option>
                   </select>
                 </div>

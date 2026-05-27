@@ -1075,6 +1075,20 @@ app.put('/api/quotations/:id', checkPermission('quotations', 'write'), (req: Req
   }
 });
 
+app.delete('/api/quotations/:id', checkPermission('quotations', 'delete'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const index = db_quotations.findIndex(q => q.id === id);
+  if (index !== -1) {
+    const qNumber = db_quotations[index].quotationNumber;
+    db_quotations.splice(index, 1);
+    syncStateToFirestore('quotations', id);
+    logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_DELETE", `Deleted quotation estimate: ${qNumber}`);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "Quotation not found" });
+  }
+});
+
 app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), (req: Request, res: Response) => {
   const { id } = req.params;
   const qIndex = db_quotations.findIndex(q => q.id === id);

@@ -776,6 +776,22 @@ export const api = {
     return request<{ success: boolean; invoice: Invoice }>(`/api/quotations/${id}/convert`, 'POST');
   },
 
+  deleteQuotation: (id: string) => {
+    if (isLocalOnly) {
+      const list = getLocalItem<Quotation[]>('db_quotations', []);
+      const index = list.findIndex(item => item.id === id);
+      if (index !== -1) {
+        const qNum = list[index].quotationNumber;
+        list.splice(index, 1);
+        setLocalItem('db_quotations', list);
+        logLocalActivity("QUOTATION_DELETE", `Purged template proposal draft ${qNum}`);
+        return Promise.resolve({ success: true });
+      }
+      return Promise.reject(new Error("Quotation not found"));
+    }
+    return request<{ success: boolean }>(`/api/quotations/${id}`, 'DELETE');
+  },
+
   // 7. Payments Collections
   getPayments: () => {
     if (isLocalOnly) {

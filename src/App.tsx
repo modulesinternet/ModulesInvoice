@@ -120,10 +120,9 @@ export function computeLocalDashboardMetrics(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
-  const upiCollected = payments.filter(p => p.paymentMode === 'UPI').reduce((sum, p) => sum + (p.amount || 0), 0);
-  const bankCollected = payments.filter(p => p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const upiBankCollected = payments.filter(p => p.paymentMode === 'UPI/Bank Transfer' || p.paymentMode === 'UPI' || p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
   const cashCollected = payments.filter(p => p.paymentMode === 'Cash').reduce((sum, p) => sum + (p.amount || 0), 0);
-  const otherCollected = payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const otherCollected = payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI/Bank Transfer' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + (p.amount || 0), 0);
 
   // Compute cashbook running balances sequentially for true current operating liquidity
   const sortedCashbook = [...cashbook].sort((a, b) => {
@@ -175,10 +174,9 @@ export function computeLocalDashboardMetrics(
       bankBalance: computedBank
     },
     paymentMethods: [
-      { name: 'UPI Collections', value: upiCollected, color: '#8B5CF6' },
-      { name: 'Bank Wire / EFT', value: bankCollected, color: '#3B82F6' },
+      { name: 'UPI & Bank Transfer', value: upiBankCollected, color: '#8B5CF6' },
       { name: 'Over Counter Cash', value: cashCollected, color: '#10B981' },
-      { name: 'Paper Cheque/Card', value: otherCollected, color: '#F59E0B' }
+      { name: 'Paper/Other Settle', value: otherCollected, color: '#F59E0B' }
     ],
     chartData,
     recentInvoices,
@@ -563,6 +561,26 @@ export default function App() {
     try {
       await api.convertQuotation(id);
       showToast("Approved: Proposal estimate converted to official Tax Invoice successfully!");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateQuotation = async (id: string, q: Partial<Quotation>) => {
+    try {
+      await api.updateQuotation(id, q);
+      showToast("Estimate proposal updated successfully.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteQuotation = async (id: string) => {
+    try {
+      await api.deleteQuotation(id);
+      showToast("Estimate proposal deleted successfully.");
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1383,9 +1401,12 @@ export default function App() {
                   clients={clients}
                   products={products}
                   onCreateQuotation={handleCreateQuotation}
+                  onUpdateQuotation={handleUpdateQuotation}
+                  onDeleteQuotation={handleDeleteQuotation}
                   onConvertQuotation={handleConvertQuotation}
                   businessSettings={businessSettings}
                   canWrite={getModulePermissions('quotations').write}
+                  canDelete={getModulePermissions('quotations').delete}
                 />
               )}
 
@@ -1430,6 +1451,8 @@ export default function App() {
                   onUpdateCashbookEntry={handleUpdateCashbookEntry}
                   onDeleteCashbookEntry={handleDeleteCashbookEntry}
                   canWrite={getModulePermissions('cashbook').write}
+                  categories={categories}
+                  onAddCategory={handleAddCategory}
                 />
               )}
 

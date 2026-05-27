@@ -70,7 +70,14 @@ export default function InvoicesModule({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [invoiceTemplate, setInvoiceTemplate] = useState<InvoiceLayoutTemplate>('navy');
+  const [invoiceTemplate, setInvoiceTemplate] = useState<InvoiceLayoutTemplate>((businessSettings?.invoiceTheme as any) || 'navy');
+
+  React.useEffect(() => {
+    if (businessSettings?.invoiceTheme) {
+      setInvoiceTemplate(businessSettings.invoiceTheme);
+    }
+  }, [businessSettings]);
+
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -392,27 +399,47 @@ export default function InvoicesModule({
           {/* MASTER VISUAL DRAW TARGET */}
           <div 
             ref={printableRef}
-            className="bg-white rounded-3xl border border-[#E5E7EB] shadow-xl overflow-hidden p-8 space-y-8 max-w-4xl mx-auto"
+            className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl overflow-hidden p-8 space-y-8 max-w-4xl mx-auto`}
             id="print-invoice-layout"
           >
             {/* Header section based on branding template chosen */}
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-[#E5E7EB] pb-8">
+            <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderTheme || 'border-slate-200'} pb-8`}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-[#5B21FF] flex items-center justify-center text-white font-bold text-lg font-display shadow-sm">
-                    A
-                  </div>
+                  {((businessSettings?.showInvoiceLogo ?? true) !== false && businessSettings?.logoUrl) ? (
+                    <img 
+                      src={businessSettings.logoUrl} 
+                      className="w-12 h-12 rounded-xl object-contain shadow-sm" 
+                      alt="Logo" 
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg font-display shadow-sm bg-indigo-600">
+                      {businessSettings?.companyName ? businessSettings.companyName.charAt(0) : 'A'}
+                    </div>
+                  )}
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">{businessSettings.companyName}</h2>
-                    <span className="text-[11px] font-semibold text-indigo-600 tracking-wider block mt-1 uppercase font-mono">GSTIN: {businessSettings.gstIn}</span>
+                    <h2 className="text-xl font-extrabold text-slate-900 font-display tracking-tight leading-none">{businessSettings?.companyName}</h2>
+                    {(businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false) && (
+                      <span className={`text-[11px] font-semibold ${activeTheme?.accentText || 'text-indigo-600'} tracking-wider block mt-1 uppercase font-mono`}>
+                        GSTIN: {businessSettings.gstIn}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 max-w-xs">{businessSettings.address}</p>
-                <p className="text-xs text-slate-500">Email: {businessSettings.email} | Tel: {businessSettings.phone}</p>
+                {((businessSettings?.showInvoiceAddress ?? true) !== false && businessSettings?.address) && (
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">{businessSettings.address}</p>
+                )}
+                {(businessSettings?.showInvoicePhone ?? true) !== false || (businessSettings?.showInvoiceEmail ?? true) !== false ? (
+                  <p className="text-xs text-slate-400">
+                    {((businessSettings?.showInvoiceEmail ?? true) !== false && businessSettings?.email) && `Email: ${businessSettings.email}`}
+                    {((businessSettings?.showInvoiceEmail ?? true) !== false && businessSettings?.email && (businessSettings?.showInvoicePhone ?? true) !== false && businessSettings?.phone) && ' | '}
+                    {((businessSettings?.showInvoicePhone ?? true) !== false && businessSettings?.phone) && `Tel: ${businessSettings.phone}`}
+                  </p>
+                ) : null}
               </div>
 
               <div className="text-right space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400">tax invoice</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest block">tax invoice</span>
                 <h1 className="text-2xl font-mono font-bold text-slate-800 mt-1">{selectedInvoice.invoiceNumber}</h1>
                 <div className="flex items-center justify-end gap-1.5 mt-1 relative">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
@@ -430,31 +457,64 @@ export default function InvoicesModule({
             </div>
 
             {/* Billed To Address card */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border border-[#E5E7EB] p-5 rounded-2xl">
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Client Bill-To Particulars</span>
-                <h3 className="font-bold text-slate-800 text-sm mt-1">{selectedInvoice.clientName}</h3>
-                <span className="text-[10.5px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-semibold mt-1 inline-block uppercase">GSTIN: {selectedInvoice.clientGst || 'N/A (Unregistered)'}</span>
-                <p className="text-xs text-slate-500 leading-relaxed mt-2 max-w-xs">{selectedInvoice.notes || 'No notes'}</p>
-              </div>
-              <div className="md:text-right space-y-1">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Banking Payout Details</span>
-                <p className="text-xs text-slate-700 font-bold">{businessSettings.bankName}</p>
-                <p className="text-xs text-slate-500 font-mono">A/C: {businessSettings.accountNum}</p>
-                <p className="text-xs text-slate-500 font-mono">IFSC: {businessSettings.ifscCode}</p>
-                <p className="text-xs text-slate-500 font-mono">UPI ID: {businessSettings.upiId}</p>
-              </div>
-            </div>
+            {(() => {
+              const invoiceClient = clients.find(c => c.id === selectedInvoice.clientId);
+              return (
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border ${activeTheme?.borderTheme || 'border-slate-200'} p-5 rounded-2xl`}>
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Client Bill-To Particulars</span>
+                    <h3 className="font-bold text-slate-800 text-sm mt-1">{selectedInvoice.clientName}</h3>
+                    
+                    {((businessSettings?.showInvoiceClientAddress ?? true) !== false && invoiceClient?.billingAddress) && (
+                      <p className="text-xs text-slate-500 leading-relaxed mt-1">{invoiceClient.billingAddress}</p>
+                    )}
+                    
+                    {invoiceClient?.email && (businessSettings?.showInvoiceClientEmail ?? true) !== false && (
+                      <p className="text-xs text-slate-500">Email: {invoiceClient.email}</p>
+                    )}
+                    {invoiceClient?.phone && (businessSettings?.showInvoiceClientPhone ?? true) !== false && (
+                      <p className="text-xs text-slate-500">Tel: {invoiceClient.phone}</p>
+                    )}
+
+                    {((businessSettings?.showInvoiceClientGst ?? true) !== false && (selectedInvoice.clientGst || invoiceClient?.gstIn)) && (
+                      <span className="text-[10.5px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-semibold mt-1 inline-block uppercase">
+                        GSTIN: {selectedInvoice.clientGst || invoiceClient?.gstIn || 'URP (Unregistered)'}
+                      </span>
+                    )}
+                    
+                    {((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice.notes) && (
+                      <p className="text-[11px] text-indigo-600/80 bg-indigo-50/40 p-2 rounded-lg italic mt-2 max-w-xs leading-normal">
+                        Note: {selectedInvoice.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="md:text-right space-y-1">
+                    {((businessSettings?.showInvoiceBankDetails ?? true) !== false) && (
+                      <>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Banking Payout Details</span>
+                        <p className="text-xs text-slate-700 font-bold">{businessSettings?.bankName || 'N/A'}</p>
+                        <p className="text-xs text-slate-500 font-mono">A/C: {businessSettings?.accountNum || 'N/A'}</p>
+                        <p className="text-xs text-slate-500 font-mono">IFSC: {businessSettings?.ifscCode || 'N/A'}</p>
+                      </>
+                    )}
+                    {((businessSettings?.showInvoiceUpiId ?? true) !== false && businessSettings?.upiId) && (
+                      <p className="text-xs text-slate-500 font-mono">UPI ID: {businessSettings.upiId}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Dynamic Line items table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse border border-[#E5E7EB] rounded-xl overflow-hidden">
+              <table className={`w-full text-left border-collapse border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl overflow-hidden`}>
                 <thead>
-                  <tr className="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b ${activeTheme?.borderTheme || 'border-slate-200'}`}>
                     <th className="py-3 px-4">Standard Deliverables Line Item</th>
                     <th className="py-3 px-3 text-center col-span-1">Qty</th>
                     <th className="py-3 px-3 text-right">Unit Rate (INR)</th>
-                    {businessSettings.gstOption !== 'zero_tax' && (
+                    {businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false && (
                       <th className="py-3 px-3 text-center">Tax Split</th>
                     )}
                     <th className="py-3 px-4 text-right">Amount (Gross)</th>
@@ -463,17 +523,22 @@ export default function InvoicesModule({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {selectedInvoice.items.map((item, index) => (
                     <tr key={index} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-4 font-semibold text-slate-800">{item.name}</td>
+                      <td className="py-4 px-4 font-semibold text-slate-800">
+                        <div>{item.name}</div>
+                        {((businessSettings?.showInvoiceHsn ?? true) !== false && item.hsnSac) && (
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">HSN: {item.hsnSac}</div>
+                        )}
+                      </td>
                       <td className="py-4 px-3 text-center font-mono font-bold text-slate-600">{item.qty}</td>
                       <td className="py-4 px-3 text-right font-mono text-slate-600">{formatCurrency(item.price)}</td>
-                      {businessSettings.gstOption !== 'zero_tax' && (
+                      {businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false && (
                         <td className="py-4 px-3 text-center">
                           {selectedInvoice.taxType === 'CGST_SGST' ? (
                             <span className="text-[10px] text-slate-500">
                               CGST {(item.gstPercent/2)}% + SGST {(item.gstPercent/2)}%
                             </span>
                           ) : (
-                            <span className="text-[10px] text-indigo-600 font-bold">
+                            <span className={`text-[10px] ${activeTheme?.accentText || 'text-indigo-600'} font-bold`}>
                               IGST {item.gstPercent}%
                             </span>
                           )}
@@ -487,26 +552,35 @@ export default function InvoicesModule({
             </div>
 
             {/* Totals math section, signatures, plus QR code */}
-            <div className="flex flex-col md:flex-row justify-between items-start gap-8 border-t border-[#E5E7EB] pt-6">
+            <div className={`flex flex-col md:flex-row justify-between items-start gap-8 border-t ${activeTheme?.borderTheme || 'border-slate-200'} pt-6`}>
               {/* Left QR Code and Notes */}
-              <div className="flex gap-4 items-center">
-                <div className="p-2 border border-[#E5E7EB] rounded-xl bg-slate-50/50">
-                  {/* Generate QR image representing standard BHIM UPI protocol deep-link */}
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=upi://pay?pa=${businessSettings.upiId}%26pn=${encodeURIComponent(businessSettings.companyName)}%26am=${selectedInvoice.dueAmount}%26cu=INR`} 
-                    className="w-24 h-24" 
-                    alt="BHIM UPI QRCode" 
-                    id="upi-instant-qr"
-                  />
-                  <span className="text-[9px] text-[#5B21FF] font-semibold tracking-wide text-center mt-1 block">Scan BHIM UPI</span>
-                </div>
-                <div>
-                  <span className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Authorized Signoff</span>
-                  <div className="py-1">
-                    <img src={businessSettings.signatureUrl} className="h-10 border-b border-dashed border-slate-200" alt="Stamp signature" />
+              <div className="flex flex-wrap gap-6 items-center">
+                {((businessSettings?.showInvoiceQrCode ?? true) !== false && businessSettings?.upiId) && (
+                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50`}>
+                    {/* Generate QR image representing standard BHIM UPI protocol deep-link */}
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=upi://pay?pa=${businessSettings.upiId}%26pn=${encodeURIComponent(businessSettings.companyName || '')}%26am=${selectedInvoice.dueAmount || selectedInvoice.total}%26cu=INR`} 
+                      className="w-24 h-24" 
+                      alt="BHIM UPI QRCode" 
+                      id="upi-instant-qr"
+                    />
+                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>Scan BHIM UPI</span>
                   </div>
-                  <span className="text-[10px] text-slate-500 block font-semibold">{businessSettings.companyName} Director</span>
-                </div>
+                )}
+                {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
+                  <div>
+                    <span className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Authorized Signoff</span>
+                    <div className="py-1">
+                      <img 
+                        src={businessSettings.signatureUrl} 
+                        style={{ height: `${businessSettings.moharSize || 40}px` }} 
+                        className="w-auto max-w-[200px] border-b border-dashed border-slate-200" 
+                        alt="Stamp signature" 
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-500 block font-semibold">{businessSettings?.companyName} Director</span>
+                  </div>
+                )}
               </div>
 
               {/* Right mathematical sums */}

@@ -20,7 +20,25 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   signatureUrl: "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
   timezone: "Asia/Kolkata",
   gstOption: "standard",
-  titleBarText: "Apex Digital Solutions"
+  titleBarText: "Apex Digital Solutions",
+  invoiceTheme: "navy",
+  moharSize: 40,
+  showInvoiceGst: true,
+  showInvoiceLogo: true,
+  showInvoicePhone: true,
+  showInvoiceEmail: true,
+  showInvoiceAddress: true,
+  showInvoiceClientAddress: true,
+  showInvoiceClientPhone: true,
+  showInvoiceClientEmail: true,
+  showInvoiceClientGst: true,
+  showInvoiceHsn: true,
+  showInvoiceTaxSplit: true,
+  showInvoiceBankDetails: true,
+  showInvoiceUpiId: true,
+  showInvoiceQrCode: true,
+  showInvoiceSignature: true,
+  showInvoiceNotes: true
 };
 
 export const DEMO_USERS: UserProfile[] = [
