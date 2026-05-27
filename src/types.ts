@@ -181,6 +181,8 @@ export interface BusinessSettings {
   showInvoiceBankDetails?: boolean;
   showInvoiceUpiId?: boolean;
   showInvoiceQrCode?: boolean;
+  customQrUrl?: string;
+  useCustomQrCode?: boolean;
   showInvoiceSignature?: boolean;
   showInvoiceNotes?: boolean;
 }

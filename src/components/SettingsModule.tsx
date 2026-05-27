@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Image,
   Database,
-  Download
+  Download,
+  QrCode
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 import SignaturePad from './SignaturePad';
@@ -50,6 +51,8 @@ export default function SettingsModule({
   const [ifscCode, setIfscCode] = useState(settings?.ifscCode || '');
   const [upiId, setUpiId] = useState(settings?.upiId || '');
   const [signatureUrl, setSignatureUrl] = useState(settings?.signatureUrl || '');
+  const [customQrUrl, setCustomQrUrl] = useState(settings?.customQrUrl || '');
+  const [useCustomQrCode, setUseCustomQrCode] = useState<boolean>(settings?.useCustomQrCode ?? false);
   const [timezone, setTimezone] = useState(settings?.timezone || 'Asia/Kolkata');
   const [gstOption, setGstOption] = useState(settings?.gstOption || 'standard');
   const [titleBarText, setTitleBarText] = useState(settings?.titleBarText || '');
@@ -91,6 +94,8 @@ export default function SettingsModule({
       setIfscCode(settings.ifscCode || '');
       setUpiId(settings.upiId || '');
       setSignatureUrl(settings.signatureUrl || '');
+      setCustomQrUrl(settings.customQrUrl || '');
+      setUseCustomQrCode(settings.useCustomQrCode ?? false);
       setTimezone(settings.timezone || 'Asia/Kolkata');
       setGstOption(settings.gstOption || 'standard');
       setTitleBarText(settings.titleBarText || '');
@@ -207,6 +212,7 @@ export default function SettingsModule({
     return settings?.signatureUrl ? 'link' : 'draw';
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingQr, setIsDraggingQr] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,6 +233,8 @@ export default function SettingsModule({
         ifscCode: ifscCode ? ifscCode.toUpperCase() : '',
         upiId,
         signatureUrl,
+        customQrUrl,
+        useCustomQrCode,
         timezone,
         gstOption,
         logoUrl,
@@ -624,6 +632,119 @@ export default function SettingsModule({
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Box 2.5: Invoice Payment QR Options */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <QrCode className="w-4 h-4 text-indigo-500" />
+              <span>Invoice Payment QR Options</span>
+            </h3>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-2 text-xs text-slate-700 font-medium cursor-pointer selection:bg-transparent">
+                <input 
+                  type="checkbox"
+                  checked={useCustomQrCode}
+                  onChange={(e) => setUseCustomQrCode(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0 mt-0.5"
+                />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-slate-850">Use Custom QR Code</span>
+                  <p className="text-[10px] text-slate-400 font-sans">
+                    Display an uploaded custom QR image instead of the auto-generated UPI deep-link QR.
+                  </p>
+                </div>
+              </label>
+
+              {useCustomQrCode && (
+                <div className="space-y-3.5 pt-2 border-t border-dashed border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Upload Custom QR Code Image</label>
+                  
+                  <div 
+                    className={`border-2 border-dashed rounded-2xl p-4 transition duration-200 flex flex-col items-center justify-center text-center space-y-2.5 ${
+                      isDraggingQr ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingQr(true);
+                    }}
+                    onDragLeave={() => setIsDraggingQr(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingQr(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) {
+                        processImageUpload(file, setCustomQrUrl, 300, 300);
+                      }
+                    }}
+                  >
+                    {customQrUrl ? (
+                      <div className="relative p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center h-28 w-28 shadow-xs group">
+                        <img 
+                          src={customQrUrl} 
+                          className="max-h-full max-w-full object-contain rounded-lg" 
+                          alt="Custom QR preview" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCustomQrUrl('');
+                          }}
+                          className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md transition font-bold cursor-pointer"
+                          title="Remove custom QR"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-2">
+                        <QrCode className="w-8 h-8 text-slate-400 mb-1 animate-pulse" />
+                        <p className="text-[11px] text-slate-500">Drag &amp; drop QR image here, or</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('qr-file-picker')?.click()}
+                        className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Browse image</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = prompt("Enter web URL of your payment QR code image:");
+                          if (url) {
+                            setCustomQrUrl(url);
+                          }
+                        }}
+                        className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-[10px] font-semibold rounded-xl transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Link className="w-3 h-3 text-slate-500" />
+                        <span>Paste URL</span>
+                      </button>
+                    </div>
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      id="qr-file-picker"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          processImageUpload(file, setCustomQrUrl, 300, 300);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

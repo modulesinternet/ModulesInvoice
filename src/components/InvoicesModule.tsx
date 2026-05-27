@@ -489,8 +489,6 @@ export default function InvoicesModule({
                       src={businessSettings.logoUrl} 
                       className="w-20 h-20 rounded-xl object-contain shadow-sm" 
                       alt="Logo" 
-                      crossOrigin="anonymous"
-                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <div className="w-20 h-20 rounded-xl flex items-center justify-center text-white font-black text-3xl font-display shadow-sm bg-indigo-600">
@@ -650,31 +648,34 @@ export default function InvoicesModule({
             <div className="flex flex-row justify-between items-start gap-8 border-t border-slate-200 pt-6 w-full" id="invoice-footer-row">
               {/* Left QR Code and Notes */}
               <div className="flex flex-wrap gap-6 items-center">
-                {((businessSettings?.showInvoiceQrCode ?? true) !== false && businessSettings?.upiId) && (
-                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50`}>
-                    {/* Generate QR image representing standard BHIM UPI protocol deep-link */}
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=upi://pay?pa=${businessSettings.upiId}%26pn=${encodeURIComponent(businessSettings.companyName || '')}%26am=${selectedInvoice.dueAmount || selectedInvoice.total}%26cu=INR`} 
-                      className="w-24 h-24" 
-                      alt="BHIM UPI QRCode" 
-                      id="upi-instant-qr"
-                      crossOrigin="anonymous"
-                      referrerPolicy="no-referrer"
-                    />
-                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>Scan BHIM UPI</span>
-                  </div>
-                )}
+                {((businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
+                  const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
+                  const canGenUpi = businessSettings?.upiId;
+                  if (!useCust && !canGenUpi) return null;
+
+                  return (
+                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50`}>
+                      <img 
+                        src={useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=upi://pay?pa=${businessSettings.upiId}%26pn=${encodeURIComponent(businessSettings.companyName || '')}%26am=${selectedInvoice.dueAmount || selectedInvoice.total}%26cu=INR`} 
+                        className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                        alt="Payment QR Code" 
+                        id="upi-instant-qr"
+                      />
+                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                        {useCust ? "Scan to Pay" : "Scan BHIM UPI"}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
                   <div>
                     <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
                     <div className="py-2">
-                      <img 
+                       <img 
                         src={businessSettings.signatureUrl} 
                         style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
                         className="w-auto max-w-[240px]" 
                         alt="Stamp signature" 
-                        crossOrigin="anonymous"
-                        referrerPolicy="no-referrer"
                       />
                     </div>
                   </div>
