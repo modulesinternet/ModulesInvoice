@@ -579,10 +579,50 @@ export default function App() {
     }
   };
 
+  const handleUpdatePayment = async (id: string, p: Partial<Payment>) => {
+    try {
+      await api.updatePayment(id, p);
+      showToast("Approved: Modified payment receipt references successfully.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    try {
+      await api.deletePayment(id);
+      showToast("Approved: Voided and deleted payment successfully.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleCreateCashbookEntry = async (entry: Partial<CashbookEntry>) => {
     try {
       await api.createCashbookEntry(entry);
       showToast("Approved: Recorded Cashbook operating voucher.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateCashbookEntry = async (id: string, entry: Partial<CashbookEntry>) => {
+    try {
+      await api.updateCashbookEntry(id, entry);
+      showToast("Approved: Updated cashbook operating voucher.");
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteCashbookEntry = async (id: string) => {
+    try {
+      await api.deleteCashbookEntry(id);
+      showToast("Approved: Deleted cashbook operating voucher.");
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1369,6 +1409,8 @@ export default function App() {
                   clients={clients}
                   invoices={invoices}
                   onAddPayment={handleAddPayment}
+                  onUpdatePayment={handleUpdatePayment}
+                  onDeletePayment={handleDeletePayment}
                   canWrite={getModulePermissions('payments').write}
                 />
               )}
@@ -1385,6 +1427,8 @@ export default function App() {
                 <CashbookModule 
                   cashbook={cashbook}
                   onCreateCashbookEntry={handleCreateCashbookEntry}
+                  onUpdateCashbookEntry={handleUpdateCashbookEntry}
+                  onDeleteCashbookEntry={handleDeleteCashbookEntry}
                   canWrite={getModulePermissions('cashbook').write}
                 />
               )}

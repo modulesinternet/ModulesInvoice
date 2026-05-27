@@ -171,8 +171,8 @@ function logLocalActivity(actionType: string, description: string) {
     id: `log-${Date.now()}`,
     userId,
     userName: name,
-    actionType,
-    description,
+    action: actionType,
+    details: description,
     timestamp: new Date().toISOString()
   };
   logs.unshift(newLog);
@@ -374,13 +374,12 @@ export const api = {
       const newClient: Client = {
         id: `cli-${Date.now()}`,
         name: client.name || "",
-        contactPerson: client.contactPerson || "",
         email: client.email || "",
         phone: client.phone || "",
         gstIn: client.gstIn || "",
         pan: client.pan || "",
-        address: client.address || "",
-        state: client.state || "",
+        billingAddress: client.billingAddress || (client as any).address || "",
+        shippingAddress: client.shippingAddress || (client as any).address || "",
         outstandingBalance: 0,
         createdAt: new Date().toISOString()
       };
@@ -436,11 +435,12 @@ export const api = {
         id: `prod-${Date.now()}`,
         name: product.name || "",
         sku: product.sku || `SKU-${Date.now()}`,
-        description: product.description || "",
         price: Number(product.price || 0),
         unit: product.unit || "Services",
         category: product.category || "General",
-        createdAt: new Date().toISOString()
+        gstPercent: product.gstPercent || 18,
+        hsnSac: product.hsnSac || "",
+        stockQty: product.stockQty || 0
       };
       list.unshift(newProduct);
       setLocalItem('db_products', list);
@@ -669,7 +669,7 @@ export const api = {
         clientId: quotation.clientId || "cli-123",
         clientName: quotation.clientName || "Unknown Client",
         date: quotation.date || new Date().toISOString().split('T')[0],
-        validUntil: quotation.validUntil || new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+        expiryDate: quotation.expiryDate || new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
         items: quotation.items || [],
         subtotal: Number(quotation.subtotal || 0),
         discount: Number(quotation.discount || 0),
@@ -889,6 +889,183 @@ export const api = {
     return request<Payment>('/api/payments', 'POST', payment);
   },
 
+  updatePayment: (id: string, updated: Partial<Payment>) => {
+    if (isLocalOnly) {
+      const db_payments = getLocalItem<Payment[]>('db_payments', []);
+      const db_invoices = getLocalItem<Invoice[]>('db_invoices', []);
+      const db_clients = getLocalItem<Client[]>('db_clients', []);
+      const db_ledger = getLocalItem<LedgerEntry[]>('db_ledger', []);
+      const db_cashbook = getLocalItem<CashbookEntry[]>('db_cashbook', []);
+
+      const pIndex = db_payments.findIndex(pay => pay.id === id);
+      if (pIndex !== -1) {
+        const oldP = db_payments[pIndex];
+
+        // 1. Revert Old values
+        const oldAmount = oldP.amount;
+        const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+        if (oldInvIndex !== -1) {
+          const inv = db_invoices[oldInvIndex];
+          inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - oldAmount);
+          inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+          inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+        }
+
+        const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+        if (oldClientIndex !== -1) {
+          db_clients[oldClientIndex].outstandingBalance = Number(db_clients[oldClientIndex].outstandingBalance || 0) + oldAmount;
+        }
+
+        // Apply edits to oldP
+        const updatedInvoiceId = updated.invoiceId || oldP.invoiceId;
+        const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
+
+        oldP.amount = Number(updated.amount ?? oldP.amount);
+        oldP.paymentDate = updated.paymentDate || oldP.paymentDate;
+        oldP.paymentMode = updated.paymentMode || oldP.paymentMode;
+        oldP.referenceNum = updated.referenceNum || oldP.referenceNum;
+        oldP.remarks = updated.remarks || oldP.remarks;
+
+        if (isInvoiceChanged) {
+          oldP.invoiceId = updatedInvoiceId;
+          const targetInv = db_invoices.find(inv => inv.id === updatedInvoiceId);
+          oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
+        }
+
+        // 2. Apply New values
+        const newAmount = oldP.amount;
+        const newInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+        if (newInvIndex !== -1) {
+          const inv = db_invoices[newInvIndex];
+          inv.paidAmount = Number(inv.paidAmount || 0) + newAmount;
+          inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+          inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+        }
+
+        const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+        let runningClientBalance = 0;
+        if (newClientIndex !== -1) {
+          db_clients[newClientIndex].outstandingBalance = Math.max(0, Number(db_clients[newClientIndex].outstandingBalance || 0) - newAmount);
+          runningClientBalance = db_clients[newClientIndex].outstandingBalance;
+        }
+
+        // Filter and rebuild Ledger entry
+        const otherLedgers = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
+        const newLedger: LedgerEntry = {
+          id: `led-${Date.now()}`,
+          clientId: oldP.clientId,
+          clientName: oldP.clientName,
+          date: oldP.paymentDate,
+          description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
+          type: "credit",
+          amount: newAmount,
+          runningBalance: runningClientBalance,
+          referenceType: "payment",
+          referenceId: oldP.id,
+          createdAt: new Date().toISOString()
+        };
+        otherLedgers.unshift(newLedger);
+
+        // Filter and rebuild Cashbook entry
+        const otherCashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
+        
+        let cashChange = 0;
+        let bankChange = 0;
+        if (oldP.paymentMode === 'Cash') {
+          cashChange = newAmount;
+        } else {
+          bankChange = newAmount;
+        }
+
+        const sortedCashForPayment = [...otherCashbook].sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          if (dateA !== dateB) return dateA - dateB;
+          const timeA = new Date(a.createdAt).getTime();
+          const timeB = new Date(b.createdAt).getTime();
+          if (timeA !== timeB) return timeA - timeB;
+          return a.id.localeCompare(b.id);
+        });
+        const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
+
+        const newCashbook: CashbookEntry = {
+          id: `cb-${Date.now()}`,
+          date: oldP.paymentDate,
+          description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
+          type: "income",
+          paymentMode: oldP.paymentMode,
+          amount: newAmount,
+          referenceId: oldP.id,
+          runningCashBalance: (lastCashbookEntry.runningCashBalance || 0) + cashChange,
+          runningBankBalance: (lastCashbookEntry.runningBankBalance || 0) + bankChange,
+          createdAt: new Date().toISOString()
+        };
+        otherCashbook.unshift(newCashbook);
+
+        // Save everything
+        setLocalItem('db_payments', db_payments);
+        setLocalItem('db_invoices', db_invoices);
+        setLocalItem('db_clients', db_clients);
+        setLocalItem('db_ledger', otherLedgers);
+        setLocalItem('db_cashbook', otherCashbook);
+
+        logLocalActivity("PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
+        return Promise.resolve(oldP);
+      }
+      return Promise.reject(new Error("Payment not found"));
+    }
+    return request<Payment>(`/api/payments/${id}`, 'PUT', updated);
+  },
+
+  deletePayment: (id: string) => {
+    if (isLocalOnly) {
+      const db_payments = getLocalItem<Payment[]>('db_payments', []);
+      const db_invoices = getLocalItem<Invoice[]>('db_invoices', []);
+      const db_clients = getLocalItem<Client[]>('db_clients', []);
+      const db_ledger = getLocalItem<LedgerEntry[]>('db_ledger', []);
+      const db_cashbook = getLocalItem<CashbookEntry[]>('db_cashbook', []);
+
+      const pIndex = db_payments.findIndex(pay => pay.id === id);
+      if (pIndex !== -1) {
+        const p = db_payments[pIndex];
+
+        // Revert Invoice paid amount
+        const invIndex = db_invoices.findIndex(inv => inv.id === p.invoiceId);
+        if (invIndex !== -1) {
+          const inv = db_invoices[invIndex];
+          inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - p.amount);
+          inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+          inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+          setLocalItem('db_invoices', db_invoices);
+        }
+
+        // Revert Client outstanding balance
+        const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
+        if (clientIndex !== -1) {
+          db_clients[clientIndex].outstandingBalance = Number(db_clients[clientIndex].outstandingBalance || 0) + p.amount;
+          setLocalItem('db_clients', db_clients);
+        }
+
+        // Revert Ledger
+        const filteredLedger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
+        setLocalItem('db_ledger', filteredLedger);
+
+        // Revert Cashbook
+        const filteredCashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
+        setLocalItem('db_cashbook', filteredCashbook);
+
+        // Delete payment
+        db_payments.splice(pIndex, 1);
+        setLocalItem('db_payments', db_payments);
+
+        logLocalActivity("PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName}`);
+        return Promise.resolve({ success: true });
+      }
+      return Promise.reject(new Error("Payment not found"));
+    }
+    return request<{ success: boolean }>(`/api/payments/${id}`, 'DELETE');
+  },
+
   // 8. General Ledgers
   getLedgers: () => {
     if (isLocalOnly) {
@@ -966,6 +1143,37 @@ export const api = {
       return Promise.resolve(newEntry);
     }
     return request<CashbookEntry>('/api/cashbook', 'POST', entry);
+  },
+
+  deleteCashbookEntry: (id: string) => {
+    if (isLocalOnly) {
+      const db_cashbook = getLocalItem<CashbookEntry[]>('db_cashbook', []);
+      const index = db_cashbook.findIndex(cb => cb.id === id);
+      if (index !== -1) {
+        const item = db_cashbook[index];
+        db_cashbook.splice(index, 1);
+        setLocalItem('db_cashbook', db_cashbook);
+        logLocalActivity("CASHBOOK_DELETE", `Deleted cashbook entry: ${item.description}`);
+        return Promise.resolve({ success: true });
+      }
+      return Promise.reject(new Error("Cashbook entry not found"));
+    }
+    return request<{ success: boolean }>(`/api/cashbook/${id}`, 'DELETE');
+  },
+
+  updateCashbookEntry: (id: string, updated: Partial<CashbookEntry>) => {
+    if (isLocalOnly) {
+      const db_cashbook = getLocalItem<CashbookEntry[]>('db_cashbook', []);
+      const index = db_cashbook.findIndex(cb => cb.id === id);
+      if (index !== -1) {
+        db_cashbook[index] = { ...db_cashbook[index], ...updated };
+        setLocalItem('db_cashbook', db_cashbook);
+        logLocalActivity("CASHBOOK_UPDATE", `Updated cashbook entry: ${db_cashbook[index].description}`);
+        return Promise.resolve(db_cashbook[index]);
+      }
+      return Promise.reject(new Error("Cashbook entry not found"));
+    }
+    return request<CashbookEntry>(`/api/cashbook/${id}`, 'PUT', updated);
   },
 
   // 10. Business & Banking settings

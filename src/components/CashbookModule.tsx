@@ -4,7 +4,9 @@ import {
   Search, 
   X,
   Building2,
-  Wallet
+  Wallet,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { CashbookEntry } from '../types';
 import Pagination from './Pagination';
@@ -12,16 +14,21 @@ import Pagination from './Pagination';
 interface CashbookModuleProps {
   cashbook: CashbookEntry[];
   onCreateCashbookEntry: (entry: Partial<CashbookEntry>) => Promise<void>;
+  onUpdateCashbookEntry?: (id: string, entry: Partial<CashbookEntry>) => Promise<void>;
+  onDeleteCashbookEntry?: (id: string) => Promise<void>;
   canWrite?: boolean;
 }
 
 export default function CashbookModule({
   cashbook,
   onCreateCashbookEntry,
+  onUpdateCashbookEntry,
+  onDeleteCashbookEntry,
   canWrite = true
 }: CashbookModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<CashbookEntry | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -43,7 +50,7 @@ export default function CashbookModule({
   // Form states
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
-  const [type, setType] = useState('receipt');
+  const [type, setType] = useState('payment'); // Default to payment (Cash Out)
   const [account, setAccount] = useState('bank');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -66,7 +73,7 @@ export default function CashbookModule({
     const payload: Partial<CashbookEntry> = {
       date,
       description,
-      type: (type === 'receipt' ? 'income' : 'expense') as any,
+      type: 'expense', // Forced Cash Out
       amount: Number(amount),
       paymentMode: account === 'bank' ? 'Bank Transfer' : 'Cash',
       referenceId: reference,
@@ -79,6 +86,52 @@ export default function CashbookModule({
     setDescription('');
     setAmount('');
     setReference('');
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+
+    if (!description || Number(amount) <= 0 || !reference) {
+      alert("Please check that description, reference, and numeric amount fields are completed.");
+      return;
+    }
+
+    const payload: Partial<CashbookEntry> = {
+      date,
+      description,
+      type: 'expense', // Forced Cash Out
+      amount: Number(amount),
+      paymentMode: account === 'bank' ? 'Bank Transfer' : 'Cash',
+      referenceId: reference,
+    };
+
+    if (onUpdateCashbookEntry) {
+      await onUpdateCashbookEntry(editingEntry.id, payload);
+    }
+    setEditingEntry(null);
+
+    // reset Form
+    setDescription('');
+    setAmount('');
+    setReference('');
+  };
+
+  const startEdit = (entry: CashbookEntry) => {
+    setEditingEntry(entry);
+    setDate(entry.date);
+    setDescription(entry.description);
+    setAccount(entry.paymentMode === 'Bank Transfer' ? 'bank' : 'cash');
+    setAmount(String(entry.amount));
+    setReference(entry.referenceId || '');
+  };
+
+  const handleDelete = async (id: string, desc: string) => {
+    if (window.confirm(`Are you sure you want to delete Cash Out entry: "${desc}"?`)) {
+      if (onDeleteCashbookEntry) {
+        await onDeleteCashbookEntry(id);
+      }
+    }
   };
 
   // Compute stats on-the-fly with robust chronological sorting and adjustment tracking
@@ -145,7 +198,7 @@ export default function CashbookModule({
             id="add-cashbook-entry-btn"
           >
             <Plus className="w-4 h-4" />
-            <span>Record Cashbook Entry</span>
+            <span>Record Cash Out</span>
           </button>
         )}
       </div>
@@ -227,6 +280,7 @@ export default function CashbookModule({
                 <th className="py-3.5 px-4 text-center">Reconciled Pool</th>
                 <th className="py-3.5 px-5 text-right text-emerald-600">Credits / Receipts (+)</th>
                 <th className="py-3.5 px-5 text-right text-rose-600">Debits / Payouts (-)</th>
+                <th className="py-3.5 px-5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
@@ -246,12 +300,34 @@ export default function CashbookModule({
                   <td className="py-3.5 px-5 text-right font-mono font-bold text-rose-600">
                     {row.type === 'expense' || row.type === 'withdrawal' ? `- ${formatCurrency(row.amount)}` : '-'}
                   </td>
+                  <td className="py-3.5 px-5 text-center">
+                    {row.type === 'expense' ? (
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => startEdit(row)}
+                          className="p-1 px-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                          title="Edit Cash Out"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(row.id, row.description)}
+                          className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                          title="Delete Cash Out"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
 
               {filteredCashbook.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
+                  <td colSpan={7} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
                 </tr>
               )}
             </tbody>
@@ -267,12 +343,12 @@ export default function CashbookModule({
         />
       </div>
 
-      {/* FORM MODAL POPOVER */}
+      {/* FORM MODAL POPOVER FOR CREATE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <h3 className="font-bold text-sm">Post Cashbook Entry</h3>
+              <h3 className="font-bold text-sm">Post Cash Out Entry</h3>
               <button onClick={() => setIsModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
               </button>
@@ -304,15 +380,10 @@ export default function CashbookModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type *</label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
-                  >
-                    <option value="receipt">Credit / Receipt (+)</option>
-                    <option value="payment">Debit / Payment (-)</option>
-                  </select>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type</label>
+                  <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-rose-500">
+                    Debit / Payment (-)
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Account Pool *</label>
@@ -365,6 +436,106 @@ export default function CashbookModule({
                   className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
                   Approve Entry Post
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* FORM MODAL POPOVER FOR EDIT */}
+      {editingEntry && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <h3 className="font-bold text-sm">Edit Cash Out Entry</h3>
+              <button onClick={() => setEditingEntry(null)}>
+                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Voucher Date *</label>
+                <input 
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Clause Description *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. AWS Production Cloud Bill"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type</label>
+                  <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-rose-500">
+                    Debit / Payment (-)
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Account Pool *</label>
+                  <select
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                  >
+                    <option value="bank">HDFC Current Bank A/C</option>
+                    <option value="cash">Daily Physical Cash</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Numeric Amount (INR) *</label>
+                  <input 
+                    type="number"
+                    required
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase font-sans">Reference / Receipt ID *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. RF99120"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Drawer actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingEntry(null)}
+                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                >
+                  Save Cash Out Edits
                 </button>
               </div>
             </form>

@@ -4,7 +4,9 @@ import {
   Plus, 
   Search, 
   Check,
-  X
+  X,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Payment, Client, Invoice } from '../types';
 import Pagination from './Pagination';
@@ -14,6 +16,8 @@ interface PaymentsModuleProps {
   clients: Client[];
   invoices: Invoice[];
   onAddPayment: (p: Partial<Payment>) => Promise<void>;
+  onUpdatePayment?: (id: string, p: Partial<Payment>) => Promise<void>;
+  onDeletePayment?: (id: string) => Promise<void>;
   canWrite?: boolean;
 }
 
@@ -22,10 +26,13 @@ export default function PaymentsModule({
   clients,
   invoices,
   onAddPayment,
+  onUpdatePayment,
+  onDeletePayment,
   canWrite = true
 }: PaymentsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -51,8 +58,10 @@ export default function PaymentsModule({
   };
 
   // Find valid unpaid invoices for selected client to populate invoice dropdown
+  // Wait, when editing, we want to ALSO include the currently selected invoice, even if it is fully paid/settled by this payment!
   const filteredInvoices = invoices.filter(inv => 
-    inv.clientId === clientId && (inv.status === 'unpaid' || inv.status === 'partially_paid')
+    inv.clientId === clientId && 
+    (inv.status === 'unpaid' || inv.status === 'partially_paid' || (editingPayment && inv.id === editingPayment.invoiceId))
   );
 
   const selectedInvoiceObj = invoices.find(inv => inv.id === invoiceId);
@@ -67,7 +76,12 @@ export default function PaymentsModule({
     setInvoiceId(invId);
     const chosen = invoices.find(inv => inv.id === invId);
     if (chosen) {
-      setAmount(String(chosen.dueAmount));
+      // If editing this payment, set amount defaults based on current edit balance
+      if (editingPayment && chosen.id === editingPayment.invoiceId) {
+        setAmount(String(chosen.dueAmount + editingPayment.amount));
+      } else {
+        setAmount(String(chosen.dueAmount));
+      }
     }
   };
 
@@ -107,6 +121,67 @@ export default function PaymentsModule({
     setAmount('');
     setReferenceNumber('');
     setNotes('Payment matched and credited instantly.');
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+
+    if (!clientId || !invoiceId || Number(amount) <= 0 || !referenceNumber) {
+      alert("Please ensure client, invoice, valid positive amount, and reference code or UPI ref is specified.");
+      return;
+    }
+
+    const clientObj = clients.find(c => c.id === clientId)!;
+    const invoiceObj = invoices.find(inv => inv.id === invoiceId)!;
+
+    // Check balance limit
+    const allowableBalance = invoiceObj.dueAmount + (invoiceObj.id === editingPayment.invoiceId ? editingPayment.amount : 0);
+    if (Number(amount) > allowableBalance) {
+      alert(`Warning: The specified payment amount ${formatCurrency(Number(amount))} exceeds this invoice's maximum available remaining balance of ${formatCurrency(allowableBalance)}.`);
+      return;
+    }
+
+    const payload: Partial<Payment> = {
+      clientId,
+      clientName: clientObj.name,
+      invoiceId,
+      invoiceNumber: invoiceObj.invoiceNumber,
+      amount: Number(amount),
+      paymentMode: mode,
+      referenceNum: referenceNumber,
+      remarks: notes
+    };
+
+    if (onUpdatePayment) {
+      await onUpdatePayment(editingPayment.id, payload);
+    }
+    setEditingPayment(null);
+
+    // Reset values
+    setClientId('');
+    setInvoiceId('');
+    setAmount('');
+    setReferenceNumber('');
+    setNotes('Payment matched and credited instantly.');
+  };
+
+  const startEditPayment = (p: Payment) => {
+    setEditingPayment(p);
+    setClientId(p.clientId);
+    setInvoiceId(p.invoiceId);
+    setAmount(String(p.amount));
+    setMode(p.paymentMode as any);
+    setReferenceNumber(p.referenceNum);
+    setNotes(p.remarks || '');
+  };
+
+  const handleDeletePayment = async (p: Payment) => {
+    if (window.confirm(`Are you sure you want to void and delete the payment of INR ${p.amount} from ${p.clientName}?`)) {
+      if (onDeletePayment) {
+        await onDeletePayment(p.id);
+      }
+    }
   };
 
   const getModeBadge = (m: string) => {
@@ -207,6 +282,7 @@ export default function PaymentsModule({
               <th className="py-3 px-5">Channel Mode</th>
               <th className="py-3 px-5 text-right">Receipt Value</th>
               <th className="py-3 px-5">Notes / Status</th>
+              <th className="py-3 px-5 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
@@ -223,12 +299,34 @@ export default function PaymentsModule({
                 </td>
                 <td className="py-4 px-5 text-right font-mono font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
                 <td className="py-4 px-5 text-slate-400 italic font-medium">{p.remarks}</td>
+                <td className="py-4 px-5 text-center">
+                  {canWrite ? (
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={() => startEditPayment(p)}
+                        className="p-1 px-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                        title="Modify Payment"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeletePayment(p)}
+                        className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                        title="Delete Payment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-slate-350">-</span>
+                  )}
+                </td>
               </tr>
             ))}
 
             {filteredPayments.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
+                <td colSpan={8} className="text-center py-12 text-slate-400">No transaction logs recorded under database pipeline.</td>
               </tr>
             )}
           </tbody>
@@ -365,6 +463,117 @@ export default function PaymentsModule({
                   className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
                   Approve Ledger Credit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PAYMENT MODAL */}
+      {editingPayment && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-sm">Modify Client Receipt</h3>
+              </div>
+              <button onClick={() => setEditingPayment(null)}>
+                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              {/* Select client (read-only for security & accounting consistency) */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Target Client</label>
+                <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-700">
+                  {editingPayment.clientName}
+                </div>
+              </div>
+
+              {/* Select Invoice (read-only for credit-matching log logic) */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Settled Bill Invoice</label>
+                <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-700">
+                  {editingPayment.invoiceNumber}
+                </div>
+              </div>
+
+              {/* Amount and Mode */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Deposit Amount (INR) *</label>
+                  <input 
+                    type="number"
+                    required
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Settlement Channel *</label>
+                  <select 
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value as any)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white"
+                  >
+                    <option value="UPI">BHIM UPI</option>
+                    <option value="Bank Transfer">Bank Transfer (IMPS/NEFT)</option>
+                    <option value="Cash">Cash Registry</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Reference */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Reference Code / Bank ID *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. TXN991209120 or UPI RRN code..."
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Ledger Remarks</label>
+                <input 
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              {selectedInvoiceObj && (
+                <div className="p-3 bg-indigo-50 text-[11px] text-indigo-800 rounded-xl italic">
+                  Remaining unpaid balance after this receipt: 
+                  <b className="font-mono ml-1 text-slate-800">
+                    {formatCurrency(Math.max(0, (selectedInvoiceObj.dueAmount + editingPayment.amount) - Number(amount || 0)))}
+                  </b>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingPayment(null)}
+                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                >
+                  Save Credit Edits
                 </button>
               </div>
             </form>

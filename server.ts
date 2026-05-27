@@ -1254,6 +1254,170 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
   res.status(201).json(newPayment);
 });
 
+app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const data = req.body;
+  const pIndex = db_payments.findIndex(pay => pay.id === id);
+  if (pIndex !== -1) {
+    const oldP = db_payments[pIndex];
+
+    // 1. Revert Old values
+    const oldAmount = oldP.amount;
+    const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+    if (oldInvIndex !== -1) {
+      const inv = db_invoices[oldInvIndex];
+      inv.paidAmount = Math.max(0, inv.paidAmount - oldAmount);
+      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+      inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+      syncStateToFirestore('invoices', inv.id);
+    }
+
+    const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+    if (oldClientIndex !== -1) {
+      db_clients[oldClientIndex].outstandingBalance = db_clients[oldClientIndex].outstandingBalance + oldAmount;
+      syncStateToFirestore('clients', db_clients[oldClientIndex].id);
+    }
+
+    // Apply edits
+    const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
+    const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
+
+    oldP.amount = Number(data.amount ?? oldP.amount);
+    oldP.paymentDate = data.paymentDate || oldP.paymentDate;
+    oldP.paymentMode = data.paymentMode || oldP.paymentMode;
+    oldP.referenceNum = data.referenceNum || oldP.referenceNum;
+    oldP.remarks = data.remarks || oldP.remarks;
+
+    if (isInvoiceChanged) {
+      oldP.invoiceId = updatedInvoiceId;
+      const targetInv = db_invoices.find(inv => inv.id === updatedInvoiceId);
+      oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
+    }
+
+    // 2. Apply New values
+    const newAmount = oldP.amount;
+    const newInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+    if (newInvIndex !== -1) {
+      const inv = db_invoices[newInvIndex];
+      inv.paidAmount = inv.paidAmount + newAmount;
+      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+      inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+      syncStateToFirestore('invoices', inv.id);
+    }
+
+    const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+    let runningClientBalance = 0;
+    if (newClientIndex !== -1) {
+      db_clients[newClientIndex].outstandingBalance = Math.max(0, db_clients[newClientIndex].outstandingBalance - newAmount);
+      runningClientBalance = db_clients[newClientIndex].outstandingBalance;
+      syncStateToFirestore('clients', db_clients[newClientIndex].id);
+    }
+
+    // Filter and rebuild Ledger entry
+    db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
+    const newLedger: LedgerEntry = {
+      id: `led-${Date.now()}`,
+      clientId: oldP.clientId,
+      clientName: oldP.clientName,
+      date: oldP.paymentDate,
+      description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
+      type: "credit",
+      amount: newAmount,
+      runningBalance: runningClientBalance,
+      referenceType: "payment",
+      referenceId: oldP.id,
+      createdAt: new Date().toISOString()
+    };
+    db_ledger.unshift(newLedger);
+    syncStateToFirestore('ledger', newLedger.id);
+
+    // Filter and rebuild Cashbook entry
+    db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
+    
+    let cashChange = 0;
+    let bankChange = 0;
+    if (oldP.paymentMode === 'Cash') {
+      cashChange = newAmount;
+    } else {
+      bankChange = newAmount;
+    }
+
+    const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return a.id.localeCompare(b.id);
+    });
+    const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
+
+    const newCashbook: CashbookEntry = {
+      id: `cb-${Date.now()}`,
+      date: oldP.paymentDate,
+      description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
+      type: "income",
+      paymentMode: oldP.paymentMode,
+      amount: newAmount,
+      referenceId: oldP.id,
+      runningCashBalance: lastCashbookEntry.runningCashBalance + cashChange,
+      runningBankBalance: lastCashbookEntry.runningBankBalance + bankChange,
+      createdAt: new Date().toISOString()
+    };
+    db_cashbook.unshift(newCashbook);
+    syncStateToFirestore('cashbook', newCashbook.id);
+
+    syncStateToFirestore('payments', oldP.id);
+
+    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
+    res.json(oldP);
+  } else {
+    res.status(404).json({ error: "Payment not found" });
+  }
+});
+
+app.delete('/api/payments/:id', checkPermission('payments', 'delete'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const pIndex = db_payments.findIndex(pay => pay.id === id);
+  if (pIndex !== -1) {
+    const p = db_payments[pIndex];
+
+    // Revert Invoice paid amount
+    const invIndex = db_invoices.findIndex(inv => inv.id === p.invoiceId);
+    if (invIndex !== -1) {
+      const inv = db_invoices[invIndex];
+      inv.paidAmount = Math.max(0, inv.paidAmount - p.amount);
+      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
+      inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+      syncStateToFirestore('invoices', inv.id);
+    }
+
+    // Revert Client outstanding balance
+    const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
+    if (clientIndex !== -1) {
+      db_clients[clientIndex].outstandingBalance = db_clients[clientIndex].outstandingBalance + p.amount;
+      syncStateToFirestore('clients', db_clients[clientIndex].id);
+    }
+
+    // Revert Ledger
+    db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
+
+    // Revert Cashbook
+    db_cashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
+
+    // Delete payment
+    db_payments.splice(pIndex, 1);
+
+    syncStateToFirestore('payments', id);
+
+    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName}`);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "Payment not found" });
+  }
+});
+
 // 7. Ledgers
 app.get('/api/ledger', checkPermission('ledger', 'read'), (req: Request, res: Response) => {
   res.json(db_ledger);
@@ -1320,6 +1484,34 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), (req: Request, r
   syncStateToFirestore('cashbook', newEntry.id);
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
+});
+
+app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const data = req.body;
+  const index = db_cashbook.findIndex(cb => cb.id === id);
+  if (index !== -1) {
+    db_cashbook[index] = { ...db_cashbook[index], ...data };
+    syncStateToFirestore('cashbook', id);
+    logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_UPDATE", `Updated manual transactional log: ${db_cashbook[index].description}`);
+    res.json(db_cashbook[index]);
+  } else {
+    res.status(404).json({ error: "Cashbook entry not found" });
+  }
+});
+
+app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const index = db_cashbook.findIndex(cb => cb.id === id);
+  if (index !== -1) {
+    const item = db_cashbook[index];
+    db_cashbook.splice(index, 1);
+    syncStateToFirestore('cashbook', id);
+    logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_DELETE", `Deleted transactional log: ${item.description}`);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "Cashbook entry not found" });
+  }
 });
 
 // 9. Users Management
