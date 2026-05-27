@@ -465,7 +465,7 @@ export default function InvoicesModule({
           {/* MASTER VISUAL DRAW TARGET */}
           <div 
             ref={printableRef}
-            className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl overflow-hidden p-8 space-y-8 max-w-4xl mx-auto`}
+            className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl overflow-visible p-8 pb-12 space-y-8 max-w-4xl mx-auto`}
             id="print-invoice-layout"
           >
             {/* Header section based on branding template chosen */}
@@ -475,11 +475,13 @@ export default function InvoicesModule({
                   {((businessSettings?.showInvoiceLogo ?? true) !== false && businessSettings?.logoUrl) ? (
                     <img 
                       src={businessSettings.logoUrl} 
-                      className="w-12 h-12 rounded-xl object-contain shadow-sm" 
+                      className="w-20 h-20 rounded-xl object-contain shadow-sm" 
                       alt="Logo" 
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg font-display shadow-sm bg-indigo-600">
+                    <div className="w-20 h-20 rounded-xl flex items-center justify-center text-white font-black text-3xl font-display shadow-sm bg-indigo-600">
                       {businessSettings?.companyName ? businessSettings.companyName.charAt(0) : 'A'}
                     </div>
                   )}
@@ -504,8 +506,8 @@ export default function InvoicesModule({
                 ) : null}
               </div>
 
-              <div className="text-right space-y-1">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest block">tax invoice</span>
+              <div className="text-right space-y-1.5">
+                <span className="text-lg uppercase font-black text-slate-900 tracking-widest block font-sans">TAX INVOICE</span>
                 <h1 className="text-2xl font-mono font-bold text-slate-800 mt-1">{selectedInvoice.invoiceNumber}</h1>
                 <div className="flex items-center justify-end gap-1.5 mt-1 relative">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
@@ -620,7 +622,7 @@ export default function InvoicesModule({
             </div>
 
             {/* Totals math section, signatures, plus QR code */}
-            <div className={`flex flex-col md:flex-row justify-between items-start gap-8 border-t ${activeTheme?.borderTheme || 'border-slate-200'} pt-6`}>
+            <div className="flex flex-row justify-between items-start gap-8 border-t border-slate-200 pt-6 w-full" id="invoice-footer-row">
               {/* Left QR Code and Notes */}
               <div className="flex flex-wrap gap-6 items-center">
                 {((businessSettings?.showInvoiceQrCode ?? true) !== false && businessSettings?.upiId) && (
@@ -631,28 +633,31 @@ export default function InvoicesModule({
                       className="w-24 h-24" 
                       alt="BHIM UPI QRCode" 
                       id="upi-instant-qr"
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
                     />
                     <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>Scan BHIM UPI</span>
                   </div>
                 )}
                 {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
                   <div>
-                    <span className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Authorized Signoff</span>
-                    <div className="py-1">
+                    <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
+                    <div className="py-2">
                       <img 
                         src={businessSettings.signatureUrl} 
-                        style={{ height: `${businessSettings.moharSize || 40}px` }} 
-                        className="w-auto max-w-[200px] border-b border-dashed border-slate-200" 
+                        style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
+                        className="w-auto max-w-[240px]" 
                         alt="Stamp signature" 
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
                       />
                     </div>
-                    <span className="text-[10px] text-slate-500 block font-semibold">{businessSettings?.companyName} Director</span>
                   </div>
                 )}
               </div>
 
               {/* Right mathematical sums */}
-              <div className="w-full md:w-80 bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
+              <div className="w-80 bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Net Ledger Value:</span>
                   <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
@@ -670,11 +675,11 @@ export default function InvoicesModule({
                   </div>
                 )}
                 <div className="flex justify-between text-slate-900 border-t border-slate-200 pt-2.5 font-bold">
-                  <span>Cumulative Total:</span>
+                  <span>Total Amount:</span>
                   <span className="font-mono font-extrabold">{formatCurrency(selectedInvoice.total)}</span>
                 </div>
                 <div className="flex justify-between text-emerald-700 pt-1 font-semibold">
-                  <span>Amount Cleared:</span>
+                  <span>Amount Paid:</span>
                   <span className="font-mono font-bold text-emerald-600">{formatCurrency(selectedInvoice.paidAmount)}</span>
                 </div>
                 <div className="flex justify-between text-rose-700 border-t border-slate-200/60 pt-2.5 font-bold">
