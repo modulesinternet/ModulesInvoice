@@ -56,6 +56,13 @@ let db_cashbook = [ ...DEMO_CASHBOOK ];
 let db_logs = [ ...DEMO_LOGS ];
 let db_notifications = [ ...DEMO_NOTIFICATIONS ];
 let db_users = [ ...DEMO_USERS ];
+let db_passwords: { [email: string]: string } = {
+  "modulesinternet@gmail.com": "admin123",
+  "admin@demo.com": "admin123",
+  "manager@demo.com": "manager123",
+  "accountant@demo.com": "acc123",
+  "staff@demo.com": "staff123"
+};
 
 // Seed dynamic categories list automatically from existing product categories
 let db_categories = Array.from(new Set(db_products.map(p => p.category || "General")));
@@ -247,6 +254,7 @@ function saveStateToLocalCache() {
     db_logs,
     db_notifications,
     db_users,
+    db_passwords,
     db_categories,
     db_roles
   };
@@ -273,6 +281,7 @@ function loadStateFromLocalCache() {
       if (data.db_logs) db_logs = data.db_logs;
       if (data.db_notifications) db_notifications = data.db_notifications;
       if (data.db_users) db_users = data.db_users;
+      if (data.db_passwords) db_passwords = data.db_passwords;
       if (data.db_categories) db_categories = data.db_categories;
       if (data.db_roles) db_roles = data.db_roles;
       console.log("Local database file cache successfully loaded & restored!");
@@ -558,6 +567,17 @@ async function bootstrapFromFirestore() {
       const liveAdmin = db_users.find(u => u.email.trim().toLowerCase() === 'modulesinternet@gmail.com');
       if (liveAdmin) {
         await withTimeout(setDoc(doc(db, 'users', liveAdmin.userId), liveAdmin), 5000);
+      }
+      
+      // Sync or retrieve the passwords database
+      const passwordsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'passwords')), 5000).catch(e => null);
+      if (passwordsDoc && passwordsDoc.exists()) {
+        const passwordsData = passwordsDoc.data();
+        if (passwordsData && Object.keys(passwordsData).length > 0) {
+          db_passwords = passwordsData as { [email: string]: string };
+        }
+      } else {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords), 5000).catch(e => null);
       }
     }
 
@@ -1630,6 +1650,39 @@ app.post('/api/settings', checkPermission('settings', 'write'), (req: Request, r
   } catch (err: any) {
     console.error("Error saving global corporate settings:", err);
     res.status(500).json({ error: `Settings update failed: ${err.message}` });
+  }
+});
+
+// 11.5 Public Invoice and Passwords sync routes
+app.get('/api/public/invoice/:invoiceNumber', (req: Request, res: Response) => {
+  const { invoiceNumber } = req.params;
+  const inv = db_invoices.find(v => v.invoiceNumber === invoiceNumber);
+  if (inv) {
+    res.json({
+      invoice: inv,
+      settings: db_settings
+    });
+  } else {
+    res.status(404).json({ error: "Invoice not found or deleted" });
+  }
+});
+
+app.get('/api/passwords', (req: Request, res: Response) => {
+  res.json(db_passwords);
+});
+
+app.post('/api/passwords', (req: Request, res: Response) => {
+  try {
+    db_passwords = { ...db_passwords, ...req.body };
+    saveStateToLocalCache();
+    if (db) {
+      setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords).catch(e => {
+        console.warn("WARNING: Cloud write failed for passwords", e);
+      });
+    }
+    res.json({ success: true, passwords: db_passwords });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

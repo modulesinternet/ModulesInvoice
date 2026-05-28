@@ -1258,6 +1258,32 @@ export const api = {
     return request<BusinessSettings>('/api/settings', 'POST', settings);
   },
 
+  getPublicInvoice: (invoiceNumber: string) => {
+    return fetch(`/api/public/invoice/${encodeURIComponent(invoiceNumber)}`).then(res => {
+      if (!res.ok) throw new Error("Could not find invoice details");
+      return res.json() as Promise<{ invoice: Invoice; settings: BusinessSettings }>;
+    });
+  },
+
+  getPasswords: () => {
+    if (isLocalOnly) {
+      const saved = localStorage.getItem('user_passwords_store');
+      if (saved) {
+        try { return Promise.resolve(JSON.parse(saved)); } catch (_) {}
+      }
+      return Promise.resolve({});
+    }
+    return request<Record<string, string>>('/api/passwords');
+  },
+
+  savePasswords: (passwords: Record<string, string>) => {
+    if (isLocalOnly) {
+      localStorage.setItem('user_passwords_store', JSON.stringify(passwords));
+      return Promise.resolve(passwords);
+    }
+    return request<Record<string, string>>('/api/passwords', 'POST', passwords);
+  },
+
   // 11. Team User Management
   getUsers: () => {
     if (isLocalOnly) {
