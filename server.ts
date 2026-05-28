@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import nodemailer from 'nodemailer';
 
 // Initialize Firebase SDK
 import { initializeApp } from 'firebase/app';
@@ -598,7 +599,7 @@ async function bootstrapFromFirestore() {
 
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
-    console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap.");
+    console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap:", error);
     console.warn("The server will proceed running using the local in-memory database fallback.");
     console.warn("Disabling active Firestore communication to prevent runtime API issues.");
     db = null; // Important: Disable Firestore triggers completely
@@ -1698,6 +1699,152 @@ app.post('/api/passwords', (req: Request, res: Response) => {
     res.json({ success: true, passwords: db_passwords });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper to get nodemailer transporter (with auto Ethereal fallback for seamless testing)
+async function getTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || '587');
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (host && user && pass) {
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass }
+    });
+  }
+
+  // Create real temporary test account from Ethereal if custom SMTP options are not specified
+  try {
+    const testAccount = await nodemailer.createTestAccount();
+    console.log("Created transient testing Ethereal SMTP account:", testAccount.user);
+    return nodemailer.createTransport({
+      host: testAccount.smtp.host,
+      port: testAccount.smtp.port,
+      secure: testAccount.smtp.secure,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass
+      }
+    });
+  } catch (error) {
+    console.error("Failed to create transient SMTP fallback account:", error);
+    return null;
+  }
+}
+
+// 11.6 Secure OTP mail sending endpoint with high-fidelity layout
+app.post('/api/send-otp-email', async (req: Request, res: Response) => {
+  const { email, otpCode } = req.body;
+  if (!email || !otpCode) {
+    return res.status(400).json({ error: "Missing destination email or passcode" });
+  }
+
+  const transporter = await getTransporter();
+  if (!transporter) {
+    return res.status(500).json({ error: "Could not initialize secure mail transfer layer" });
+  }
+
+  const fromAddress = process.env.SMTP_FROM || '"Apex Digital Vault" <security@apexdigital.com>';
+  
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Security Verification Code</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="padding: 32px 32px 24px 32px; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: -0.025em;">
+                    APEX DIGITAL SOLUTIONS
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px;">
+              <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.025em;">
+                Reset Your Security Password
+              </h2>
+              <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                We received a request to recover your security password. Use the verification passcode below to complete your authentication. This passcode is single-use and valid for the next 15 minutes.
+              </p>
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; border-radius: 12px; margin-bottom: 24px;">
+                <tr>
+                  <td align="center" style="padding: 24px;">
+                    <span style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 8px;">Your Recovery OTP</span>
+                    <div style="font-size: 36px; font-weight: 800; color: #4f46e5; letter-spacing: 0.1em; font-family: monospace;">
+                      ${otpCode}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 24px 0; font-size: 13px; line-height: 1.5; color: #64748b; font-style: italic;">
+                If you did not initiate this password change, you can safely ignore this email. Please ensure your operational credentials are never shared.
+              </p>
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid #f1f5f9; padding-top: 24px;">
+                <tr>
+                  <td style="font-size: 11px; line-height: 1.5; color: #94a3b8; text-align: left;">
+                    <strong>Security Metadata:</strong><br>
+                    Request Timestamp: ${new Date().toUTCString()}<br>
+                    Environment Ingress: Active Secure Node
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <table width="100%" style="max-width: 500px; margin-top: 20px;" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td align="center" style="font-size: 11px; color: #94a3b8;">
+              © 2026 Apex Digital Solutions. All Rights Reserved.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: email,
+      subject: "Apex Digital Security Verification Passcode",
+      text: `Apex Digital Solutions Security Password Reset. Your OTP Code: ${otpCode}. Timestamp: ${new Date().toUTCString()}`,
+      html: htmlContent
+    });
+
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    console.log(`[MAILER] Email successfully sent to ${email}. MessageID: ${info.messageId}`);
+    if (previewUrl) {
+      console.log(`[MAILER] Test Preview Link (Ethereal): ${previewUrl}`);
+    }
+
+    res.json({ 
+      success: true, 
+      messageId: info.messageId, 
+      previewUrl: previewUrl || undefined,
+      description: previewUrl ? `Sent via test mail simulator. Preview email here: ${previewUrl}` : "Dispatched via corporate SMTP Gateway"
+    });
+  } catch (error: any) {
+    console.error("[MAILER] Send failure:", error);
+    res.status(500).json({ error: `SMTP Send Failure: ${error.message}` });
   }
 });
 

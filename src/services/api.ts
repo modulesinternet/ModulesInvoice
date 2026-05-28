@@ -1295,6 +1295,14 @@ export const api = {
     return request<Record<string, string>>('/api/passwords', 'POST', passwords);
   },
 
+  sendOtpEmail: (email: string, otpCode: string) => {
+    if (isLocalOnly) {
+      console.log(`[LOCAL] Simulating OTP ${otpCode} email dispatch to ${email}`);
+      return Promise.resolve({ success: true, previewUrl: `https://ethereal.email/simulated?otp=${otpCode}` });
+    }
+    return request<{ success: boolean; messageId?: string; previewUrl?: string; description?: string }>('/api/send-otp-email', 'POST', { email, otpCode });
+  },
+
   // 11. Team User Management
   getUsers: () => {
     if (isLocalOnly) {

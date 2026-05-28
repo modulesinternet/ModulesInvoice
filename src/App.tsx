@@ -230,6 +230,9 @@ export default function App() {
   const [typedOtp, setTypedOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [emailSendingStatus, setEmailSendingStatus] = useState<string | null>(null);
+  const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
 
   // Local persistent dictionary of user passwords for realistic check
   const [userPasswords, setUserPasswords] = useState<{ [email: string]: string }>(() => {
@@ -758,7 +761,7 @@ export default function App() {
     loadMasterData();
   };
 
-  const handleForgotPassword = (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail) {
       showToast("Specify corporate email address to receive recovery code.", "error");
@@ -773,7 +776,27 @@ export default function App() {
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(otpCode);
     setLoginMode('otp');
-    showToast(`Simulation trigger OTP '${otpCode}' dispatched to: ${forgotEmail}`, "success");
+    setEmailSendingStatus('dispatching');
+    setEmailPreviewUrl(null);
+
+    try {
+      showToast("Contacting secure SMTP delivery gateway...", "info");
+      const res = await api.sendOtpEmail(forgotEmail, otpCode);
+      if (res && res.success) {
+        setEmailSendingStatus('sent');
+        if (res.previewUrl) {
+          setEmailPreviewUrl(res.previewUrl);
+        }
+        showToast("Passcode successfully dispatched to your email address!", "success");
+      } else {
+        setEmailSendingStatus('failed');
+        showToast("SMTP server rejected delivery parameters. Fallback triggered.", "error");
+      }
+    } catch (err: any) {
+      console.warn("SMTP failure:", err);
+      setEmailSendingStatus('error');
+      showToast("Delivery gateway timeout. Using local simulation bypass.", "info");
+    }
   };
 
   const handleVerifyOtp = (e: React.FormEvent) => {
@@ -980,13 +1003,53 @@ export default function App() {
                   />
                 </div>
 
-                {/* Simulated Server Mail Terminal Dispatch Container */}
-                <div className="p-3 bg-indigo-950/95 border border-indigo-900 rounded-2xl font-mono text-left animate-pulse">
-                  <p className="text-[8.5px] text-[#A5B4FC]">=== OUTGOING SMTP MAIL STREAM ===</p>
-                  <p className="text-[10px] text-emerald-400 mt-1">To: <span className="underline">{forgotEmail}</span></p>
-                  <p className="text-[9.5px] text-slate-200 mt-1">Subject: Portal Recovery OTP Code</p>
-                  <p className="text-xs text-white font-bold mt-2">Security recovery code: <span className="bg-yellow-400 text-slate-900 py-0.5 px-2 rounded font-extrabold">{generatedOtp}</span></p>
-                  <p className="text-[8px] text-indigo-400 mt-2">===============================</p>
+                {/* Real & Simulated Server Mail Terminal Dispatch Container */}
+                <div className="p-4 bg-slate-950 border border-slate-850 rounded-2xl font-mono text-left space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400">SMTP DISPATCH CENTER</span>
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase ${
+                      emailSendingStatus === 'dispatching' ? 'bg-amber-400/90 text-slate-900 animate-pulse' :
+                      emailSendingStatus === 'sent' ? 'bg-emerald-500 text-white' :
+                      emailSendingStatus === 'failed' || emailSendingStatus === 'error' ? 'bg-rose-500 text-white' :
+                      'bg-slate-800 text-slate-400'
+                    }`}>
+                      {emailSendingStatus || 'Idle'}
+                    </span>
+                  </div>
+
+                  <div className="text-[10.5px] space-y-1 text-slate-300">
+                    <div><span className="text-slate-500">To:</span> <span className="text-emerald-400 font-semibold">{forgotEmail}</span></div>
+                    <div><span className="text-slate-500">Transporter:</span> <span className="text-indigo-400 font-bold">NodeMailer SSL Gateway</span></div>
+                    <div><span className="text-slate-500">OTP Code:</span> <span className="bg-indigo-900 text-indigo-100 py-0.5 px-2 rounded font-extrabold select-all">{generatedOtp}</span></div>
+                  </div>
+
+                  {emailPreviewUrl ? (
+                    <div className="pt-2 border-t border-slate-800">
+                      <a 
+                        href={emailPreviewUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-[11px] rounded-xl transition duration-150 cursor-pointer text-center"
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        Open Professional Email Preview
+                      </a>
+                      <p className="text-[9px] text-[#A5B4FC] mt-1.5 leading-relaxed font-sans text-center">
+                        Click above to view the actual beautifully styled HTML mail dispatched by Nodemailer!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="pt-2 border-t border-slate-800">
+                      <p className="text-[9.5px] text-slate-400 text-center font-sans">
+                        {emailSendingStatus === 'dispatching' ? 'Analyzing gateway availability...' :
+                         emailSendingStatus === 'sent' ? '✓ Dispatched with HTML design to your email box.' : 
+                         '⚠ System using secure client simulation bypass.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
