@@ -143,19 +143,20 @@ export default function QuotationsModule({
       return;
     }
 
-    const clientObj = clients.find(c => c.id === clientId)!;
+    const clientObj = clients.find(c => c.id === clientId);
+    const clientName = clientObj ? clientObj.name : "Unknown Client";
     const isZeroTax = businessSettings.gstOption === 'zero_tax';
     
     // Build full items payloads
     const finalItems: QuotationItem[] = addedItems.map(item => {
-      const prod = products.find(p => p.id === item.productId)!;
+      const prod = products.find(p => p.id === item.productId);
       const base = item.qty * item.price;
-      const rate = isZeroTax ? 0 : prod.gstPercent;
+      const rate = isZeroTax ? 0 : (prod ? prod.gstPercent : 18);
       const tax = base * (rate / 100);
       return {
         productId: item.productId,
-        name: prod.name,
-        hsnSac: prod.hsnSac || '',
+        name: prod ? prod.name : "Custom Item",
+        hsnSac: prod ? (prod.hsnSac || '') : '',
         qty: item.qty,
         price: item.price,
         gstPercent: rate,
@@ -166,7 +167,7 @@ export default function QuotationsModule({
 
     const payload: Partial<Quotation> = {
       clientId,
-      clientName: clientObj.name,
+      clientName: clientName,
       date,
       expiryDate,
       items: finalItems,
@@ -240,10 +241,10 @@ export default function QuotationsModule({
                     setExpiryDate(q.expiryDate);
                     setNotes(q.notes || '');
                     setDiscount(String(q.discount || 0));
-                    setAddedItems(q.items.map(item => ({
-                      productId: item.productId,
-                      qty: item.qty,
-                      price: item.price
+                    setAddedItems((q.items || []).map(item => ({
+                      productId: item.productId || '',
+                      qty: item.qty || 1,
+                      price: item.price || 0
                     })));
                     setIsCreateOpen(true);
                     setSelectedQuotation(null);
@@ -489,10 +490,10 @@ export default function QuotationsModule({
                                 setExpiryDate(q.expiryDate);
                                 setNotes(q.notes || '');
                                 setDiscount(String(q.discount || 0));
-                                setAddedItems(q.items.map(item => ({
-                                  productId: item.productId,
-                                  qty: item.qty,
-                                  price: item.price
+                                setAddedItems((q.items || []).map(item => ({
+                                  productId: item.productId || '',
+                                  qty: item.qty || 1,
+                                  price: item.price || 0
                                 })));
                                 setIsCreateOpen(true);
                               }}

@@ -653,16 +653,19 @@ export default function InvoicesModule({
                   const canGenUpi = businessSettings?.upiId;
                   if (!useCust && !canGenUpi) return null;
 
+                  const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                  const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
+
                   return (
-                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50`}>
+                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
                       <img 
-                        src={useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=upi://pay?pa=${businessSettings.upiId}%26pn=${encodeURIComponent(businessSettings.companyName || '')}%26am=${selectedInvoice.dueAmount || selectedInvoice.total}%26cu=INR`} 
+                        src={qrCodeImgSrc} 
                         className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
                         alt="Payment QR Code" 
                         id="upi-instant-qr"
                       />
                       <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                        {useCust ? "Scan to Pay" : "Scan BHIM UPI"}
+                        Scan to Fetch Details &amp; Pay
                       </span>
                     </div>
                   );

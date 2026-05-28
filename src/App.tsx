@@ -52,6 +52,7 @@ import LedgerModule from './components/LedgerModule';
 import CashbookModule from './components/CashbookModule';
 import UsersModule from './components/UsersModule';
 import SettingsModule from './components/SettingsModule';
+import PublicInvoiceView from './components/PublicInvoiceView';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings';
 
@@ -327,7 +328,8 @@ export default function App() {
         notificationsData,
         settingsData,
         rolesData,
-        categoriesData
+        categoriesData,
+        passwordsData
       ] = await Promise.all([
         safeFetch(api.getDashboard(), null, "Dashboard Analytics"),
         safeFetch(api.getClients(), [], "Clients Directory"),
@@ -342,7 +344,8 @@ export default function App() {
         safeFetch(api.getNotifications(), [], "Notifications Panel"),
         safeFetch(api.getSettings(), null, "Firm Profile Settings"),
         safeFetch(api.getRoles(), [], "Role Matrix Clearances"),
-        safeFetch(api.getCategories(), [], "Product Categories")
+        safeFetch(api.getCategories(), [], "Product Categories"),
+        safeFetch(api.getPasswords(), {}, "Passwords Matrix")
       ]);
 
       const clientsFinal = clientsData || [];
@@ -357,6 +360,7 @@ export default function App() {
       const notificationsFinal = notificationsData || [];
       const rolesFinal = rolesData || [];
       const categoriesFinal = categoriesData || [];
+      const passwordsFinal = passwordsData || {};
 
       setClients(clientsFinal);
       setProducts(productsFinal);
@@ -368,6 +372,11 @@ export default function App() {
       setUsers(usersFinal);
       setLogs(logsFinal);
       setNotifications(notificationsFinal);
+      
+      if (Object.keys(passwordsFinal).length > 0) {
+        setUserPasswords(passwordsFinal);
+        localStorage.setItem('user_passwords_store', JSON.stringify(passwordsFinal));
+      }
       
       if (settingsData) {
         setBusinessSettings(settingsData);
@@ -777,7 +786,7 @@ export default function App() {
     }
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 5) {
       showToast("For safety, passwords must contain at least 5 characters.", "error");
@@ -788,15 +797,29 @@ export default function App() {
       return;
     }
 
-    const updated = { ...userPasswords, [forgotEmail.toLowerCase()]: newPassword };
-    setUserPasswords(updated);
-    localStorage.setItem('user_passwords_store', JSON.stringify(updated));
+    try {
+      const updated = { ...userPasswords, [forgotEmail.toLowerCase()]: newPassword };
+      await api.savePasswords(updated);
+      setUserPasswords(updated);
+      localStorage.setItem('user_passwords_store', JSON.stringify(updated));
 
-    showToast("Password updated successfully! Sign-in with new parameters.", "success");
-    setLoginEmail(forgotEmail);
-    setLoginPassword(newPassword);
-    setLoginMode('signin');
+      showToast("Password updated successfully! Sign-in with new parameters.", "success");
+      setLoginEmail(forgotEmail);
+      setLoginPassword(newPassword);
+      setLoginMode('signin');
+    } catch (err: any) {
+      showToast(`Could not sync updated credentials inside the cloud: ${err.message}`, "error");
+    }
   };
+
+  // Intercept the public invoice QR scan page route
+  const isPublicInvoiceRoute = window.location.pathname.startsWith('/public/invoice/');
+  if (isPublicInvoiceRoute) {
+    const pubInvNum = decodeURIComponent(window.location.pathname.split('/public/invoice/')[1] || '').trim();
+    if (pubInvNum) {
+      return <PublicInvoiceView invoiceNumber={pubInvNum} />;
+    }
+  }
 
   if (!currentUser) {
     return (

@@ -94,7 +94,7 @@ const DEFAULT_ROLES: RolePermissions[] = [
 const DEFAULT_CATEGORIES = ['Software Services', 'Cloud Infrastructure', 'Licensing', 'Creative Services', 'Security Services', 'Hardware Assets', 'Support Retainers'];
 
 // Transparent Switch: Always fall back to offline local storage if running on standard GitHub Pages static hosting
-const isLocalOnly = window.location.hostname.endsWith('github.io') || (window.location.hostname.includes('localhost') === false && window.location.hostname.includes('.run.app') === false);
+const isLocalOnly = window.location.hostname.endsWith('github.io');
 
 function initLocalStorageDb() {
   if (!localStorage.getItem('db_settings')) {
