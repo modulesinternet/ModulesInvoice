@@ -1257,22 +1257,76 @@ export default function App() {
           </div>
         </div>
 
-        {/* Professional badge avatar on right edge of mobile top header */}
-        {businessSettings && (
-          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500 overflow-hidden">
-            {businessSettings.logoUrl ? (
-              <img src={businessSettings.logoUrl} className="w-full h-full object-contain" alt="Profile" />
-            ) : (
-              companyInitials
+        {/* Right action block: Notification block & Profile avatar */}
+        <div className="flex items-center gap-2">
+          {/* Notification Alert System for Mobile */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none"
+              title="View System Notifications"
+            >
+              <Bell className="w-4 h-4 text-slate-600" />
+              {notifications.filter(n => !n.isRead).length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full animate-pulse"></span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left animate-fade-in divide-y divide-slate-100 font-sans">
+                <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-slate-100">
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
+                  {notifications.some(n => !n.isRead) && (
+                    <button 
+                      onClick={() => {
+                        const updated = notifications.map(n => ({ ...n, isRead: true }));
+                        setNotifications(updated);
+                        showToast("Assigned read clearance to logs", "success");
+                      }}
+                      className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
+                    >
+                      Clear Unread
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs font-sans">
+                      No active network notices.
+                    </div>
+                  ) : (
+                    notifications.slice(0, notificationsPageSize).map((item) => (
+                      <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
+                          <span className="text-[8px] font-mono text-slate-400 shrink-0">{new Date(item.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 leading-relaxed block">{item.message}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        )}
+
+          {/* Professional badge avatar on right edge of mobile top header */}
+          {businessSettings && (
+            <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500 overflow-hidden shrink-0">
+              {businessSettings.logoUrl ? (
+                <img src={businessSettings.logoUrl} className="w-full h-full object-contain" alt="Profile" />
+              ) : (
+                companyInitials
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* MASTER SCROLLABLE COMPONENT PANEL CONTAINER */}
       <main className="flex-1 flex flex-col overflow-y-auto h-full">
         {/* Top Operational Status Bar */}
-        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in">
+        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in">
           <div className="flex items-center gap-3">
             {/* High-visibility toggle for desktop */}
             <button 

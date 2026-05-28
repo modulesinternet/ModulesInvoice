@@ -175,7 +175,7 @@ export default function QuotationsModule({
       discount: draftDiscountNum,
       taxAmount: draftTax,
       total: draftTotal,
-      status: isEditing ? undefined : 'sent',
+      status: isEditing ? (quotations.find(q => q.id === editingQuotationId)?.status || 'sent') : 'sent',
       notes
     };
 

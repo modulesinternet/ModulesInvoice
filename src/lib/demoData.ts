@@ -39,7 +39,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   showInvoiceQrCode: true,
   showInvoiceSignature: true,
   showInvoiceNotes: true,
-  qrBesideMohar: false
+  qrBesideMohar: false,
+  defaultInvoiceNotes: "Humble warning: Please quote our invoice serial number in all bank payouts."
 };
 
 export const DEMO_USERS: UserProfile[] = [

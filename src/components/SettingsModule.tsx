@@ -60,6 +60,7 @@ export default function SettingsModule({
   const [quotationPrefix, setQuotationPrefix] = useState(settings?.quotationPrefix || 'EST-');
   const [invoiceTheme, setInvoiceTheme] = useState<'navy' | 'minimal' | 'emerald'>(settings?.invoiceTheme || 'navy');
   const [moharSize, setMoharSize] = useState<number>(settings?.moharSize || 40);
+  const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(settings?.defaultInvoiceNotes || '');
 
   // Field/Section Level Visibility States
   const [showInvoiceGst, setShowInvoiceGst] = useState<boolean>(settings?.showInvoiceGst ?? true);
@@ -121,6 +122,7 @@ export default function SettingsModule({
       setShowInvoiceSignature(settings.showInvoiceSignature ?? true);
       setShowInvoiceNotes(settings.showInvoiceNotes ?? true);
       setQrBesideMohar(settings.qrBesideMohar ?? false);
+      setDefaultInvoiceNotes(settings.defaultInvoiceNotes || '');
     }
   }, [settings]);
 
@@ -262,7 +264,8 @@ export default function SettingsModule({
         showInvoiceQrCode,
         showInvoiceSignature,
         showInvoiceNotes,
-        qrBesideMohar
+        qrBesideMohar,
+        defaultInvoiceNotes
       };
 
       await onSaveSettings(payload);
@@ -518,6 +521,20 @@ export default function SettingsModule({
                 onChange={(e) => setAddress(e.target.value)}
                 className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Default Invoice Notes / Terms</label>
+              <textarea 
+                rows={2}
+                value={defaultInvoiceNotes}
+                onChange={(e) => setDefaultInvoiceNotes(e.target.value)}
+                placeholder="e.g. Terms: 100% within 15 days of issue"
+                className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+              />
+              <p className="text-[10px] text-slate-400 font-sans">
+                These default notes will pre-populate the notes field of any new invoices you create.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

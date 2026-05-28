@@ -186,6 +186,7 @@ export interface BusinessSettings {
   showInvoiceSignature?: boolean;
   showInvoiceNotes?: boolean;
   qrBesideMohar?: boolean;
+  defaultInvoiceNotes?: string;
 }
 
 export interface ActivityLog {

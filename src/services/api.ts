@@ -93,8 +93,8 @@ const DEFAULT_ROLES: RolePermissions[] = [
 
 const DEFAULT_CATEGORIES = ['Software Services', 'Cloud Infrastructure', 'Licensing', 'Creative Services', 'Security Services', 'Hardware Assets', 'Support Retainers'];
 
-// Transparent Switch: Always fall back to offline local storage if running on standard GitHub Pages static hosting
-const isLocalOnly = window.location.hostname.endsWith('github.io');
+// Connected database design: Force isLocalOnly to false to ensure all nodes connect to Central Firestore Database via REST proxy
+const isLocalOnly = false;
 
 function initLocalStorageDb() {
   if (!localStorage.getItem('db_settings')) {
@@ -207,6 +207,17 @@ function getHeaders(): HeadersInit {
   };
 }
 
+function getApiUrl(url: string) {
+  const isCloudRun = window.location.hostname.includes('run.app');
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  // If the app is loaded from GitHub Pages (or any custom domain / third-party server remotely),
+  // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
+  const base = (!isCloudRun && !isLocalhost)
+    ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+    : '';
+  return `${base}${url}`;
+}
+
 // REST fetch request helper
 async function request<T>(url: string, method: string = 'GET', body?: any): Promise<T> {
   const headers = getHeaders();
@@ -217,7 +228,7 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
   if (body) {
     config.body = JSON.stringify(body);
   }
-  const response = await fetch(url, config);
+  const response = await fetch(getApiUrl(url), config);
   if (!response.ok) {
     let errMsg = `Request failed: ${response.statusText}`;
     try {

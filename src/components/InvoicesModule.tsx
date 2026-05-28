@@ -124,6 +124,11 @@ export default function InvoicesModule({
       const computedPrefix = businessSettings?.invoicePrefix || 'INV-';
       const autoNum = `${computedPrefix}${String(invoices.length + 1).padStart(3, '0')}`;
       setInvoiceNumber(autoNum);
+      if (businessSettings?.defaultInvoiceNotes) {
+        setNotes(businessSettings.defaultInvoiceNotes);
+      } else {
+        setNotes('Humble warning: Please quote our invoice serial number in all bank payouts.');
+      }
     }
   }, [isCreateOpen, isEditing, businessSettings, invoices]);
 
@@ -511,6 +516,7 @@ export default function InvoicesModule({
                       src={businessSettings.logoUrl} 
                       className="w-20 h-20 rounded-xl object-contain shadow-sm" 
                       alt="Logo" 
+                      crossOrigin="anonymous"
                     />
                   ) : (
                     <div className="w-20 h-20 rounded-xl flex items-center justify-center text-white font-black text-3xl font-display shadow-sm bg-indigo-600">
@@ -677,6 +683,7 @@ export default function InvoicesModule({
                       className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
                       alt="Payment QR Code" 
                       id="upi-instant-qr"
+                      crossOrigin="anonymous"
                     />
                     <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
                       Scan to Fetch Details &amp; Pay
@@ -693,6 +700,7 @@ export default function InvoicesModule({
                           style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
                           className="w-auto max-w-[240px]" 
                           alt="Stamp signature" 
+                          crossOrigin="anonymous"
                         />
                       </div>
                     </div>
@@ -703,6 +711,7 @@ export default function InvoicesModule({
                           className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
                           alt="Payment QR Code" 
                           id="upi-instant-qr-beside-mohar"
+                          crossOrigin="anonymous"
                         />
                         <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
                           Scan to Fetch Details &amp; Pay
@@ -719,6 +728,7 @@ export default function InvoicesModule({
                       className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
                       alt="Payment QR Code" 
                       id="upi-instant-qr-beside-mohar-fallback"
+                      crossOrigin="anonymous"
                     />
                     <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
                       Scan to Fetch Details &amp; Pay
