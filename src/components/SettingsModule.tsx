@@ -78,6 +78,7 @@ export default function SettingsModule({
   const [showInvoiceQrCode, setShowInvoiceQrCode] = useState<boolean>(settings?.showInvoiceQrCode ?? true);
   const [showInvoiceSignature, setShowInvoiceSignature] = useState<boolean>(settings?.showInvoiceSignature ?? true);
   const [showInvoiceNotes, setShowInvoiceNotes] = useState<boolean>(settings?.showInvoiceNotes ?? true);
+  const [qrBesideMohar, setQrBesideMohar] = useState<boolean>(settings?.qrBesideMohar ?? false);
 
   // Synchronize internal state when settings prop updates (important when loaded after mounting)
   React.useEffect(() => {
@@ -119,6 +120,7 @@ export default function SettingsModule({
       setShowInvoiceQrCode(settings.showInvoiceQrCode ?? true);
       setShowInvoiceSignature(settings.showInvoiceSignature ?? true);
       setShowInvoiceNotes(settings.showInvoiceNotes ?? true);
+      setQrBesideMohar(settings.qrBesideMohar ?? false);
     }
   }, [settings]);
 
@@ -259,7 +261,8 @@ export default function SettingsModule({
         showInvoiceUpiId,
         showInvoiceQrCode,
         showInvoiceSignature,
-        showInvoiceNotes
+        showInvoiceNotes,
+        qrBesideMohar
       };
 
       await onSaveSettings(payload);
@@ -1149,6 +1152,15 @@ export default function SettingsModule({
                         className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
                       />
                       <span>Show Stamp signature</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
+                      <input 
+                        type="checkbox"
+                        checked={qrBesideMohar}
+                        onChange={(e) => setQrBesideMohar(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-100 dark:text-indigo-600 focus:ring-indigo-500 focus:ring-0"
+                      />
+                      <span>QR Beside Mohar (Right)</span>
                     </label>
                     <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent col-span-2">
                       <input 

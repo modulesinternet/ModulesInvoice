@@ -38,7 +38,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   showInvoiceUpiId: true,
   showInvoiceQrCode: true,
   showInvoiceSignature: true,
-  showInvoiceNotes: true
+  showInvoiceNotes: true,
+  qrBesideMohar: false
 };
 
 export const DEMO_USERS: UserProfile[] = [

@@ -648,10 +648,8 @@ export default function InvoicesModule({
             <div className="flex flex-row justify-between items-start gap-8 border-t border-slate-200 pt-6 w-full" id="invoice-footer-row">
               {/* Left QR Code and Notes */}
               <div className="flex flex-wrap gap-6 items-center">
-                {((businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
+                {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
                   const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
-                  const canGenUpi = businessSettings?.upiId;
-                  if (!useCust && !canGenUpi) return null;
 
                   const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
                   const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
@@ -671,18 +669,61 @@ export default function InvoicesModule({
                   );
                 })()}
                 {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
-                  <div>
-                    <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
-                    <div className="py-2">
-                       <img 
-                        src={businessSettings.signatureUrl} 
-                        style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
-                        className="w-auto max-w-[240px]" 
-                        alt="Stamp signature" 
-                      />
+                  <div className="flex flex-row items-center gap-6">
+                    <div>
+                      <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
+                      <div className="py-2">
+                         <img 
+                          src={businessSettings.signatureUrl} 
+                          style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
+                          className="w-auto max-w-[240px]" 
+                          alt="Stamp signature" 
+                        />
+                      </div>
                     </div>
+                    {(businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
+                      const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
+
+                      const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
+
+                      return (
+                        <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-50 transition`}>
+                          <img 
+                            src={qrCodeImgSrc} 
+                            className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                            alt="Payment QR Code" 
+                            id="upi-instant-qr-beside-mohar"
+                          />
+                          <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                            Scan to Fetch Details &amp; Pay
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
+                {/* Fallback to show QR Code beside mohar place even if signature is disabled or blank */}
+                {((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl) && (businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
+                  const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
+
+                  const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                  const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
+
+                  return (
+                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
+                      <img 
+                        src={qrCodeImgSrc} 
+                        className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                        alt="Payment QR Code" 
+                        id="upi-instant-qr-beside-mohar-fallback"
+                      />
+                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                        Scan to Fetch Details &amp; Pay
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Right mathematical sums */}

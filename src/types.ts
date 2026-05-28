@@ -185,6 +185,7 @@ export interface BusinessSettings {
   useCustomQrCode?: boolean;
   showInvoiceSignature?: boolean;
   showInvoiceNotes?: boolean;
+  qrBesideMohar?: boolean;
 }
 
 export interface ActivityLog {
