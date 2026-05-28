@@ -28,6 +28,7 @@ import { Invoice, Client, Product, InvoiceItem } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import Pagination from './Pagination';
+import QRCode from 'qrcode';
 
 interface InvoicesModuleProps {
   invoices: Invoice[];
@@ -80,6 +81,27 @@ export default function InvoicesModule({
       setInvoiceTemplate(businessSettings.invoiceTheme);
     }
   }, [businessSettings]);
+
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+
+  React.useEffect(() => {
+    if (!selectedInvoice) {
+      setQrCodeDataUrl('');
+      return;
+    }
+    const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
+    if (useCust) {
+      setQrCodeDataUrl(businessSettings.customQrUrl);
+      return;
+    }
+
+    const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+    QRCode.toDataURL(publicScanUrl, { margin: 1, width: 250 }, (err, url) => {
+      if (!err && url) {
+        setQrCodeDataUrl(url);
+      }
+    });
+  }, [selectedInvoice, businessSettings]);
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
@@ -648,26 +670,19 @@ export default function InvoicesModule({
             <div className="flex flex-row justify-between items-start gap-8 border-t border-slate-200 pt-6 w-full" id="invoice-footer-row">
               {/* Left QR Code and Notes */}
               <div className="flex flex-wrap gap-6 items-center">
-                {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
-                  const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
-
-                  const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                  const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
-
-                  return (
-                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
-                      <img 
-                        src={qrCodeImgSrc} 
-                        className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
-                        alt="Payment QR Code" 
-                        id="upi-instant-qr"
-                      />
-                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                        Scan to Fetch Details &amp; Pay
-                      </span>
-                    </div>
-                  );
-                })()}
+                {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
+                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
+                    <img 
+                      src={qrCodeDataUrl} 
+                      className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                      alt="Payment QR Code" 
+                      id="upi-instant-qr"
+                    />
+                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                      Scan to Fetch Details &amp; Pay
+                    </span>
+                  </div>
+                )}
                 {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
                   <div className="flex flex-row items-center gap-6">
                     <div>
@@ -681,49 +696,35 @@ export default function InvoicesModule({
                         />
                       </div>
                     </div>
-                    {(businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
-                      const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
-
-                      const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                      const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
-
-                      return (
-                        <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-50 transition`}>
-                          <img 
-                            src={qrCodeImgSrc} 
-                            className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
-                            alt="Payment QR Code" 
-                            id="upi-instant-qr-beside-mohar"
-                          />
-                          <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                            Scan to Fetch Details &amp; Pay
-                          </span>
-                        </div>
-                      );
-                    })()}
+                    {(businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
+                      <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-50 transition`}>
+                        <img 
+                          src={qrCodeDataUrl} 
+                          className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                          alt="Payment QR Code" 
+                          id="upi-instant-qr-beside-mohar"
+                        />
+                        <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                          Scan to Fetch Details &amp; Pay
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 {/* Fallback to show QR Code beside mohar place even if signature is disabled or blank */}
-                {((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl) && (businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false) && (() => {
-                  const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
-
-                  const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                  const qrCodeImgSrc = useCust ? businessSettings.customQrUrl : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicScanUrl)}`;
-
-                  return (
-                    <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
-                      <img 
-                        src={qrCodeImgSrc} 
-                        className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
-                        alt="Payment QR Code" 
-                        id="upi-instant-qr-beside-mohar-fallback"
-                      />
-                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                        Scan to Fetch Details &amp; Pay
-                      </span>
-                    </div>
-                  );
-                })()}
+                {((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl) && (businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
+                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
+                    <img 
+                      src={qrCodeDataUrl} 
+                      className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                      alt="Payment QR Code" 
+                      id="upi-instant-qr-beside-mohar-fallback"
+                    />
+                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
+                      Scan to Fetch Details &amp; Pay
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Right mathematical sums */}
