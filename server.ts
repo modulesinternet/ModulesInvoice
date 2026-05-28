@@ -49,7 +49,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-active-role, x-user-email");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-active-role, x-user-email");
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
