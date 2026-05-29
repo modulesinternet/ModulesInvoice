@@ -462,9 +462,7 @@ async function bootstrapFromFirestore() {
         db_categories = listData;
       }
     } else {
-      if (isFirstSeed) {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
-      }
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
     }
 
     // 3. Roles
@@ -1700,6 +1698,93 @@ app.post('/api/passwords', (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// 11.55 Unified Batch Synchronization Gateway for maximum network reliability and zero queue-blocking
+app.get('/api/batch-sync', (req: Request, res: Response) => {
+  const roleHeader = (req.headers['x-user-role'] as string || '').trim();
+  const role: UserRole = (roleHeader || 'Admin') as UserRole;
+  const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
+
+  const isAdminOrOwner = role.toLowerCase() === 'admin' || userEmail === 'modulesinternet@gmail.com';
+  const roleConfig = db_roles.find(r => r.role.trim().toLowerCase() === role.toLowerCase());
+
+  const hasReadPermission = (module: 'dashboard' | 'clients' | 'products' | 'invoices' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings') => {
+    if (isAdminOrOwner) return true;
+    if (!roleConfig) return false;
+    return !!roleConfig.modules[module]?.read;
+  };
+
+  // Compute live dashboard metrics on the fly if permitted
+  let dashboardData = null;
+  if (hasReadPermission('dashboard')) {
+    const totalRevenue = db_payments.reduce((sum, p) => sum + p.amount, 0);
+    const totalInvoicesValue = db_invoices.reduce((sum, inv) => sum + inv.total, 0);
+    const unpaidInvoicesValue = db_invoices.reduce((sum, inv) => sum + inv.dueAmount, 0);
+    const totalOutstanding = db_clients.reduce((sum, c) => sum + c.outstandingBalance, 0);
+    const totalClientsCount = db_clients.length;
+    const totalInvoicesCount = db_invoices.length;
+    const pendingInvoicesCount = db_invoices.filter(i => i.status !== 'paid').length;
+
+    const monthlyDataMap = new Map<string, { month: string; billed: number; collected: number }>();
+    const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+    months.forEach(m => {
+      monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
+    });
+
+    db_invoices.forEach(inv => {
+      const monthIndex = new Date(inv.date).getMonth();
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const m = monthNames[monthIndex];
+      const fallbackMonth = m ? m.substring(0, 3) : "Jan";
+      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "May");
+      const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
+      current.billed += inv.total;
+      monthlyDataMap.set(key, current);
+    });
+
+    db_payments.forEach(pay => {
+      const monthIndex = new Date(pay.paymentDate).getMonth();
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const m = monthNames[monthIndex];
+      const fallbackMonth = m ? m.substring(0, 3) : "Jan";
+      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "May");
+      const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
+      current.collected += pay.amount;
+      monthlyDataMap.set(key, current);
+    });
+
+    dashboardData = {
+      totalRevenue,
+      totalInvoicesValue,
+      unpaidInvoicesValue,
+      totalOutstanding,
+      totalClientsCount,
+      totalInvoicesCount,
+      pendingInvoicesCount,
+      chartData: Array.from(monthlyDataMap.values())
+    };
+  }
+
+  const payload = {
+    dashboard: dashboardData,
+    clients: hasReadPermission('clients') ? db_clients : [],
+    products: hasReadPermission('products') ? db_products : [],
+    invoices: hasReadPermission('invoices') ? db_invoices : [],
+    quotations: hasReadPermission('quotations') ? db_quotations : [],
+    payments: hasReadPermission('payments') ? db_payments : [],
+    ledger: hasReadPermission('ledger') ? db_ledger : [],
+    cashbook: hasReadPermission('cashbook') ? db_cashbook : [],
+    users: hasReadPermission('users') ? db_users : [],
+    logs: hasReadPermission('users') ? db_logs : [],
+    notifications: db_notifications,
+    settings: db_settings,
+    roles: db_roles,
+    categories: db_categories,
+    passwords: db_passwords
+  };
+
+  res.json(payload);
 });
 
 // Helper to get nodemailer transporter (with auto Ethereal fallback for seamless testing)

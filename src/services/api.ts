@@ -241,6 +241,46 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
 }
 
 export const api = {
+  // Unified high-speed batch synchronization gate
+  getBatchSync: () => {
+    if (isLocalOnly) {
+      return Promise.resolve({
+        dashboard: null,
+        clients: getLocalItem<any[]>('db_clients', []),
+        products: getLocalItem<any[]>('db_products', []),
+        invoices: getLocalItem<any[]>('db_invoices', []),
+        quotations: getLocalItem<any[]>('db_quotations', []),
+        payments: getLocalItem<any[]>('db_payments', []),
+        ledger: getLocalItem<any[]>('db_ledger', []),
+        cashbook: getLocalItem<any[]>('db_cashbook', []),
+        users: getLocalItem<any[]>('db_users', []),
+        logs: getLocalItem<any[]>('db_logs', []),
+        notifications: getLocalItem<any[]>('db_notifications', []),
+        settings: getLocalItem<any>('db_settings', null),
+        roles: getLocalItem<any[]>('db_roles', []),
+        categories: getLocalItem<string[]>('db_categories', []),
+        passwords: getLocalItem<any>('user_passwords_store', {})
+      });
+    }
+    return request<{
+      dashboard: any;
+      clients: any[];
+      products: any[];
+      invoices: any[];
+      quotations: any[];
+      payments: any[];
+      ledger: any[];
+      cashbook: any[];
+      users: any[];
+      logs: any[];
+      notifications: any[];
+      settings: any;
+      roles: any[];
+      categories: string[];
+      passwords: Record<string, string>;
+    }>('/api/batch-sync');
+  },
+
   // 1. Dashboard Metrics
   getDashboard: () => {
     if (isLocalOnly) {

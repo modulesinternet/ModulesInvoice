@@ -304,66 +304,73 @@ export default function App() {
     try {
       setLoading(true);
 
-      const safeFetch = async <T,>(promise: Promise<T>, fallback: T, label: string): Promise<T> => {
-        try {
-          return await promise;
-        } catch (err: any) {
-          console.warn(`Intermediate load failure for module "${label}": `, err);
-          // Only show error toast to user if they are logged in to avoid pre-login spamming
-          if (localStorage.getItem('current_user')) {
-            showToast(`Database alert: Failed to synchronize latest "${label}" records.`, "error");
+      // Fetch all collections in a single unified high-performance batch call
+      // to avoid HTTP/1.1 browser concurrent connection queue limitations (max 6)
+      let batch;
+      try {
+        batch = await api.getBatchSync();
+      } catch (err: any) {
+        console.warn("Unified batch synchronization failed, dropping back to progressive individual loaders: ", err);
+        const safeFetch = async <T,>(promise: Promise<T>, fallback: T): Promise<T> => {
+          try {
+            return await promise;
+          } catch (e) {
+            return fallback;
           }
-          return fallback;
-        }
-      };
+        };
+        const [
+          dash, clients, products, invoices, quotations, payments, ledger, cashbook, users, logs, notifications, settings, roles, categories, passwords
+        ] = await Promise.all([
+          safeFetch(api.getDashboard(), null),
+          safeFetch(api.getClients(), []),
+          safeFetch(api.getProducts(), []),
+          safeFetch(api.getInvoices(), []),
+          safeFetch(api.getQuotations(), []),
+          safeFetch(api.getPayments(), []),
+          safeFetch(api.getLedgers(), []),
+          safeFetch(api.getCashbook(), []),
+          safeFetch(api.getUsers(), []),
+          safeFetch(api.getLogs(), []),
+          safeFetch(api.getNotifications(), []),
+          safeFetch(api.getSettings(), null),
+          safeFetch(api.getRoles(), []),
+          safeFetch(api.getCategories(), []),
+          safeFetch(api.getPasswords(), {})
+        ]);
+        batch = {
+          dashboard: dash,
+          clients,
+          products,
+          invoices,
+          quotations,
+          payments,
+          ledger,
+          cashbook,
+          users,
+          logs,
+          notifications,
+          settings,
+          roles,
+          categories,
+          passwords
+        };
+      }
 
-      const [
-        dashData,
-        clientsData,
-        productsData,
-        invoicesData,
-        quotationsData,
-        paymentsData,
-        ledgerData,
-        cashbookData,
-        usersData,
-        logsData,
-        notificationsData,
-        settingsData,
-        rolesData,
-        categoriesData,
-        passwordsData
-      ] = await Promise.all([
-        safeFetch(api.getDashboard(), null, "Dashboard Analytics"),
-        safeFetch(api.getClients(), [], "Clients Directory"),
-        safeFetch(api.getProducts(), [], "Products Catalog"),
-        safeFetch(api.getInvoices(), [], "Official Invoices"),
-        safeFetch(api.getQuotations(), [], "Client Quotations"),
-        safeFetch(api.getPayments(), [], "Payments Collections"),
-        safeFetch(api.getLedgers(), [], "General Ledger"),
-        safeFetch(api.getCashbook(), [], "Operating Cashbook"),
-        safeFetch(api.getUsers(), [], "Users List"),
-        safeFetch(api.getLogs(), [], "Activity Audit Logs"),
-        safeFetch(api.getNotifications(), [], "Notifications Panel"),
-        safeFetch(api.getSettings(), null, "Firm Profile Settings"),
-        safeFetch(api.getRoles(), [], "Role Matrix Clearances"),
-        safeFetch(api.getCategories(), [], "Product Categories"),
-        safeFetch(api.getPasswords(), {}, "Passwords Matrix")
-      ]);
-
-      const clientsFinal = clientsData || [];
-      const productsFinal = productsData || [];
-      const invoicesFinal = invoicesData || [];
-      const quotationsFinal = quotationsData || [];
-      const paymentsFinal = paymentsData || [];
-      const ledgerFinal = ledgerData || [];
-      const cashbookFinal = cashbookData || [];
-      const usersFinal = usersData || [];
-      const logsFinal = logsData || [];
-      const notificationsFinal = notificationsData || [];
-      const rolesFinal = rolesData || [];
-      const categoriesFinal = categoriesData || [];
-      const passwordsFinal = passwordsData || {};
+      const dashData = batch.dashboard;
+      const clientsFinal = batch.clients || [];
+      const productsFinal = batch.products || [];
+      const invoicesFinal = batch.invoices || [];
+      const quotationsFinal = batch.quotations || [];
+      const paymentsFinal = batch.payments || [];
+      const ledgerFinal = batch.ledger || [];
+      const cashbookFinal = batch.cashbook || [];
+      const usersFinal = batch.users || [];
+      const logsFinal = batch.logs || [];
+      const notificationsFinal = batch.notifications || [];
+      const settingsData = batch.settings;
+      const rolesFinal = batch.roles || [];
+      const categoriesFinal = batch.categories || [];
+      const passwordsFinal = batch.passwords || {};
 
       setClients(clientsFinal);
       setProducts(productsFinal);
@@ -390,17 +397,13 @@ export default function App() {
       setAppRoles(rolesFinal);
       setCategories(categoriesFinal);
 
-      if (dashData) {
-        setDashboardMetrics(dashData);
-      } else {
-        const locallyComputed = computeLocalDashboardMetrics(
-          clientsFinal,
-          invoicesFinal,
-          paymentsFinal,
-          cashbookFinal
-        );
-        setDashboardMetrics(locallyComputed);
-      }
+      const locallyComputed = computeLocalDashboardMetrics(
+        clientsFinal,
+        invoicesFinal,
+        paymentsFinal,
+        cashbookFinal
+      );
+      setDashboardMetrics(locallyComputed);
     } catch (e: any) {
       console.error("Fetch pipeline error: ", e);
       // If permission is denied because they shifted tab, keep loading other states graceful
