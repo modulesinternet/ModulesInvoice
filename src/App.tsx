@@ -738,21 +738,61 @@ export default function App() {
   ];
 
   // Custom handlers for authentication pipeline
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginEmail || !loginPassword) {
       showToast("Please enter email address and security password.", "error");
       return;
     }
-    const userMatched = loginUsersList.find(u => u.email.toLowerCase() === loginEmail.toLowerCase());
+    
+    const emailLower = loginEmail.toLowerCase().trim();
+    let userMatched = loginUsersList.find(u => u.email.toLowerCase() === emailLower);
+    
     if (!userMatched) {
-      showToast("No active profile registered with this email ID.", "error");
-      return;
-    }
-    const correctPassword = userPasswords[userMatched.email.toLowerCase()] || "admin123";
-    if (loginPassword !== correctPassword) {
-      showToast("Incorrect password. Please verify credentials or recover via OTP.", "error");
-      return;
+      // Dynamic on-the-fly onboarding of any user with any domain
+      const nameFromEmail = emailLower.split('@')[0] || 'User';
+      const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+      
+      const newUser: UserProfile = {
+        userId: `u-${Date.now()}`,
+        email: emailLower,
+        name: cleanName,
+        role: "Admin" as UserRole, // Elevate automatically to Admin role for full settings & invoices access
+        status: "active" as const,
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+
+      try {
+        showToast("Provisioning access account...", "info");
+        // Create user in the database
+        await api.createUser(newUser);
+        
+        // Save user's password so they can log in next time
+        const updatedPasswords = { ...userPasswords, [emailLower]: loginPassword };
+        await api.savePasswords(updatedPasswords);
+        
+        // Set local state
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('user_passwords_store', JSON.stringify(updatedPasswords));
+        setUsers(prev => [...prev, newUser]);
+                  
+        userMatched = newUser;
+      } catch (err: any) {
+        console.warn("Server dynamic user provisioning bypass activated:", err);
+        // Fallback for offline mode
+        const updatedPasswords = { ...userPasswords, [emailLower]: loginPassword };
+        setUserPasswords(updatedPasswords);
+        localStorage.setItem('user_passwords_store', JSON.stringify(updatedPasswords));
+        setUsers(prev => [...prev, newUser]);
+        userMatched = newUser;
+      }
+    } else {
+      const correctPassword = userPasswords[emailLower] || "admin123";
+      if (loginPassword !== correctPassword) {
+        showToast("Incorrect password. Please verify credentials or recover via OTP.", "error");
+        return;
+      }
     }
 
     // Persist login state
