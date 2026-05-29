@@ -1310,7 +1310,7 @@ export const api = {
   },
 
   getPublicInvoice: (invoiceNumber: string) => {
-    return fetch(`/api/public/invoice/${encodeURIComponent(invoiceNumber)}`).then(res => {
+    return fetch(getApiUrl(`/api/public/invoice/${encodeURIComponent(invoiceNumber)}`)).then(res => {
       if (!res.ok) throw new Error("Could not find invoice details");
       return res.json() as Promise<{ invoice: Invoice; settings: BusinessSettings }>;
     });

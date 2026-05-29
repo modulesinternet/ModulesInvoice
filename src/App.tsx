@@ -838,10 +838,11 @@ export default function App() {
     }
   };
 
-  // Intercept the public invoice QR scan page route
-  const isPublicInvoiceRoute = window.location.pathname.startsWith('/public/invoice/');
+  // Intercept the public invoice QR scan page route (robust subdirectory compatibility)
+  const isPublicInvoiceRoute = window.location.pathname.includes('/public/invoice/');
   if (isPublicInvoiceRoute) {
-    const pubInvNum = decodeURIComponent(window.location.pathname.split('/public/invoice/')[1] || '').trim();
+    const parts = window.location.pathname.split('/public/invoice/');
+    const pubInvNum = decodeURIComponent(parts[parts.length - 1] || '').trim();
     if (pubInvNum) {
       return <PublicInvoiceView invoiceNumber={pubInvNum} />;
     }

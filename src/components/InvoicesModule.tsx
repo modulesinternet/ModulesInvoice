@@ -95,7 +95,20 @@ export default function InvoicesModule({
       return;
     }
 
-    const publicScanUrl = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+    // Handle subfolder deployments on GitHub Pages dynamically
+    let basePath = window.location.pathname;
+    if (basePath.includes('/public/invoice/')) {
+      basePath = basePath.split('/public/invoice/')[0];
+    }
+    if (basePath.endsWith('.html')) {
+      const parts = basePath.split('/');
+      parts.pop();
+      basePath = parts.join('/');
+    }
+    if (!basePath.endsWith('/')) {
+      basePath += '/';
+    }
+    const publicScanUrl = `${window.location.origin}${basePath}public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
     QRCode.toDataURL(publicScanUrl, { margin: 1, width: 250 }, (err, url) => {
       if (!err && url) {
         setQrCodeDataUrl(url);
