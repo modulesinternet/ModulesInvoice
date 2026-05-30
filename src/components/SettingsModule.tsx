@@ -218,6 +218,56 @@ export default function SettingsModule({
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingQr, setIsDraggingQr] = useState(false);
 
+  // Active API states
+  const [serverApiInput, setServerApiInput] = useState(api.getSavedBackendUrl() || '');
+  const [serverApiTarget, setServerApiTarget] = useState(api.getActiveBackendUrl() || '');
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setTestStatus(null);
+    try {
+      const res = await api.testHealth(serverApiInput);
+      if (res.success) {
+        setTestStatus({
+          success: true,
+          message: `Endpoint verified. Response: "${res.data.message}" | Database synchronized: ${res.data.databaseConnected ? 'Active' : 'Offline Mode'}`
+        });
+      } else {
+        setTestStatus({
+          success: false,
+          message: `Network check failed: ${res.error}`
+        });
+      }
+    } catch (e: any) {
+      setTestStatus({
+        success: false,
+        message: e.message || String(e)
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveServerUrl = () => {
+    api.setBackendUrl(serverApiInput);
+    const active = api.getActiveBackendUrl();
+    setServerApiTarget(active);
+    setServerApiInput(api.getSavedBackendUrl());
+    alert("API Backend URL bound successfully! All future network synchronization calls will target: " + active);
+    window.location.reload(); // Refresh the browser page to apply the custom base server target universally
+  };
+
+  const handleResetServerUrl = () => {
+    api.setBackendUrl('');
+    const active = api.getActiveBackendUrl();
+    setServerApiTarget(active);
+    setServerApiInput('');
+    alert("API Backend URL reset to built-in fallback default! Target: " + active);
+    window.location.reload();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName) {
@@ -1190,6 +1240,85 @@ export default function SettingsModule({
                     </label>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 5: Central Live Server Connectivity & Diagnostics */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-5">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <Database className="w-4 h-4 text-indigo-500" />
+              <span>Central Live Server Target</span>
+            </h3>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase block">Active Backend URL</label>
+                <div className="font-mono text-[11px] p-2 bg-slate-50 border border-slate-150 text-slate-700 rounded-xl break-all">
+                  {serverApiTarget || api.getActiveBackendUrl()}
+                </div>
+                <p className="text-[9px] text-slate-400 leading-normal">This is the Cloud Run API backend address which your browser connects to for synchronizing data.</p>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase block">Override Backend Server URL</label>
+                <input 
+                  type="text"
+                  value={serverApiInput}
+                  onChange={(e) => setServerApiInput(e.target.value)}
+                  placeholder="e.g. https://ais-pre-xyz.run.app"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                />
+                <p className="text-[9px] text-slate-400 leading-normal">If using multiple domains (like GitHub Pages or custom mirrors), paste your target Cloud Run domain URL here to bridge synchronized Firestore states.</p>
+              </div>
+
+              {testStatus && (
+                <div className={`p-3 rounded-2xl border text-xs flex flex-col gap-1 font-medium ${
+                  testStatus.success 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
+                    : 'bg-rose-50 text-rose-800 border-rose-100'
+                }`}>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    {testStatus.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <span className="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">X</span>
+                    )}
+                    <span>{testStatus.success ? "Connection Verified!" : "Connection Failed!"}</span>
+                  </div>
+                  <span className="text-[10px] font-normal leading-normal">{testStatus.message}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 pt-1 animate-fadeIn">
+                <button
+                  type="button"
+                  disabled={testingConnection}
+                  onClick={handleTestConnection}
+                  className="py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition rounded-xl text-xs font-bold font-sans flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${testingConnection ? 'animate-spin' : ''}`} />
+                  <span>{testingConnection ? 'Testing...' : 'Test Conn'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveServerUrl}
+                  className="py-2.5 bg-slate-800 hover:bg-slate-900 border border-slate-950 text-white transition rounded-xl text-xs font-bold font-sans flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98]"
+                >
+                  <Save className="w-3.5 h-3.5 text-white" />
+                  <span>Bind Target</span>
+                </button>
+              </div>
+
+              <div className="text-center pt-1.5">
+                <button
+                  type="button"
+                  onClick={handleResetServerUrl}
+                  className="text-xs font-bold text-indigo-650 text-indigo-600 hover:text-indigo-800 cursor-pointer select-none underline"
+                >
+                  Reset Target to Built-in Default
+                </button>
               </div>
             </div>
           </div>

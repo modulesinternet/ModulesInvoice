@@ -208,6 +208,12 @@ function getHeaders(): HeadersInit {
 }
 
 function getApiUrl(url: string) {
+  const savedUrl = localStorage.getItem('backend_api_url');
+  if (savedUrl && savedUrl.trim() !== '') {
+    const base = savedUrl.trim().replace(/\/+$/, '');
+    return `${base}${url}`;
+  }
+
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   // If the app is loaded from GitHub Pages (or any custom domain / third-party server remotely),
@@ -1516,5 +1522,65 @@ export const api = {
       return Promise.resolve({ success: true, message: "Database backup imported and synchronized successfully in-browser!" });
     }
     return request<{ success: boolean; message: string }>('/api/restore', 'POST', backup);
+  },
+
+  getSavedBackendUrl: () => {
+    return localStorage.getItem('backend_api_url') || '';
+  },
+  getDefaultBackendUrl: () => {
+    return 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+  },
+  getActiveBackendUrl: () => {
+    return getApiUrl('');
+  },
+  setBackendUrl: (url: string) => {
+    if (!url || url.trim() === '') {
+      localStorage.removeItem('backend_api_url');
+    } else {
+      let clean = url.trim();
+      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+        clean = `https://${clean}`;
+      }
+      localStorage.setItem('backend_api_url', clean);
+    }
+  },
+  testHealth: async (urlOverride?: string) => {
+    const backupUrl = localStorage.getItem('backend_api_url');
+    if (urlOverride !== undefined) {
+      if (urlOverride.trim() === '') {
+        localStorage.removeItem('backend_api_url');
+      } else {
+        let clean = urlOverride.trim();
+        if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+          clean = `https://${clean}`;
+        }
+        localStorage.setItem('backend_api_url', clean);
+      }
+    }
+    try {
+      const headers = getHeaders();
+      const res = await fetch(getApiUrl('/api/health'), {
+        method: 'GET',
+        headers
+      });
+      // Restore cached URL
+      if (backupUrl) {
+        localStorage.setItem('backend_api_url', backupUrl);
+      } else {
+        localStorage.removeItem('backend_api_url');
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      return { success: true, data };
+    } catch (err: any) {
+      if (backupUrl) {
+        localStorage.setItem('backend_api_url', backupUrl);
+      } else {
+        localStorage.removeItem('backend_api_url');
+      }
+      return { success: false, error: err.message || String(err) };
+    }
   }
 };

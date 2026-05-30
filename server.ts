@@ -654,6 +654,11 @@ function logUserActivity(userId: string, userName: string, action: string, detai
 // REST ENDPOINTS
 // ----------------------------------------------------
 
+// 0. Health check endpoint for remote client testing and diagnostics
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({ status: "ok", message: "Smart Accounts Server up and running!", databaseConnected: !!db });
+});
+
 // 1. Dashboard metrics
 app.get('/api/dashboard', checkPermission('dashboard', 'read'), (req: Request, res: Response) => {
   const totalRevenue = db_payments.reduce((sum, p) => sum + p.amount, 0);
