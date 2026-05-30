@@ -1261,7 +1261,19 @@ export default function SettingsModule({
               </div>
 
               <div className="space-y-1.5 pt-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase block">Override Backend Server URL</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block">Override Backend Server URL</label>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const currentOrigin = window.location.origin;
+                      setServerApiInput(currentOrigin);
+                    }}
+                    className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer hover:underline"
+                  >
+                    Use Current Origin
+                  </button>
+                </div>
                 <input 
                   type="text"
                   value={serverApiInput}
@@ -1273,7 +1285,7 @@ export default function SettingsModule({
               </div>
 
               {testStatus && (
-                <div className={`p-3 rounded-2xl border text-xs flex flex-col gap-1 font-medium ${
+                <div className={`p-3 rounded-2xl border text-xs flex flex-col gap-1.5 font-medium ${
                   testStatus.success 
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
                     : 'bg-rose-50 text-rose-800 border-rose-100'
@@ -1287,6 +1299,13 @@ export default function SettingsModule({
                     <span>{testStatus.success ? "Connection Verified!" : "Connection Failed!"}</span>
                   </div>
                   <span className="text-[10px] font-normal leading-normal">{testStatus.message}</span>
+                  {!testStatus.success && (testStatus.message.includes("404") || testStatus.message.includes("401") || testStatus.message.includes("fetch")) && (
+                    <div className="mt-1.5 pt-1.5 border-t border-rose-100/60 text-[9.5px] font-normal text-rose-700 leading-normal space-y-1">
+                      <p className="font-semibold">💡 Why did this happen?</p>
+                      <p>You are accessing the app on a different domain than your target. The Google Cloud/AI Studio platform blocks cross-origin requests between your Developer (<code className="bg-rose-100/50 px-1 py-0.5 rounded font-mono">-dev</code>) and Shared (<code className="bg-rose-100/50 px-1 py-0.5 rounded font-mono">-pre</code>) subdomains unless you are active inside that specific environment directly.</p>
+                      <p><strong>To resolve:</strong> Click the <span className="font-semibold underline cursor-pointer" onClick={() => { api.setBackendUrl(''); window.location.reload(); }}>Reset to Default</span> link below, which forces the app to target its own local server natively, or click <span className="font-semibold underline cursor-pointer" onClick={() => { const currentOrigin = window.location.origin; setServerApiInput(currentOrigin); api.setBackendUrl(currentOrigin); window.location.reload(); }}>Use Current Origin</span> to bind same-origin target seamlessly.</p>
+                    </div>
+                  )}
                 </div>
               )}
 
