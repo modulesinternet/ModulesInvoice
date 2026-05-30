@@ -442,8 +442,8 @@ async function bootstrapFromFirestore() {
   try {
     console.log("Synchronizing memory database and seeding Firestore if required...");
     
-    // 1. Settings
-    const settingsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'global')), 5000);
+    // 1. Settings (25 seconds timeout for cold starts)
+    const settingsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'global')), 25000);
     const isFirstSeed = !settingsDoc.exists();
     if (!isFirstSeed) {
       const settingsData = settingsDoc.data();
@@ -451,41 +451,41 @@ async function bootstrapFromFirestore() {
         db_settings = settingsData as BusinessSettings;
       }
     } else {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 25000);
     }
 
     // 2. Categories
-    const categoriesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'categories')), 5000);
+    const categoriesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'categories')), 25000);
     if (categoriesDoc.exists()) {
       const listData = (categoriesDoc.data() as { list?: string[] }).list;
       if (Array.isArray(listData)) {
         db_categories = listData;
       }
     } else {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 25000);
     }
 
     // 3. Roles
-    const rolesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'roles')), 5000);
+    const rolesDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'roles')), 25000);
     if (rolesDoc.exists()) {
       const listData = (rolesDoc.data() as { list?: RolePermissions[] }).list;
       if (Array.isArray(listData) && listData.length > 0) {
         db_roles = listData;
       } else {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 25000);
       }
     } else {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 25000);
     }
 
-    // Modern Self-healing Collection Bootstrapper Utility
+    // Modern Self-healing Collection Bootstrapper Utility (25 seconds timeouts)
     const syncCollectionOnStartup = async <T extends { id?: string; userId?: string }>(
       collectionName: string,
       currentList: T[],
       demoSeedList: T[],
       idKey: 'id' | 'userId' = 'id'
     ): Promise<T[]> => {
-      const snap = await withTimeout(getDocs(collection(db, collectionName)), 5000);
+      const snap = await withTimeout(getDocs(collection(db, collectionName)), 25000);
       if (snap.empty) {
         if (currentList.length > 0) {
           console.log(`Firestore '${collectionName}' collection is empty. Back-syncing local cache (${currentList.length} records) to cloud...`);
@@ -494,7 +494,7 @@ async function bootstrapFromFirestore() {
             const docId = idKey === 'id' ? item.id : item.userId;
             if (docId) batch.set(doc(db, collectionName, docId), item);
           }
-          await withTimeout(batch.commit(), 5000);
+          await withTimeout(batch.commit(), 25000);
           return currentList;
         } else {
           console.log(`Firestore '${collectionName}' empty. Seeding with default demo dataset...`);
@@ -503,7 +503,7 @@ async function bootstrapFromFirestore() {
             const docId = idKey === 'id' ? item.id : item.userId;
             if (docId) batch.set(doc(db, collectionName, docId), item);
           }
-          await withTimeout(batch.commit(), 5000);
+          await withTimeout(batch.commit(), 25000);
           return demoSeedList;
         }
       } else {
@@ -580,18 +580,18 @@ async function bootstrapFromFirestore() {
     if (db) {
       const liveAdmin = db_users.find(u => u.email.trim().toLowerCase() === 'modulesinternet@gmail.com');
       if (liveAdmin) {
-        await withTimeout(setDoc(doc(db, 'users', liveAdmin.userId), liveAdmin), 5000);
+        await withTimeout(setDoc(doc(db, 'users', liveAdmin.userId), liveAdmin), 25000);
       }
       
       // Sync or retrieve the passwords database
-      const passwordsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'passwords')), 5000).catch(e => null);
+      const passwordsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'passwords')), 25000).catch(e => null);
       if (passwordsDoc && passwordsDoc.exists()) {
         const passwordsData = passwordsDoc.data();
         if (passwordsData && Object.keys(passwordsData).length > 0) {
           db_passwords = passwordsData as { [email: string]: string };
         }
       } else {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords), 5000).catch(e => null);
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords), 25000).catch(e => null);
       }
     }
 
@@ -599,8 +599,8 @@ async function bootstrapFromFirestore() {
   } catch (error) {
     console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap:", error);
     console.warn("The server will proceed running using the local in-memory database fallback.");
-    console.warn("Disabling active Firestore communication to prevent runtime API issues.");
-    db = null; // Important: Disable Firestore triggers completely
+    console.warn("Keeping active Firestore database reference in case of dynamic recovery.");
+    // Crucial: DO NOT drop `db = null` reference so future writes/reads and dynamic connections can still auto-recover and succeed!
   }
 }
 
