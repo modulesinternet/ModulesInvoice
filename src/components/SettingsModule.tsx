@@ -1284,6 +1284,18 @@ export default function SettingsModule({
                 <p className="text-[9px] text-slate-400 leading-normal">If using multiple domains (like GitHub Pages or custom mirrors), paste your target Cloud Run domain URL here to bridge synchronized Firestore states.</p>
               </div>
 
+              {serverApiInput.toLowerCase().includes('.github.io') && (
+                <div className="p-3.5 bg-amber-50 border border-amber-100 text-amber-800 text-[10.5px] rounded-2xl leading-relaxed space-y-1.5 shadow-sm">
+                  <p className="font-bold flex items-center gap-1 text-amber-900">
+                    <span className="text-sm">⚠️</span>
+                    <span>Frontend Web Address Detected</span>
+                  </p>
+                  <p>You entered <code className="bg-amber-100/80 px-1 py-0.5 rounded font-mono text-amber-900 font-semibold">{serverApiInput}</code>, which is your <strong>GitHub Pages static frontend</strong>, not an API backend server.</p>
+                  <p>By design, the React frontend deployed on your GitHub Pages site automatically references your live Cloud Run API backend by default—<strong>requiring zero custom setup!</strong></p>
+                  <p>To restore regular operation, click <button type="button" onClick={handleResetServerUrl} className="underline font-bold text-amber-900 hover:text-amber-950 cursor-pointer font-sans">Reset to Default</button> or click <button type="button" onClick={() => { const currentOrigin = window.location.origin; setServerApiInput(currentOrigin); api.setBackendUrl(currentOrigin); window.location.reload(); }} className="underline font-bold text-amber-900 hover:text-amber-950 cursor-pointer font-sans">Use Current Origin</button> to match same-origin settings.</p>
+                </div>
+              )}
+
               {testStatus && (
                 <div className={`p-3 rounded-2xl border text-xs flex flex-col gap-1.5 font-medium ${
                   testStatus.success 
