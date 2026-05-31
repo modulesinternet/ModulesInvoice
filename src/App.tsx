@@ -188,7 +188,14 @@ export function computeLocalDashboardMetrics(
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const saved = localStorage.getItem('active_tab');
+    return (saved as TabType) || 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('active_tab', activeTab);
+  }, [activeTab]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1694,6 +1701,7 @@ export default function App() {
                   topClients={dashboardMetrics.topClients}
                   onRefresh={loadMasterData}
                   onNavigate={(t) => setActiveTab(t as TabType)}
+                  businessSettings={businessSettings}
                 />
               )}
 
@@ -1706,6 +1714,7 @@ export default function App() {
                   onSelectClientLedger={handleSelectClientLedgerTab}
                   canWrite={getModulePermissions('clients').write}
                   canDelete={getModulePermissions('clients').delete}
+                  businessSettings={businessSettings}
                 />
               )}
 
@@ -1764,6 +1773,7 @@ export default function App() {
                   onUpdatePayment={handleUpdatePayment}
                   onDeletePayment={handleDeletePayment}
                   canWrite={getModulePermissions('payments').write}
+                  businessSettings={businessSettings}
                 />
               )}
 
@@ -1772,6 +1782,7 @@ export default function App() {
                   ledger={ledger}
                   clients={clients}
                   initialSelectedClientId={ledgerSelectedClientId}
+                  businessSettings={businessSettings}
                 />
               )}
 
@@ -1784,6 +1795,7 @@ export default function App() {
                   canWrite={getModulePermissions('cashbook').write}
                   categories={categories}
                   onAddCategory={handleAddCategory}
+                  businessSettings={businessSettings}
                 />
               )}
 

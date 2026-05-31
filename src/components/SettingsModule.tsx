@@ -43,13 +43,16 @@ export default function SettingsModule({
   const [logoUrl, setLogoUrl] = useState(settings?.logoUrl || '');
   const [faviconUrl, setFaviconUrl] = useState(settings?.faviconUrl || '');
   const [gstIn, setGstIn] = useState(settings?.gstIn || '');
+  const [pan, setPan] = useState(settings?.pan || '');
   const [address, setAddress] = useState(settings?.address || '');
   const [phone, setPhone] = useState(settings?.phone || '');
   const [email, setEmail] = useState(settings?.email || '');
+  const [website, setWebsite] = useState(settings?.website || '');
   const [bankName, setBankName] = useState(settings?.bankName || '');
   const [accountNum, setAccountNum] = useState(settings?.accountNum || '');
   const [ifscCode, setIfscCode] = useState(settings?.ifscCode || '');
   const [upiId, setUpiId] = useState(settings?.upiId || '');
+  const [currency, setCurrency] = useState(settings?.currency || 'INR');
   const [signatureUrl, setSignatureUrl] = useState(settings?.signatureUrl || '');
   const [customQrUrl, setCustomQrUrl] = useState(settings?.customQrUrl || '');
   const [useCustomQrCode, setUseCustomQrCode] = useState<boolean>(settings?.useCustomQrCode ?? false);
@@ -88,13 +91,16 @@ export default function SettingsModule({
       setLogoUrl(settings.logoUrl || '');
       setFaviconUrl(settings.faviconUrl || '');
       setGstIn(settings.gstIn || '');
+      setPan(settings.pan || '');
       setAddress(settings.address || '');
       setPhone(settings.phone || '');
       setEmail(settings.email || '');
+      setWebsite(settings.website || '');
       setBankName(settings.bankName || '');
       setAccountNum(settings.accountNum || '');
       setIfscCode(settings.ifscCode || '');
       setUpiId(settings.upiId || '');
+      setCurrency(settings.currency || 'INR');
       setSignatureUrl(settings.signatureUrl || '');
       setCustomQrUrl(settings.customQrUrl || '');
       setUseCustomQrCode(settings.useCustomQrCode ?? false);
@@ -279,13 +285,16 @@ export default function SettingsModule({
       const payload: Partial<BusinessSettings> = {
         companyName,
         gstIn: gstIn ? gstIn.toUpperCase() : '',
+        pan: pan ? pan.toUpperCase() : '',
         address,
         phone,
         email,
+        website,
         bankName,
         accountNum,
         ifscCode: ifscCode ? ifscCode.toUpperCase() : '',
         upiId,
+        currency,
         signatureUrl,
         customQrUrl,
         useCustomQrCode,
@@ -345,7 +354,7 @@ export default function SettingsModule({
               <span>Corporate Branding &amp; Tax Registration</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Registered Firm Name</label>
                 <input 
@@ -358,12 +367,23 @@ export default function SettingsModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Company GSTIN (Optional / Leave blank to hide)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Company GSTIN</label>
                 <input 
                   type="text"
                   value={gstIn}
                   onChange={(e) => setGstIn(e.target.value)}
                   placeholder="e.g. 27AAZCA4312R1ZX"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono uppercase font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Company PAN</label>
+                <input 
+                  type="text"
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value)}
+                  placeholder="e.g. AAZCA4312R"
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono uppercase font-semibold"
                 />
               </div>
@@ -587,7 +607,7 @@ export default function SettingsModule({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Firm Email Desk</label>
                 <input 
@@ -608,6 +628,16 @@ export default function SettingsModule({
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
                 />
               </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Firm Website</label>
+                <input 
+                  type="text"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="e.g. www.apexdigital.in"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
+                />
+              </div>
             </div>
           </div>
 
@@ -618,7 +648,7 @@ export default function SettingsModule({
               <span>Localization &amp; GST Taxation Setup</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">System Timezone</label>
                 <select
@@ -646,6 +676,22 @@ export default function SettingsModule({
                   <option value="zero_tax">0% GST Setup (No Tax displayed on Invoices)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 font-sans">Selecting 0% GST overrides all billing lines to be tax-free and completely hides all tax calculations & columns on invoices.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Billing Currency</label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-1 focus:ring-indigo-500 font-mono"
+                >
+                  <option value="INR">INR (₹) - Indian Rupee</option>
+                  <option value="USD">USD ($) - US Dollar</option>
+                  <option value="EUR">EUR (€) - Euro</option>
+                  <option value="GBP">GBP (£) - British Pound</option>
+                  <option value="SGD">SGD (S$) - Singapore Dollar</option>
+                </select>
+                <p className="text-[10px] text-slate-400 font-sans">Controls the display currency symbol on compiled invoices, receipts, and ledger statements.</p>
               </div>
             </div>
           </div>

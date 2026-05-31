@@ -18,21 +18,23 @@ interface LedgerModuleProps {
   ledger: LedgerEntry[];
   clients: Client[];
   initialSelectedClientId?: string;
+  businessSettings?: any;
 }
 
 export default function LedgerModule({
   ledger,
   clients,
-  initialSelectedClientId = ''
+  initialSelectedClientId = '',
+  businessSettings
 }: LedgerModuleProps) {
   const [selectedClientId, setSelectedClientId] = useState(initialSelectedClientId || (clients[0]?.id || ''));
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: businessSettings?.currency || 'INR',
       maximumFractionDigits: 0
     }).format(val);
   };

@@ -47,6 +47,7 @@ interface DashboardProps {
   topClients: Array<{ name: string; amount: number }>;
   onRefresh: () => void;
   onNavigate: (tab: string) => void;
+  businessSettings?: any;
 }
 
 export default function Dashboard({
@@ -56,13 +57,14 @@ export default function Dashboard({
   recentInvoices,
   topClients,
   onRefresh,
-  onNavigate
+  onNavigate,
+  businessSettings
 }: DashboardProps) {
   
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: businessSettings?.currency || 'INR',
       maximumFractionDigits: 0
     }).format(val);
   };

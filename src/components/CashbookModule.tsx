@@ -19,6 +19,7 @@ interface CashbookModuleProps {
   canWrite?: boolean;
   categories: string[];
   onAddCategory?: (category: string) => Promise<void>;
+  businessSettings?: any;
 }
 
 export default function CashbookModule({
@@ -28,7 +29,8 @@ export default function CashbookModule({
   onDeleteCashbookEntry,
   canWrite = true,
   categories = [],
-  onAddCategory
+  onAddCategory,
+  businessSettings
 }: CashbookModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,9 +68,9 @@ export default function CashbookModule({
   const [reference, setReference] = useState('');
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: businessSettings?.currency || 'INR',
       maximumFractionDigits: 0
     }).format(val);
   };
@@ -343,13 +345,15 @@ export default function CashbookModule({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(row.id, row.description)}
-                        className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
-                        title="Delete Cashbook Entry"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {(row.type === 'expense' || row.type === 'withdrawal') && (
+                        <button
+                          onClick={() => handleDelete(row.id, row.description)}
+                          className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                          title="Delete Cashbook Entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

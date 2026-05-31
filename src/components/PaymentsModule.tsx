@@ -19,6 +19,7 @@ interface PaymentsModuleProps {
   onUpdatePayment?: (id: string, p: Partial<Payment>) => Promise<void>;
   onDeletePayment?: (id: string) => Promise<void>;
   canWrite?: boolean;
+  businessSettings?: any;
 }
 
 export default function PaymentsModule({
@@ -28,7 +29,8 @@ export default function PaymentsModule({
   onAddPayment,
   onUpdatePayment,
   onDeletePayment,
-  canWrite = true
+  canWrite = true,
+  businessSettings
 }: PaymentsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,9 +52,9 @@ export default function PaymentsModule({
   const [notes, setNotes] = useState('Payment matched and credited instantly.');
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: businessSettings?.currency || 'INR',
       maximumFractionDigits: 0
     }).format(val);
   };

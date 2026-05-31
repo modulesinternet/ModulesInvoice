@@ -26,6 +26,7 @@ interface ClientsModuleProps {
   onSelectClientLedger: (clientId: string) => void;
   canWrite?: boolean;
   canDelete?: boolean;
+  businessSettings?: any;
 }
 
 export default function ClientsModule({
@@ -35,7 +36,8 @@ export default function ClientsModule({
   onDeleteClient,
   onSelectClientLedger,
   canWrite = true,
-  canDelete = true
+  canDelete = true,
+  businessSettings
 }: ClientsModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -113,9 +115,9 @@ export default function ClientsModule({
   );
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: businessSettings?.currency || 'INR',
       maximumFractionDigits: 0
     }).format(val);
   };

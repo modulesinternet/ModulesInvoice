@@ -1425,7 +1425,11 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
     }
 
     // Filter and rebuild Ledger entry
+    const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === oldP.id);
     db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
+    for (const led of ledgerToRemove) {
+      await syncStateToFirestore('ledger', led.id);
+    }
     const newLedger: LedgerEntry = {
       id: `led-${Date.now()}`,
       clientId: oldP.clientId,
@@ -1443,7 +1447,11 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
     await syncStateToFirestore('ledger', newLedger.id);
 
     // Filter and rebuild Cashbook entry
+    const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === oldP.id);
     db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
+    for (const cb of cashbookToRemove) {
+      await syncStateToFirestore('cashbook', cb.id);
+    }
     
     let cashChange = 0;
     let bankChange = 0;
@@ -1512,10 +1520,18 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
     }
 
     // Revert Ledger
+    const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === p.id);
     db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
+    for (const led of ledgerToRemove) {
+      await syncStateToFirestore('ledger', led.id);
+    }
 
     // Revert Cashbook
+    const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === p.id);
     db_cashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
+    for (const cb of cashbookToRemove) {
+      await syncStateToFirestore('cashbook', cb.id);
+    }
 
     // Delete payment
     db_payments.splice(pIndex, 1);
