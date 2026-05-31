@@ -430,78 +430,20 @@ export default function App() {
     loadMasterData();
   }, []);
 
-  // Set up deep real-time client-side Firestore listeners for multi-device instant live sync
+  // CRITICAL RESOLUTION: We bypass background client-side Firestore onSnapshot listeners because we operate in a full-stack context 
+  // where all CRUD actions route to the central Node API backend. Having background listeners firing asynchronously with 
+  // client-side or IndexedDB cached documents (especially previous demo data) would constantly clash with, and overwrite,
+  // the clean verified states loaded by the loadMasterData pipeline during settings saves, invoice generation, and deletions.
+  // Instead, the app uses a clean, reliable, single-source-of-truth post-mutation "fetch-on-action" architecture.
   useEffect(() => {
     if (!currentUser) return;
 
-    const unsubscribeList: (() => void)[] = [];
-
-    const syncCollection = <T,>(
-      path: string,
-      setter: React.Dispatch<React.SetStateAction<T[]>>,
-      idField: string = 'id'
-    ) => {
-      try {
-        const unsub = onSnapshot(
-          collection(firestoreDb, path),
-          (snapshot) => {
-            const list: T[] = [];
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              // Preserve exact keys/IDs
-              if (idField === 'id') {
-                list.push({ id: doc.id, ...data } as T);
-              } else if (idField === 'userId') {
-                list.push({ userId: doc.id, ...data } as T);
-              } else {
-                list.push({ ...data } as T);
-              }
-            });
-            setter(list);
-          },
-          (error) => {
-            // Standard formatted Firestore error handling callback (required by Firebase skill)
-            handleFirestoreError(error, OperationType.LIST, path);
-          }
-        );
-        unsubscribeList.push(unsub);
-      } catch (err) {
-        console.error(`Error subscribing to Firestore collection ${path}: `, err);
-      }
-    };
-
-    // Subscribing to each collection mapping from firebase-blueprint.json
-    syncCollection<Client>('clients', setClients, 'id');
-    syncCollection<Product>('products', setProducts, 'id');
-    syncCollection<Invoice>('invoices', setInvoices, 'id');
-    syncCollection<Quotation>('quotations', setQuotations, 'id');
-    syncCollection<Payment>('payments', setPayments, 'id');
-    syncCollection<LedgerEntry>('ledger', setLedger, 'id');
-    syncCollection<CashbookEntry>('cashbook', setCashbook, 'id');
-    syncCollection<UserProfile>('users', setUsers, 'userId');
-    syncCollection<Notification>('notifications', setNotifications, 'id');
-    syncCollection<ActivityLog>('activityLogs', setLogs, 'id');
-
-    // Subscribe to global singleton organization and business settings
-    try {
-      const unsubSettings = onSnapshot(
-        doc(firestoreDb, 'businessSettings', 'global'),
-        (snapshot) => {
-          if (snapshot.exists()) {
-            setBusinessSettings(snapshot.data() as BusinessSettings);
-          }
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'businessSettings/global');
-        }
-      );
-      unsubscribeList.push(unsubSettings);
-    } catch (err) {
-      console.error("Error subscribing to settings document: ", err);
-    }
-
+    // Direct background snapshot listeners are disabled/commented out to guarantee operational parity and zero stale cache conflicts.
+    // Full synchronizations are processed via the high-accuracy api.getBatchSync() REST gateway called in loadMasterData().
+    console.log("Central REST fetch pipeline active. Client-side snapshot subscriptions bypassed for master data stability.");
+    
     return () => {
-      unsubscribeList.forEach((unsub) => unsub());
+      // No-op cleanup
     };
   }, [currentUser]);
 
