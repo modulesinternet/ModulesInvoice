@@ -487,24 +487,23 @@ async function bootstrapFromFirestore() {
     ): Promise<T[]> => {
       const snap = await withTimeout(getDocs(collection(db, collectionName)), 25000);
       if (snap.empty) {
-        if (currentList.length > 0) {
-          console.log(`Firestore '${collectionName}' collection is empty. Back-syncing local cache (${currentList.length} records) to cloud...`);
+        if (isFirstSeed) {
+          // If this is the absolute first-time seed of the database:
+          // Use whatever local cached records exist, or fallback to the standard demo dataset
+          const seedData = currentList.length > 0 ? currentList : demoSeedList;
+          console.log(`Firestore '${collectionName}' collection is empty. First-time seeding with default dataset (${seedData.length} records) to cloud...`);
           const batch = writeBatch(db);
-          for (const item of currentList) {
+          for (const item of seedData) {
             const docId = idKey === 'id' ? item.id : item.userId;
             if (docId) batch.set(doc(db, collectionName, docId), item);
           }
           await withTimeout(batch.commit(), 25000);
-          return currentList;
+          return seedData;
         } else {
-          console.log(`Firestore '${collectionName}' empty. Seeding with default demo dataset...`);
-          const batch = writeBatch(db);
-          for (const item of demoSeedList) {
-            const docId = idKey === 'id' ? item.id : item.userId;
-            if (docId) batch.set(doc(db, collectionName, docId), item);
-          }
-          await withTimeout(batch.commit(), 25000);
-          return demoSeedList;
+          // If the database is NOT brand-new (settings exists), an empty database collection
+          // means the user intentionally deleted all records. We must NOT seed with demo data!
+          console.log(`Firestore '${collectionName}' is empty (cleared by user). Keeping it empty.`);
+          return [];
         }
       } else {
         return snap.docs.map(d => d.data() as T);
@@ -580,11 +579,13 @@ async function bootstrapFromFirestore() {
       }
     });
 
-    DEMO_USERS.forEach(du => {
-      if (!finalUsers.some(f => f.email.trim().toLowerCase() === du.email.trim().toLowerCase())) {
-        finalUsers.push(du);
-      }
-    });
+    if (isFirstSeed) {
+      DEMO_USERS.forEach(du => {
+        if (!finalUsers.some(f => f.email.trim().toLowerCase() === du.email.trim().toLowerCase())) {
+          finalUsers.push(du);
+        }
+      });
+    }
 
     db_users = finalUsers;
     saveStateToLocalCache();

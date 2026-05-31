@@ -586,7 +586,6 @@ export default function SettingsModule({
               <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Address</label>
               <textarea 
                 rows={2}
-                required
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
@@ -612,7 +611,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Firm Email Desk</label>
                 <input 
                   type="email"
-                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
@@ -622,7 +620,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Firm Telephone</label>
                 <input 
                   type="text"
-                  required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
@@ -708,7 +705,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Bank Name</label>
                 <input 
                   type="text"
-                  required
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
@@ -718,7 +714,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">IFSC Routing Code</label>
                 <input 
                   type="text"
-                  required
                   maxLength={11}
                   value={ifscCode}
                   onChange={(e) => setIfscCode(e.target.value)}
@@ -732,7 +727,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Account Number</label>
                 <input 
                   type="text"
-                  required
                   value={accountNum}
                   onChange={(e) => setAccountNum(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
@@ -742,7 +736,6 @@ export default function SettingsModule({
                 <label className="text-[10px] font-bold text-slate-400 uppercase">VPA / BHIM UPI ID</label>
                 <input 
                   type="text"
-                  required
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono"
