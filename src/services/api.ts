@@ -1377,6 +1377,40 @@ export const api = {
     return request<UserProfile>('/api/users', 'POST', user);
   },
 
+  updateUser: (userId: string, user: Partial<UserProfile>) => {
+    if (isLocalOnly) {
+      const list = getLocalItem<UserProfile[]>('db_users', []);
+      const index = list.findIndex(u => u.userId === userId);
+      if (index !== -1) {
+        list[index] = {
+          ...list[index],
+          ...user
+        };
+        setLocalItem('db_users', list);
+        logLocalActivity("USER_UPDATE", `Updated teammate ${list[index].name}`);
+        return Promise.resolve(list[index]);
+      }
+      return Promise.reject(new Error("Teammate profile not found."));
+    }
+    return request<UserProfile>(`/api/users/${userId}`, 'PUT', user);
+  },
+
+  deleteUser: (userId: string) => {
+    if (isLocalOnly) {
+      const list = getLocalItem<UserProfile[]>('db_users', []);
+      const index = list.findIndex(u => u.userId === userId);
+      if (index !== -1) {
+        const deleted = list[index];
+        list.splice(index, 1);
+        setLocalItem('db_users', list);
+        logLocalActivity("USER_DELETE", `Revoked teammate clearance for: ${deleted.name}`);
+        return Promise.resolve({ success: true });
+      }
+      return Promise.reject(new Error("Teammate profile not found."));
+    }
+    return request<{ success: boolean }>(`/api/users/${userId}`, 'DELETE');
+  },
+
   // 12. Security Audit Logs & Notifications
   getLogs: () => {
     if (isLocalOnly) {

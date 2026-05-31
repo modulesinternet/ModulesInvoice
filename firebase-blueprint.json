@@ -91,7 +91,9 @@
         "paidAmount": { "type": "number" },
         "dueAmount": { "type": "number" },
         "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid", "overdue"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "pdfUrl": { "type": "string", "description": "Cloud storage URL for generated invoice PDF." },
+        "attachments": { "type": "array", "description": "Array of linked attachment files." }
       },
       "required": ["id", "invoiceNumber", "clientId", "items", "total", "paidAmount", "dueAmount", "status"]
     },

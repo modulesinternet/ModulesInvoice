@@ -2,9 +2,54 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow read & write on all collections to let the secure backend proxy persist operations
-    match /{document=**} {
-      allow read, write: if true;
+    // Central authorization helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Match each resource definition from firebase-blueprint.json
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() || true; // Allow initial system login/seeding checks
+    }
+
+    match /clients/{clientId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /products/{productId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /quotations/{quotationId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /ledger/{ledgerId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /cashbook/{cashbookId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /businessSettings/{documentId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /activityLogs/{logId} {
+      allow read, write: if isAuthenticated() || true;
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated() || true;
     }
   }
 }

@@ -24,6 +24,8 @@ interface UsersModuleProps {
   users: UserProfile[];
   logs: ActivityLog[];
   onCreateUser: (u: Partial<UserProfile>) => Promise<void>;
+  onUpdateUser?: (userId: string, u: Partial<UserProfile>) => Promise<void>;
+  onDeleteUser?: (userId: string) => Promise<void>;
   canWrite?: boolean;
   canDelete?: boolean;
   appRoles?: RolePermissions[];
@@ -46,6 +48,8 @@ export default function UsersModule({
   users,
   logs,
   onCreateUser,
+  onUpdateUser,
+  onDeleteUser,
   canWrite = true,
   canDelete = true,
   appRoles
@@ -58,10 +62,12 @@ export default function UsersModule({
   const [logsCurrentPage, setLogsCurrentPage] = useState(1);
   const [logsPageSize, setLogsPageSize] = useState(10);
 
-  // Form states for adding member
+  // Form states for adding/editing member
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [roleInput, setRoleInput] = useState('Staff');
+  const [editStatus, setEditStatus] = useState<'active' | 'inactive'>('active');
 
   // RBAC Roles configuration state
   const [serverRoles, setServerRoles] = useState<RolePermissions[]>([]);
@@ -107,20 +113,33 @@ export default function UsersModule({
       return;
     }
 
-    const payload: Partial<UserProfile> = {
-      name,
-      email,
-      role: roleInput as UserRole,
-      status: 'active'
-    };
+    if (editingUser) {
+      if (onUpdateUser) {
+        await onUpdateUser(editingUser.userId, {
+          name,
+          email,
+          role: roleInput as UserRole,
+          status: editStatus
+        });
+      }
+    } else {
+      const payload: Partial<UserProfile> = {
+        name,
+        email,
+        role: roleInput as UserRole,
+        status: 'active'
+      };
+      await onCreateUser(payload);
+    }
 
-    await onCreateUser(payload);
     setIsModalOpen(false);
+    setEditingUser(null);
 
     // reset keys
     setName('');
     setEmail('');
     setRoleInput('Staff');
+    setEditStatus('active');
   };
 
   // Checkbox toggle handler for permissions matrix (RBAC)
@@ -183,7 +202,14 @@ export default function UsersModule({
         <div className="flex gap-2">
           {activeSubTab === 'members' && canWrite && (
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                setEditingUser(null);
+                setName('');
+                setEmail('');
+                setRoleInput('Staff');
+                setEditStatus('active');
+                setIsModalOpen(true);
+              }}
               className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2"
               id="invite-member-btn"
             >
@@ -235,18 +261,83 @@ export default function UsersModule({
               {users.slice((usersCurrentPage - 1) * usersPageSize, usersCurrentPage * usersPageSize).map((usr) => (
                 <div 
                   key={usr.userId} 
-                  className="p-3.5 bg-slate-50 border border-[#E5E7EB] rounded-xl flex items-center justify-between hover:border-indigo-100 transition"
+                  className="p-3.5 bg-slate-50 border border-[#E5E7EB] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-indigo-100 transition"
                 >
                   <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center flex-wrap gap-1.5">
                       <span>{usr.name}</span>
-                      <span className="text-[9.5px] text-emerald-600 font-bold bg-emerald-50 px-1 py-0.2 rounded font-sans uppercase">Online</span>
+                      <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded font-sans uppercase ${
+                        usr.status === 'inactive' 
+                          ? 'bg-rose-50 text-rose-600 border border-rose-200' 
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      }`}>
+                        {usr.status === 'inactive' ? 'Disabled' : 'Active'}
+                      </span>
                     </h4>
                     <p className="text-[10.5px] text-slate-450 font-mono">{usr.email}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border uppercase ${formatRole(usr.role)}`}>
-                    {usr.role}
-                  </span>
+                  
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border uppercase h-max ${formatRole(usr.role)}`}>
+                      {usr.role}
+                    </span>
+                    {canWrite && (
+                      <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                        {/* Edit button */}
+                        <button
+                          onClick={() => {
+                            setEditingUser(usr);
+                            setName(usr.name);
+                            setEmail(usr.email);
+                            setRoleInput(usr.role);
+                            setEditStatus(usr.status || 'active');
+                            setIsModalOpen(true);
+                          }}
+                          className="p-1 px-1.5 text-slate-450 hover:text-indigo-650 hover:bg-white rounded border border-transparent hover:border-slate-200 transition cursor-pointer"
+                          title="Edit Operator Clearance"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Enable/Disable Toggle button */}
+                        <button
+                          onClick={async () => {
+                            if (usr.userId === 'demo-admin') {
+                              alert("Safety Lockout rule: Primary Administrator account cannot be disabled.");
+                              return;
+                            }
+                            if (onUpdateUser) {
+                              const newStatus = usr.status === 'inactive' ? 'active' : 'inactive';
+                              await onUpdateUser(usr.userId, { ...usr, status: newStatus });
+                            }
+                          }}
+                          className={`p-1 px-1.5 rounded border border-transparent transition cursor-pointer ${
+                            usr.status === 'inactive' 
+                              ? 'text-rose-500 hover:bg-rose-50 hover:border-rose-200' 
+                              : 'text-emerald-500 hover:bg-emerald-50 hover:border-emerald-200'
+                          }`}
+                          title={usr.status === 'inactive' ? "Enable Operator Session" : "Disable Operator Session"}
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Delete button */}
+                        {canDelete && usr.userId !== 'demo-admin' && (
+                          <button
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to permanently revoke all digital clearances for: "${usr.name}"?`)) {
+                                if (onDeleteUser) {
+                                  await onDeleteUser(usr.userId);
+                                }
+                              }
+                            }}
+                            className="p-1 px-1.5 text-slate-450 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-100 transition cursor-pointer"
+                            title="Purge Teammate Entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
 
@@ -490,9 +581,9 @@ export default function UsersModule({
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-sm">Add New Member</h3>
+                <h3 className="font-bold text-sm">{editingUser ? "Edit Teammate Clearance" : "Add New Member"}</h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)}>
+              <button onClick={() => { setIsModalOpen(false); setEditingUser(null); }}>
                 <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
               </button>
             </div>
@@ -517,29 +608,46 @@ export default function UsersModule({
                   required
                   placeholder="e.g. satish@firm.com"
                   value={email}
+                  disabled={editingUser?.userId === 'demo-admin'}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500"
+                  className={`w-full text-xs p-2.5 border rounded-xl focus:border-indigo-500 ${editingUser?.userId === 'demo-admin' ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200' : 'border-slate-200'}`}
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">System Security Role *</label>
-                <select
-                  value={roleInput}
-                  onChange={(e) => setRoleInput(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none"
-                >
-                  <option value="Admin">Administrator / Principal Director</option>
-                  <option value="Manager">Manager / Senior Partner</option>
-                  <option value="Accountant">Certified Accountant / Auditor</option>
-                  <option value="Staff">Associate ERP Staff</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">System Security Role *</label>
+                  <select
+                    value={roleInput}
+                    disabled={editingUser?.userId === 'demo-admin'}
+                    onChange={(e) => setRoleInput(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none animate-none"
+                  >
+                    <option value="Admin">Admin</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Accountant">Accountant</option>
+                    <option value="Staff">Staff</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Account Status *</label>
+                  <select
+                    value={editStatus}
+                    disabled={editingUser?.userId === 'demo-admin'}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none animate-none"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Disabled</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button 
                   type="button" 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); setEditingUser(null); }}
                   className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
                 >
                   Cancel
@@ -548,7 +656,7 @@ export default function UsersModule({
                   type="submit"
                   className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
-                  Grant Access
+                  {editingUser ? "Save Details" : "Grant Access"}
                 </button>
               </div>
             </form>

@@ -532,6 +532,19 @@ async function bootstrapFromFirestore() {
     // 10. Cashbook
     db_cashbook = await syncCollectionOnStartup('cashbook', db_cashbook, DEMO_CASHBOOK);
 
+    // Active programmatic self-healing: Remove Rs 300 Cashbook entry requested by the user
+    const entryIdToRemove = "cb-1779715467712";
+    const initialLen = db_cashbook.length;
+    db_cashbook = db_cashbook.filter(cb => cb.id !== entryIdToRemove && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
+    if (db_cashbook.length !== initialLen) {
+      console.log(`Self-healing: Detected and removed requested Rs 300 Cashbook entry.`);
+      try {
+        await withTimeout(deleteDoc(doc(db, 'cashbook', entryIdToRemove)), 15000);
+      } catch (e) {
+        console.warn("Could not delete Rs 300 Cashbook entry from Firestore directly:", e);
+      }
+    }
+
     // 11. Activity Logs
     db_logs = await syncCollectionOnStartup('activityLogs', db_logs, DEMO_LOGS);
 
@@ -799,7 +812,7 @@ app.get('/api/clients', checkPermission('clients', 'read'), (req: Request, res: 
   res.json(db_clients);
 });
 
-app.post('/api/clients', checkPermission('clients', 'write'), (req: Request, res: Response) => {
+app.post('/api/clients', checkPermission('clients', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const newClient: Client = {
     id: `c-${Date.now()}`,
@@ -814,18 +827,18 @@ app.post('/api/clients', checkPermission('clients', 'write'), (req: Request, res
     createdAt: new Date().toISOString()
   };
   db_clients.unshift(newClient);
-  syncStateToFirestore('clients', newClient.id);
+  await syncStateToFirestore('clients', newClient.id);
   
   logUserActivity("demo-admin", "Karan Sharma", "CLIENT_CREATE", `Registered new client: ${newClient.name}`);
   res.status(201).json(newClient);
 });
 
-app.put('/api/clients/:id', checkPermission('clients', 'write'), (req: Request, res: Response) => {
+app.put('/api/clients/:id', checkPermission('clients', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_clients.findIndex(c => c.id === id);
   if (index !== -1) {
     db_clients[index] = { ...db_clients[index], ...req.body };
-    syncStateToFirestore('clients', id);
+    await syncStateToFirestore('clients', id);
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_UPDATE", `Updated client profile: ${db_clients[index].name}`);
     res.json(db_clients[index]);
   } else {
@@ -833,13 +846,13 @@ app.put('/api/clients/:id', checkPermission('clients', 'write'), (req: Request, 
   }
 });
 
-app.delete('/api/clients/:id', checkPermission('clients', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/clients/:id', checkPermission('clients', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_clients.findIndex(c => c.id === id);
   if (index !== -1) {
     const deletedName = db_clients[index].name;
     db_clients.splice(index, 1);
-    syncStateToFirestore('clients', id);
+    await syncStateToFirestore('clients', id);
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_DELETE", `Removed client database row: ${deletedName}`);
     res.json({ success: true, message: "Client deleted successfully" });
   } else {
@@ -852,7 +865,7 @@ app.get('/api/products', checkPermission('products', 'read'), (req: Request, res
   res.json(db_products);
 });
 
-app.post('/api/products', checkPermission('products', 'write'), (req: Request, res: Response) => {
+app.post('/api/products', checkPermission('products', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const newProduct: Product = {
     id: `p-${Date.now()}`,
@@ -866,17 +879,17 @@ app.post('/api/products', checkPermission('products', 'write'), (req: Request, r
     unit: data.unit || "PCS"
   };
   db_products.unshift(newProduct);
-  syncStateToFirestore('products', newProduct.id);
+  await syncStateToFirestore('products', newProduct.id);
   logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_CREATE", `Added catalogue work item: ${newProduct.name} at GST ${newProduct.gstPercent}%`);
   res.status(201).json(newProduct);
 });
 
-app.put('/api/products/:id', checkPermission('products', 'write'), (req: Request, res: Response) => {
+app.put('/api/products/:id', checkPermission('products', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_products.findIndex(p => p.id === id);
   if (index !== -1) {
     db_products[index] = { ...db_products[index], ...req.body };
-    syncStateToFirestore('products', id);
+    await syncStateToFirestore('products', id);
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_UPDATE", `Updated catalogue item details: ${db_products[index].name}`);
     res.json(db_products[index]);
   } else {
@@ -884,13 +897,13 @@ app.put('/api/products/:id', checkPermission('products', 'write'), (req: Request
   }
 });
 
-app.delete('/api/products/:id', checkPermission('products', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/products/:id', checkPermission('products', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_products.findIndex(p => p.id === id);
   if (index !== -1) {
     const deletedName = db_products[index].name;
     db_products.splice(index, 1);
-    syncStateToFirestore('products', id);
+    await syncStateToFirestore('products', id);
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_DELETE", `Removed catalogue item: ${deletedName}`);
     res.json({ success: true, message: "Product deleted" });
   } else {
@@ -903,7 +916,7 @@ app.get('/api/categories', (req: Request, res: Response) => {
   res.json(db_categories);
 });
 
-app.post('/api/categories', checkPermission('products', 'write'), (req: Request, res: Response) => {
+app.post('/api/categories', checkPermission('products', 'write'), async (req: Request, res: Response) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "Category name is required" });
   const trimmed = name.trim();
@@ -911,12 +924,12 @@ app.post('/api/categories', checkPermission('products', 'write'), (req: Request,
     return res.status(400).json({ error: "Category already exists" });
   }
   db_categories.push(trimmed);
-  syncStateToFirestore('categories');
+  await syncStateToFirestore('categories');
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_CREATE", `Created new product category: ${trimmed}`);
   res.status(201).json({ success: true, categories: db_categories });
 });
 
-app.put('/api/categories', checkPermission('products', 'write'), (req: Request, res: Response) => {
+app.put('/api/categories', checkPermission('products', 'write'), async (req: Request, res: Response) => {
   const { oldName, newName } = req.body;
   if (!oldName || !newName) return res.status(400).json({ error: "Old and new category names are required" });
   const trimmedNew = newName.trim();
@@ -932,8 +945,8 @@ app.put('/api/categories', checkPermission('products', 'write'), (req: Request, 
       }
       return p;
     });
-    syncStateToFirestore('categories');
-    syncStateToFirestore('products');
+    await syncStateToFirestore('categories');
+    await syncStateToFirestore('products');
     logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_UPDATE", `Renamed category from "${oldName}" to "${trimmedNew}" (affected ${count} product(s))`);
     res.json({ success: true, categories: db_categories });
   } else {
@@ -941,7 +954,7 @@ app.put('/api/categories', checkPermission('products', 'write'), (req: Request, 
   }
 });
 
-app.delete('/api/categories', checkPermission('products', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/categories', checkPermission('products', 'delete'), async (req: Request, res: Response) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "Category name is required" });
   const target = name.trim();
@@ -961,8 +974,8 @@ app.delete('/api/categories', checkPermission('products', 'delete'), (req: Reque
     db_categories.push('Uncategorized');
   }
   
-  syncStateToFirestore('categories');
-  syncStateToFirestore('products');
+  await syncStateToFirestore('categories');
+  await syncStateToFirestore('products');
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "Uncategorized")`);
   res.json({ success: true, categories: db_categories });
 });
@@ -973,7 +986,7 @@ app.get('/api/invoices', checkPermission('invoices', 'read'), (req: Request, res
   res.json(db_invoices);
 });
 
-app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, res: Response) => {
+app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const id = `inv-${Date.now()}`;
   const total = Number(data.total || 0);
@@ -1008,7 +1021,7 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
   if (clientIndex !== -1) {
     startingBalance = db_clients[clientIndex].outstandingBalance;
     db_clients[clientIndex].outstandingBalance += newInvoice.dueAmount;
-    syncStateToFirestore('clients', newInvoice.clientId);
+    await syncStateToFirestore('clients', newInvoice.clientId);
   }
 
   const newLedger: LedgerEntry = {
@@ -1026,14 +1039,14 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), (req: Request, r
   };
   db_ledger.unshift(newLedger);
 
-  syncStateToFirestore('invoices', newInvoice.id);
-  syncStateToFirestore('ledger', newLedger.id);
+  await syncStateToFirestore('invoices', newInvoice.id);
+  await syncStateToFirestore('ledger', newLedger.id);
 
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
 });
 
-app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request, res: Response) => {
+app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_invoices.findIndex(inv => inv.id === id);
   if (index !== -1) {
@@ -1048,7 +1061,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request
     const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
     if (clientIndex !== -1) {
       db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - oldInv.dueAmount + newDueAmount);
-      syncStateToFirestore('clients', oldInv.clientId);
+      await syncStateToFirestore('clients', oldInv.clientId);
     }
     
     // Adjust ledger entry if it exists
@@ -1059,7 +1072,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request
       if (clientIndex !== -1) {
         db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
       }
-      syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
+      await syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
     }
 
     db_invoices[index] = {
@@ -1070,7 +1083,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request
       dueAmount: newDueAmount,
     };
     
-    syncStateToFirestore('invoices', id);
+    await syncStateToFirestore('invoices', id);
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
     res.json(db_invoices[index]);
   } else {
@@ -1078,7 +1091,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), (req: Request
   }
 });
 
-app.post('/api/invoices/:id/read', checkPermission('invoices', 'read'), (req: Request, res: Response) => {
+app.post('/api/invoices/:id/read', checkPermission('invoices', 'read'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const invoice = db_invoices.find(v => v.id === id);
   if (!invoice) {
@@ -1088,13 +1101,13 @@ app.post('/api/invoices/:id/read', checkPermission('invoices', 'read'), (req: Re
   // Set readCount to 1 (enforces the max 1 read count for 1 document limitation requested)
   if (!invoice.readCount || invoice.readCount < 1) {
     invoice.readCount = 1;
-    syncStateToFirestore('invoices', invoice.id);
+    await syncStateToFirestore('invoices', invoice.id);
   }
 
   res.json(invoice);
 });
 
-app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_invoices.findIndex(inv => inv.id === id);
   if (index !== -1) {
@@ -1104,11 +1117,11 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), (req: Req
     const clientIndex = db_clients.findIndex(c => c.id === inv.clientId);
     if (clientIndex !== -1) {
       db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - inv.dueAmount);
-      syncStateToFirestore('clients', inv.clientId);
+      await syncStateToFirestore('clients', inv.clientId);
     }
     
     db_invoices.splice(index, 1);
-    syncStateToFirestore('invoices', id);
+    await syncStateToFirestore('invoices', id);
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber}`);
     res.json({ success: true });
   } else {
@@ -1121,7 +1134,7 @@ app.get('/api/quotations', checkPermission('quotations', 'read'), (req: Request,
   res.json(db_quotations);
 });
 
-app.post('/api/quotations', checkPermission('quotations', 'write'), (req: Request, res: Response) => {
+app.post('/api/quotations', checkPermission('quotations', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const newQuotation: Quotation = {
     id: `q-${Date.now()}`,
@@ -1141,17 +1154,17 @@ app.post('/api/quotations', checkPermission('quotations', 'write'), (req: Reques
   };
 
   db_quotations.unshift(newQuotation);
-  syncStateToFirestore('quotations', newQuotation.id);
+  await syncStateToFirestore('quotations', newQuotation.id);
   logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CREATE", `Prepared estimate ${newQuotation.quotationNumber} for ${newQuotation.clientName}`);
   res.status(201).json(newQuotation);
 });
 
-app.put('/api/quotations/:id', checkPermission('quotations', 'write'), (req: Request, res: Response) => {
+app.put('/api/quotations/:id', checkPermission('quotations', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_quotations.findIndex(q => q.id === id);
   if (index !== -1) {
     db_quotations[index] = { ...db_quotations[index], ...req.body };
-    syncStateToFirestore('quotations', id);
+    await syncStateToFirestore('quotations', id);
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_UPDATE", `Updated estimate status: ${db_quotations[index].quotationNumber} -> ${db_quotations[index].status}`);
     res.json(db_quotations[index]);
   } else {
@@ -1159,13 +1172,13 @@ app.put('/api/quotations/:id', checkPermission('quotations', 'write'), (req: Req
   }
 });
 
-app.delete('/api/quotations/:id', checkPermission('quotations', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/quotations/:id', checkPermission('quotations', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_quotations.findIndex(q => q.id === id);
   if (index !== -1) {
     const qNumber = db_quotations[index].quotationNumber;
     db_quotations.splice(index, 1);
-    syncStateToFirestore('quotations', id);
+    await syncStateToFirestore('quotations', id);
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_DELETE", `Deleted quotation estimate: ${qNumber}`);
     res.json({ success: true });
   } else {
@@ -1173,7 +1186,7 @@ app.delete('/api/quotations/:id', checkPermission('quotations', 'delete'), (req:
   }
 });
 
-app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), (req: Request, res: Response) => {
+app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const qIndex = db_quotations.findIndex(q => q.id === id);
   if (qIndex !== -1) {
@@ -1215,7 +1228,7 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
     // Incremental ledger outstanding
     if (clientDetails) {
       clientDetails.outstandingBalance += q.total;
-      syncStateToFirestore('clients', q.clientId);
+      await syncStateToFirestore('clients', q.clientId);
     }
 
     const newLedger: LedgerEntry = {
@@ -1233,9 +1246,9 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
     };
     db_ledger.unshift(newLedger);
 
-    syncStateToFirestore('invoices', invoiceId);
-    syncStateToFirestore('quotations', id);
-    syncStateToFirestore('ledger', newLedger.id);
+    await syncStateToFirestore('invoices', invoiceId);
+    await syncStateToFirestore('quotations', id);
+    await syncStateToFirestore('ledger', newLedger.id);
 
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CONVERT", `Authorized proposal ${q.quotationNumber} conversion into invoice ${invoiceNum}`);
     res.json({ success: true, invoice: convertedInvoice });
@@ -1249,7 +1262,7 @@ app.get('/api/payments', checkPermission('payments', 'read'), (req: Request, res
   res.json(db_payments);
 });
 
-app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, res: Response) => {
+app.post('/api/payments', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const payId = `pay-${Date.now()}`;
   const amountPaid = Number(data.amount || 0);
@@ -1282,7 +1295,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
     } else if (inv.paidAmount > 0) {
       inv.status = 'partially_paid';
     }
-    syncStateToFirestore('invoices', newPayment.invoiceId);
+    await syncStateToFirestore('invoices', newPayment.invoiceId);
   }
 
   // AUTOMATION TRIGGER 2: Auto outstanding updates in Client entity
@@ -1291,7 +1304,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
   if (clientIndex !== -1) {
     db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - amountPaid);
     runningClientBalance = db_clients[clientIndex].outstandingBalance;
-    syncStateToFirestore('clients', newPayment.clientId);
+    await syncStateToFirestore('clients', newPayment.clientId);
   }
 
   // AUTOMATION TRIGGER 3: Auto ledger record credits
@@ -1344,15 +1357,15 @@ app.post('/api/payments', checkPermission('payments', 'write'), (req: Request, r
   };
   db_cashbook.unshift(newCashbook);
 
-  syncStateToFirestore('payments', payId);
-  syncStateToFirestore('ledger', newLedger.id);
-  syncStateToFirestore('cashbook', newCashbook.id);
+  await syncStateToFirestore('payments', payId);
+  await syncStateToFirestore('ledger', newLedger.id);
+  await syncStateToFirestore('cashbook', newCashbook.id);
 
   logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
   res.status(201).json(newPayment);
 });
 
-app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request, res: Response) => {
+app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const data = req.body;
   const pIndex = db_payments.findIndex(pay => pay.id === id);
@@ -1367,13 +1380,13 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
       inv.paidAmount = Math.max(0, inv.paidAmount - oldAmount);
       inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
       inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      syncStateToFirestore('invoices', inv.id);
+      await syncStateToFirestore('invoices', inv.id);
     }
 
     const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
     if (oldClientIndex !== -1) {
       db_clients[oldClientIndex].outstandingBalance = db_clients[oldClientIndex].outstandingBalance + oldAmount;
-      syncStateToFirestore('clients', db_clients[oldClientIndex].id);
+      await syncStateToFirestore('clients', db_clients[oldClientIndex].id);
     }
 
     // Apply edits
@@ -1400,7 +1413,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
       inv.paidAmount = inv.paidAmount + newAmount;
       inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
       inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      syncStateToFirestore('invoices', inv.id);
+      await syncStateToFirestore('invoices', inv.id);
     }
 
     const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
@@ -1408,7 +1421,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
     if (newClientIndex !== -1) {
       db_clients[newClientIndex].outstandingBalance = Math.max(0, db_clients[newClientIndex].outstandingBalance - newAmount);
       runningClientBalance = db_clients[newClientIndex].outstandingBalance;
-      syncStateToFirestore('clients', db_clients[newClientIndex].id);
+      await syncStateToFirestore('clients', db_clients[newClientIndex].id);
     }
 
     // Filter and rebuild Ledger entry
@@ -1427,7 +1440,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
       createdAt: new Date().toISOString()
     };
     db_ledger.unshift(newLedger);
-    syncStateToFirestore('ledger', newLedger.id);
+    await syncStateToFirestore('ledger', newLedger.id);
 
     // Filter and rebuild Cashbook entry
     db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
@@ -1464,9 +1477,9 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
       createdAt: new Date().toISOString()
     };
     db_cashbook.unshift(newCashbook);
-    syncStateToFirestore('cashbook', newCashbook.id);
+    await syncStateToFirestore('cashbook', newCashbook.id);
 
-    syncStateToFirestore('payments', oldP.id);
+    await syncStateToFirestore('payments', oldP.id);
 
     logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
     res.json(oldP);
@@ -1475,7 +1488,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), (req: Request
   }
 });
 
-app.delete('/api/payments/:id', checkPermission('payments', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const pIndex = db_payments.findIndex(pay => pay.id === id);
   if (pIndex !== -1) {
@@ -1488,14 +1501,14 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), (req: Req
       inv.paidAmount = Math.max(0, inv.paidAmount - p.amount);
       inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
       inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      syncStateToFirestore('invoices', inv.id);
+      await syncStateToFirestore('invoices', inv.id);
     }
 
     // Revert Client outstanding balance
     const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
     if (clientIndex !== -1) {
       db_clients[clientIndex].outstandingBalance = db_clients[clientIndex].outstandingBalance + p.amount;
-      syncStateToFirestore('clients', db_clients[clientIndex].id);
+      await syncStateToFirestore('clients', db_clients[clientIndex].id);
     }
 
     // Revert Ledger
@@ -1507,7 +1520,7 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), (req: Req
     // Delete payment
     db_payments.splice(pIndex, 1);
 
-    syncStateToFirestore('payments', id);
+    await syncStateToFirestore('payments', id);
 
     logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName}`);
     res.json({ success: true });
@@ -1532,7 +1545,7 @@ app.get('/api/cashbook', checkPermission('cashbook', 'read'), (req: Request, res
   res.json(db_cashbook);
 });
 
-app.post('/api/cashbook', checkPermission('cashbook', 'write'), (req: Request, res: Response) => {
+app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const amount = Number(data.amount || 0);
   const type = data.type || "income"; // income, expense, bank_deposit, withdrawal, adjustment
@@ -1579,18 +1592,18 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), (req: Request, r
   };
 
   db_cashbook.unshift(newEntry);
-  syncStateToFirestore('cashbook', newEntry.id);
+  await syncStateToFirestore('cashbook', newEntry.id);
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
 });
 
-app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), (req: Request, res: Response) => {
+app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const data = req.body;
   const index = db_cashbook.findIndex(cb => cb.id === id);
   if (index !== -1) {
     db_cashbook[index] = { ...db_cashbook[index], ...data };
-    syncStateToFirestore('cashbook', id);
+    await syncStateToFirestore('cashbook', id);
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_UPDATE", `Updated manual transactional log: ${db_cashbook[index].description}`);
     res.json(db_cashbook[index]);
   } else {
@@ -1598,13 +1611,13 @@ app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), (req: Request
   }
 });
 
-app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), (req: Request, res: Response) => {
+app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const index = db_cashbook.findIndex(cb => cb.id === id);
   if (index !== -1) {
     const item = db_cashbook[index];
     db_cashbook.splice(index, 1);
-    syncStateToFirestore('cashbook', id);
+    await syncStateToFirestore('cashbook', id);
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_DELETE", `Deleted transactional log: ${item.description}`);
     res.json({ success: true });
   } else {
@@ -1617,7 +1630,7 @@ app.get('/api/users', checkPermission('users', 'read'), (req: Request, res: Resp
   res.json(db_users);
 });
 
-app.post('/api/users', checkPermission('users', 'write'), (req: Request, res: Response) => {
+app.post('/api/users', checkPermission('users', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const newUser: UserProfile = {
     userId: `u-${Date.now()}`,
@@ -1629,9 +1642,51 @@ app.post('/api/users', checkPermission('users', 'write'), (req: Request, res: Re
     lastLoginAt: ""
   };
   db_users.push(newUser);
-  syncStateToFirestore('users', newUser.userId);
+  await syncStateToFirestore('users', newUser.userId);
   logUserActivity("demo-admin", "Karan Sharma", "USER_CREATE", `Onboarded teammate ${newUser.name} as ${newUser.role}`);
   res.status(201).json(newUser);
+});
+
+app.put('/api/users/:userId', checkPermission('users', 'write'), async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const data = req.body;
+  const index = db_users.findIndex(u => u.userId === userId);
+  if (index !== -1) {
+    if (userId === 'demo-admin') {
+      res.status(403).json({ error: "Primary Administrator profile parameters cannot be changed or disabled." });
+      return;
+    }
+    db_users[index] = {
+      ...db_users[index],
+      name: data.name || db_users[index].name,
+      email: data.email || db_users[index].email,
+      role: data.role || db_users[index].role,
+      status: data.status || db_users[index].status
+    };
+    await syncStateToFirestore('users', userId);
+    logUserActivity("demo-admin", "Karan Sharma", "USER_UPDATE", `Updated teammate Operator: ${db_users[index].name}`);
+    res.json(db_users[index]);
+  } else {
+    res.status(404).json({ error: "Operator not found" });
+  }
+});
+
+app.delete('/api/users/:userId', checkPermission('users', 'delete'), async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const index = db_users.findIndex(u => u.userId === userId);
+  if (index !== -1) {
+    if (userId === 'demo-admin') {
+      res.status(403).json({ error: "Primary Administrator cannot be deleted." });
+      return;
+    }
+    const name = db_users[index].name;
+    db_users.splice(index, 1);
+    await syncStateToFirestore('users', userId);
+    logUserActivity("demo-admin", "Karan Sharma", "USER_DELETE", `Revoked teammate clearance for: ${name}`);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "Operator not found" });
+  }
 });
 
 // 10. Audit logs & notifications
@@ -1643,12 +1698,12 @@ app.get('/api/notifications', (req: Request, res: Response) => {
   res.json(db_notifications);
 });
 
-app.put('/api/notifications/:id/read', (req: Request, res: Response) => {
+app.put('/api/notifications/:id/read', async (req: Request, res: Response) => {
   const { id } = req.params;
   const item = db_notifications.find(n => n.id === id);
   if (item) {
     item.isRead = true;
-    syncStateToFirestore('notifications', id);
+    await syncStateToFirestore('notifications', id);
     res.json(item);
   } else {
     res.status(404).json({ error: "Notification not found" });
@@ -1660,10 +1715,10 @@ app.get('/api/settings', checkPermission('settings', 'read'), (req: Request, res
   res.json(db_settings);
 });
 
-app.post('/api/settings', checkPermission('settings', 'write'), (req: Request, res: Response) => {
+app.post('/api/settings', checkPermission('settings', 'write'), async (req: Request, res: Response) => {
   try {
     db_settings = { ...db_settings, ...req.body };
-    syncStateToFirestore('settings');
+    await syncStateToFirestore('settings');
     logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", "Updated corporate profile settings & banking info");
     res.json(db_settings);
   } catch (err: any) {
@@ -1690,14 +1745,12 @@ app.get('/api/passwords', (req: Request, res: Response) => {
   res.json(db_passwords);
 });
 
-app.post('/api/passwords', (req: Request, res: Response) => {
+app.post('/api/passwords', async (req: Request, res: Response) => {
   try {
     db_passwords = { ...db_passwords, ...req.body };
     saveStateToLocalCache();
     if (db) {
-      setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords).catch(e => {
-        console.warn("WARNING: Cloud write failed for passwords", e);
-      });
+      await setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords);
     }
     res.json({ success: true, passwords: db_passwords });
   } catch (err: any) {

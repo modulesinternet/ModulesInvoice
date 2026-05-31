@@ -24,6 +24,8 @@ import {
   Info
 } from 'lucide-react';
 import { api } from './services/api';
+import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { DEFAULT_SETTINGS } from './lib/demoData';
 import { 
   Client, 
@@ -421,6 +423,92 @@ export default function App() {
     loadMasterData();
   }, []);
 
+  // Set up deep real-time client-side Firestore listeners for multi-device instant live sync
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribeList: (() => void)[] = [];
+
+    const syncCollection = <T,>(
+      path: string,
+      setter: React.Dispatch<React.SetStateAction<T[]>>,
+      idField: string = 'id'
+    ) => {
+      try {
+        const unsub = onSnapshot(
+          collection(firestoreDb, path),
+          (snapshot) => {
+            const list: T[] = [];
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              // Preserve exact keys/IDs
+              if (idField === 'id') {
+                list.push({ id: doc.id, ...data } as T);
+              } else if (idField === 'userId') {
+                list.push({ userId: doc.id, ...data } as T);
+              } else {
+                list.push({ ...data } as T);
+              }
+            });
+            setter(list);
+          },
+          (error) => {
+            // Standard formatted Firestore error handling callback (required by Firebase skill)
+            handleFirestoreError(error, OperationType.LIST, path);
+          }
+        );
+        unsubscribeList.push(unsub);
+      } catch (err) {
+        console.error(`Error subscribing to Firestore collection ${path}: `, err);
+      }
+    };
+
+    // Subscribing to each collection mapping from firebase-blueprint.json
+    syncCollection<Client>('clients', setClients, 'id');
+    syncCollection<Product>('products', setProducts, 'id');
+    syncCollection<Invoice>('invoices', setInvoices, 'id');
+    syncCollection<Quotation>('quotations', setQuotations, 'id');
+    syncCollection<Payment>('payments', setPayments, 'id');
+    syncCollection<LedgerEntry>('ledger', setLedger, 'id');
+    syncCollection<CashbookEntry>('cashbook', setCashbook, 'id');
+    syncCollection<UserProfile>('users', setUsers, 'userId');
+    syncCollection<Notification>('notifications', setNotifications, 'id');
+    syncCollection<ActivityLog>('activityLogs', setLogs, 'id');
+
+    // Subscribe to global singleton organization and business settings
+    try {
+      const unsubSettings = onSnapshot(
+        doc(firestoreDb, 'businessSettings', 'global'),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            setBusinessSettings(snapshot.data() as BusinessSettings);
+          }
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, 'businessSettings/global');
+        }
+      );
+      unsubscribeList.push(unsubSettings);
+    } catch (err) {
+      console.error("Error subscribing to settings document: ", err);
+    }
+
+    return () => {
+      unsubscribeList.forEach((unsub) => unsub());
+    };
+  }, [currentUser]);
+
+  // Automated real-time re-calculation of operating margins, cash, bank, and invoice metrics
+  useEffect(() => {
+    const locallyComputed = computeLocalDashboardMetrics(
+      clients,
+      invoices,
+      payments,
+      cashbook
+    );
+    setDashboardMetrics(locallyComputed);
+  }, [clients, invoices, payments, cashbook]);
+
   useEffect(() => {
     const handleReSync = () => {
       loadMasterData();
@@ -696,6 +784,26 @@ export default function App() {
     try {
       await api.createUser(u);
       showToast(`Access granted: Invited team member ${u.name}`);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleUpdateUser = async (userId: string, u: Partial<UserProfile>) => {
+    try {
+      await api.updateUser(userId, u);
+      showToast(`Update saved: Modified details for team member ${u.name}`);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await api.deleteUser(userId);
+      showToast(`Teammate credentials and access revoked.`);
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1684,6 +1792,8 @@ export default function App() {
                   users={users}
                   logs={logs}
                   onCreateUser={handleCreateUser}
+                  onUpdateUser={handleUpdateUser}
+                  onDeleteUser={handleDeleteUser}
                   canWrite={getModulePermissions('users').write}
                   canDelete={getModulePermissions('users').delete}
                   appRoles={appRoles}

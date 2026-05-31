@@ -60,7 +60,7 @@ export default function CashbookModule({
   // Form states
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
-  const [type, setType] = useState('payment'); // Default to payment (Cash Out)
+  const [entryType, setEntryType] = useState<'income' | 'expense' | 'bank_deposit' | 'withdrawal'>('expense');
   const [account, setAccount] = useState('bank');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -83,11 +83,11 @@ export default function CashbookModule({
     const payload: Partial<CashbookEntry> = {
       date,
       description,
-      type: 'expense', // Forced Cash Out
+      type: entryType,
       amount: Number(amount),
       paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
       referenceId: reference,
-      category: category || 'General'
+      category: entryType === 'expense' ? (category || 'General') : 'General'
     };
 
     await onCreateCashbookEntry(payload);
@@ -112,11 +112,11 @@ export default function CashbookModule({
     const payload: Partial<CashbookEntry> = {
       date,
       description,
-      type: 'expense', // Forced Cash Out
+      type: entryType,
       amount: Number(amount),
       paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
       referenceId: reference,
-      category: category || 'General'
+      category: entryType === 'expense' ? (category || 'General') : 'General'
     };
 
     if (onUpdateCashbookEntry) {
@@ -139,10 +139,11 @@ export default function CashbookModule({
     setAmount(String(entry.amount));
     setReference(entry.referenceId || '');
     setCategory(entry.category || 'General');
+    setEntryType(entry.type as any);
   };
 
   const handleDelete = async (id: string, desc: string) => {
-    if (window.confirm(`Are you sure you want to delete Cash Out entry: "${desc}"?`)) {
+    if (window.confirm(`Are you sure you want to permanently delete Cashbook entry: "${desc}"?`)) {
       if (onDeleteCashbookEntry) {
         await onDeleteCashbookEntry(id);
       }
@@ -208,12 +209,21 @@ export default function CashbookModule({
         </div>
         {canWrite && (
           <button 
-            onClick={() => setIsModalOpen(true)}
-            className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2"
+            onClick={() => {
+              setEditingEntry(null);
+              setEntryType('expense');
+              setDate(new Date().toISOString().split('T')[0]);
+              setDescription('');
+              setAmount('');
+              setReference('');
+              setCategory('General');
+              setIsModalOpen(true);
+            }}
+            className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2 animate-none animate-none"
             id="add-cashbook-entry-btn"
           >
             <Plus className="w-4 h-4" />
-            <span>Record Cash Out</span>
+            <span>Post Cash Voucher</span>
           </button>
         )}
       </div>
@@ -325,26 +335,22 @@ export default function CashbookModule({
                     {row.type === 'expense' || row.type === 'withdrawal' ? `- ${formatCurrency(row.amount)}` : '-'}
                   </td>
                   <td className="py-3.5 px-5 text-center">
-                    {row.type === 'expense' ? (
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          onClick={() => startEdit(row)}
-                          className="p-1 px-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition cursor-pointer"
-                          title="Edit Cash Out"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(row.id, row.description)}
-                          className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
-                          title="Delete Cash Out"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-slate-300">-</span>
-                    )}
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={() => startEdit(row)}
+                        className="p-1 px-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                        title="Edit Cashbook Entry"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(row.id, row.description)}
+                        className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                        title="Delete Cashbook Entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -372,7 +378,7 @@ export default function CashbookModule({
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <h3 className="font-bold text-sm">Post Cash Out Entry</h3>
+              <h3 className="font-bold text-sm">Post Cash Voucher</h3>
               <button onClick={() => setIsModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
               </button>
@@ -386,7 +392,7 @@ export default function CashbookModule({
                   required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -402,83 +408,92 @@ export default function CashbookModule({
                 />
               </div>
 
-              <div className="space-y-1">
-                <div className="flex justify-between items-center mb-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+              {entryType === 'expense' && (
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+                    {!isAddingNewCat ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewCat(true)}
+                        className="text-[10px] text-indigo-600 font-bold hover:underline"
+                      >
+                        + Create Category
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewCat(false)}
+                        className="text-[10px] text-slate-500 font-bold hover:underline"
+                      >
+                        Use Dropdown
+                      </button>
+                    )}
+                  </div>
+                  
                   {!isAddingNewCat ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNewCat(true)}
-                      className="text-[10px] text-indigo-600 font-bold hover:underline"
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                      required
                     >
-                      + Create Category
-                    </button>
+                      <option value="General">General</option>
+                      {categories.filter(c => c !== 'General').map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNewCat(false)}
-                      className="text-[10px] text-slate-500 font-bold hover:underline"
-                    >
-                      Use Dropdown
-                    </button>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. AWS Cloud, Rent, Wages"
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        className="w-full text-xs p-2 border border-slate-200 rounded-xl focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const trimmed = newCatName.trim();
+                          if (trimmed && onAddCategory) {
+                            await onAddCategory(trimmed);
+                            setCategory(trimmed);
+                            setIsAddingNewCat(false);
+                            setNewCatName('');
+                          } else {
+                            alert('Please specify a valid category name.');
+                          }
+                        }}
+                        className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
+                      >
+                        Add
+                      </button>
+                    </div>
                   )}
                 </div>
-                
-                {!isAddingNewCat ? (
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
-                    required
-                  >
-                    <option value="General">General</option>
-                    {categories.filter(c => c !== 'General').map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. AWS Cloud, Rent, Wages"
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-xl"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const trimmed = newCatName.trim();
-                        if (trimmed && onAddCategory) {
-                          await onAddCategory(trimmed);
-                          setCategory(trimmed);
-                          setIsAddingNewCat(false);
-                          setNewCatName('');
-                        } else {
-                          alert('Please specify a valid category name.');
-                        }
-                      }}
-                      className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
-                    >
-                      Add
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type</label>
-                  <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-rose-500">
-                    Debit / Payment (-)
-                  </div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type *</label>
+                  <select
+                    value={entryType}
+                    onChange={(e) => setEntryType(e.target.value as any)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
+                  >
+                    <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
+                    <option value="income" className="text-emerald-600 font-bold">Credit / Receipt (+)</option>
+                    <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
+                    <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Account Pool *</label>
                   <select
                     value={account}
                     onChange={(e) => setAccount(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-medium"
                   >
                     <option value="bank">HDFC Current Bank A/C</option>
                     <option value="cash">Daily Physical Cash</option>
@@ -536,7 +551,7 @@ export default function CashbookModule({
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <h3 className="font-bold text-sm">Edit Cash Out Entry</h3>
+              <h3 className="font-bold text-sm">Edit Cashbook Entry</h3>
               <button onClick={() => setEditingEntry(null)}>
                 <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
               </button>
@@ -550,7 +565,7 @@ export default function CashbookModule({
                   required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 />
               </div>
 
@@ -566,76 +581,85 @@ export default function CashbookModule({
                 />
               </div>
 
-              <div className="space-y-1">
-                <div className="flex justify-between items-center mb-0.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+              {entryType === 'expense' && (
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Expense Category *</label>
+                    {!isAddingNewCat ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewCat(true)}
+                        className="text-[10px] text-indigo-600 font-bold hover:underline"
+                      >
+                        + Create Category
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewCat(false)}
+                        className="text-[10px] text-slate-500 font-bold hover:underline"
+                      >
+                        Use Dropdown
+                      </button>
+                    )}
+                  </div>
+                  
                   {!isAddingNewCat ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNewCat(true)}
-                      className="text-[10px] text-indigo-600 font-bold hover:underline"
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
+                      required
                     >
-                      + Create Category
-                    </button>
+                      <option value="General">General</option>
+                      {categories.filter(c => c !== 'General').map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNewCat(false)}
-                      className="text-[10px] text-slate-500 font-bold hover:underline"
-                    >
-                      Use Dropdown
-                    </button>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. AWS Cloud, Rent, Wages"
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        className="w-full text-xs p-2 border border-slate-200 rounded-xl focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const trimmed = newCatName.trim();
+                          if (trimmed && onAddCategory) {
+                            await onAddCategory(trimmed);
+                            setCategory(trimmed);
+                            setIsAddingNewCat(false);
+                            setNewCatName('');
+                          } else {
+                            alert('Please specify a valid category name.');
+                          }
+                        }}
+                        className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
+                      >
+                        Add
+                      </button>
+                    </div>
                   )}
                 </div>
-                
-                {!isAddingNewCat ? (
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
-                    required
-                  >
-                    <option value="General">General</option>
-                    {categories.filter(c => c !== 'General').map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. AWS Cloud, Rent, Wages"
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-xl"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const trimmed = newCatName.trim();
-                        if (trimmed && onAddCategory) {
-                          await onAddCategory(trimmed);
-                          setCategory(trimmed);
-                          setIsAddingNewCat(false);
-                          setNewCatName('');
-                        } else {
-                          alert('Please specify a valid category name.');
-                        }
-                      }}
-                      className="px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold"
-                    >
-                      Add
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type</label>
-                  <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-rose-500">
-                    Debit / Payment (-)
-                  </div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Type *</label>
+                  <select
+                    value={entryType}
+                    onChange={(e) => setEntryType(e.target.value as any)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
+                  >
+                    <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
+                    <option value="income" className="text-emerald-600 font-bold">Credit / Receipt (+)</option>
+                    <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
+                    <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase">Account Pool *</label>
@@ -658,7 +682,7 @@ export default function CashbookModule({
                     required
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div className="space-y-1">
@@ -669,7 +693,7 @@ export default function CashbookModule({
                     placeholder="e.g. RF99120"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -687,7 +711,7 @@ export default function CashbookModule({
                   type="submit"
                   className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
                 >
-                  Save Cash Out Edits
+                  Save Entry Edits
                 </button>
               </div>
             </form>

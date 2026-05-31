@@ -1,481 +1,804 @@
 {
   "db_settings": {
-    "ifscCode": "HDFC0000060",
-    "address": "Suite 405, Dynasty Business Park, Andheri-Kurla Road, Andheri East, Mumbai, Maharashtra 400059",
-    "gstOption": "standard",
-    "phone": "+91 22 4912 3000",
+    "signatureUrl": "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
     "gstIn": "27AAZCA4312R1ZX",
-    "website": "www.apexdigital.in",
-    "quotationPrefix": "EST/26-27/",
-    "companyName": "Apex Digital Solutions Test",
     "email": "billing@local.com",
-    "accountNum": "50200049182312",
-    "timezone": "Asia/Kolkata",
-    "pan": "AAZCA4312R",
-    "titleBarText": "Apex Digital",
-    "bankName": "HDFC Bank Ltd",
+    "phone": "+91 22 4912 3000",
+    "quotationPrefix": "EST/26-27/",
     "invoicePrefix": "APX/26-27/",
-    "currency": "INR",
-    "logoUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
+    "companyName": "Apex Digital Solutions Test",
+    "timezone": "Asia/Kolkata",
     "faviconUrl": "",
+    "gstOption": "standard",
+    "currency": "INR",
+    "ifscCode": "HDFC0000060",
+    "titleBarText": "Apex Digital",
+    "logoUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
+    "accountNum": "50200049182312",
     "upiId": "apexcorp@hdfcbank",
-    "signatureUrl": "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80"
+    "address": "Suite 405, Dynasty Business Park, Andheri-Kurla Road, Andheri East, Mumbai, Maharashtra 400059",
+    "website": "www.apexdigital.in",
+    "bankName": "HDFC Bank Ltd",
+    "pan": "AAZCA4312R"
   },
   "db_clients": [
     {
-      "id": "c-1779793104072",
-      "name": "Test Client",
-      "email": "test@example.com",
-      "phone": "123456789",
-      "gstIn": "",
-      "pan": "",
-      "billingAddress": "",
-      "shippingAddress": "",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-26T10:58:24.072Z"
-    },
-    {
-      "email": "test@local.com",
-      "id": "c-1779715135593",
-      "outstandingBalance": 0,
-      "billingAddress": "Local Address",
-      "pan": "",
-      "createdAt": "2026-05-25T13:18:55.593Z",
-      "name": "Test Client Local",
-      "shippingAddress": "Local Address",
-      "gstIn": "",
-      "phone": "+91 99999 99999"
-    },
-    {
-      "id": "c-1779715195529",
-      "outstandingBalance": 0,
-      "billingAddress": "",
-      "pan": "",
-      "email": "",
-      "shippingAddress": "",
-      "phone": "",
-      "gstIn": "",
-      "createdAt": "2026-05-25T13:19:55.529Z",
-      "name": "Permission client"
-    },
-    {
-      "gstIn": "",
-      "phone": "",
-      "shippingAddress": "",
-      "createdAt": "2026-05-25T13:19:55.545Z",
-      "name": "Permission client",
-      "billingAddress": "",
-      "pan": "",
-      "id": "c-1779715195545",
-      "outstandingBalance": 0,
-      "email": ""
-    },
-    {
-      "createdAt": "2026-05-25T13:19:55.549Z",
-      "name": "Permission client",
-      "shippingAddress": "",
-      "gstIn": "",
-      "phone": "",
-      "email": "",
-      "id": "c-1779715195549",
-      "outstandingBalance": 0,
-      "billingAddress": "",
-      "pan": ""
-    },
-    {
-      "shippingAddress": "",
-      "phone": "",
-      "gstIn": "",
-      "createdAt": "2026-05-25T13:19:55.553Z",
-      "name": "Permission client",
-      "id": "c-1779715195553",
-      "outstandingBalance": 0,
-      "billingAddress": "",
-      "pan": "",
-      "email": ""
-    },
-    {
-      "phone": "",
-      "gstIn": "",
-      "shippingAddress": "",
-      "createdAt": "2026-05-25T13:24:27.675Z",
-      "name": "Test API Client",
-      "pan": "",
-      "billingAddress": "",
-      "outstandingBalance": 0,
-      "id": "c-1779715467675",
-      "email": "client@test.com"
-    },
-    {
-      "email": "finance@tcs.com",
-      "outstandingBalance": 45000,
-      "id": "c1",
-      "pan": "AAATT1234F",
-      "billingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
-      "name": "Tata Consultancy Services Ltd",
-      "createdAt": "2026-05-01T10:00:00Z",
-      "shippingAddress": "TCS House, Raveline Street, Fort, Mumbai 400001",
-      "gstIn": "27AAATT1234F1Z1",
-      "phone": "+91 22 6778 9999"
-    },
-    {
-      "email": "finance.hul@unilever.com",
-      "billingAddress": "HUL House, B.D. Sawant Marg, Chakala, Andheri East, Mumbai 400099",
-      "pan": "AAACH8091A",
-      "id": "c10",
-      "outstandingBalance": 0,
-      "createdAt": "2026-05-08T09:30:00Z",
-      "name": "Hindustan Unilever Ltd",
-      "phone": "+91 22 3983 0000",
-      "gstIn": "27AAACH8091A1ZR",
-      "shippingAddress": "HUL Warehousing Hub, Bhiwandi, Thane 421302"
-    },
-    {
-      "id": "c2",
-      "outstandingBalance": 128000,
-      "billingAddress": "Court House, Lokmanya Tilak Marg, Dhobi Talao, Mumbai 400002",
-      "pan": "AAACR1039K",
-      "email": "vendor.billing@reliance.com",
-      "shippingAddress": "Reliance Corporate Park, Ghansoli, Navi Mumbai 400701",
-      "phone": "+91 22 4477 0000",
-      "gstIn": "27AAACR1039K1ZM",
-      "createdAt": "2026-05-01T11:00:00Z",
-      "name": "Reliance Retail Ltd"
-    },
-    {
-      "email": "accounts.payable@infosys.com",
-      "id": "c3",
-      "outstandingBalance": 0,
-      "billingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100",
-      "pan": "AAACI4321A",
-      "createdAt": "2026-05-02T09:00:00Z",
-      "name": "Infosys Limited",
-      "shippingAddress": "Electronics City, Hosur Road, Bengaluru, Karnataka 560100",
-      "phone": "+91 80 2852 0261",
-      "gstIn": "29AAACI4321A1ZB"
-    },
-    {
-      "email": "billing.services@wipro.com",
-      "id": "c4",
-      "outstandingBalance": 15400,
-      "billingAddress": "Doddakannelli, Sarjapur Road, Bengaluru, Karnataka 560035",
-      "pan": "AAACW5678C",
-      "name": "Wipro Limited",
-      "createdAt": "2026-05-02T10:30:00Z",
-      "shippingAddress": "Doddakannelli, Sarjapur Road, Bengaluru, Karnataka 560035",
-      "gstIn": "29AAACW5678C1Z0",
-      "phone": "+91 80 2844 0011"
-    },
-    {
-      "outstandingBalance": 89000,
-      "id": "c5",
-      "pan": "AAACM2345K",
-      "billingAddress": "Gateway Building, Apollo Bunder, Colaba, Mumbai 400001",
-      "email": "accounts@mahindra.co.in",
-      "shippingAddress": "M&M Automotive Plant, Kandivali East, Mumbai 400101",
-      "phone": "+91 22 2490 1441",
-      "gstIn": "27AAACM2345K1ZK",
-      "createdAt": "2026-05-03T12:00:00Z",
-      "name": "Mahindra & Mahindra Ltd"
-    },
-    {
-      "billingAddress": "13th Floor, Lodha Excelus, Apollo Mills Compound, Mahalaxmi, Mumbai 400011",
-      "pan": "AABCH1209D",
-      "id": "c6",
-      "outstandingBalance": 0,
-      "email": "vendorpayments@hdfclife.com",
-      "gstIn": "27AABCH1209D1ZH",
-      "phone": "+91 22 6751 6666",
-      "shippingAddress": "13th Floor, Lodha Excelus, Mahalaxmi, Mumbai 400011",
-      "name": "HDFC Life Insurance Co Ltd",
-      "createdAt": "2026-05-04T14:00:00Z"
-    },
-    {
-      "shippingAddress": "Adani Corporate House, Ahmedabad 382421",
-      "phone": "+91 79 2656 5555",
-      "gstIn": "24AAACA1290B1ZZ",
-      "createdAt": "2026-05-05T10:00:00Z",
-      "name": "Adani Enterprises Ltd",
-      "outstandingBalance": 245000,
-      "id": "c7",
-      "pan": "AAACA1290B",
-      "billingAddress": "Adani Corporate House, Shantigram, SG Highway, Ahmedabad, Gujarat 382421",
-      "email": "finance.corporate@adani.com"
-    },
-    {
-      "createdAt": "2026-05-06T15:00:00Z",
-      "name": "Larsen & Toubro Ltd",
-      "shippingAddress": "L&T Gate No 1, Powai, Saki Vihar Road, Mumbai 400072",
-      "phone": "+91 22 6752 5656",
-      "gstIn": "27AAACL3409E1ZT",
-      "email": "billdesk@lntecc.com",
-      "outstandingBalance": 75000,
-      "id": "c8",
-      "pan": "AAACL3409E",
-      "billingAddress": "L&T House, Ballard Estate, Mumbai 400001"
-    },
-    {
-      "billingAddress": "Bharti Crescent, 1 Nelson Mandela Road, Vasant Kunj, New Delhi 110070",
-      "pan": "ACA2304K",
-      "id": "c9",
-      "outstandingBalance": 12000,
-      "email": "partner.payables@airtel.com",
       "phone": "+91 11 4666 1000",
+      "email": "partner.payables@airtel.com",
       "gstIn": "07AAACA2304K1ZC",
-      "shippingAddress": "Bharti Crescent, Vasant Kunj, New Delhi 110070",
+      "outstandingBalance": 44800,
+      "id": "c9",
       "createdAt": "2026-05-07T11:00:00Z",
-      "name": "Airtel Business Solutions"
+      "pan": "ACA2304K",
+      "billingAddress": "Bharti Crescent, 1 Nelson Mandela Road, Vasant Kunj, New Delhi 110070",
+      "name": "Airtel Business Solutions",
+      "shippingAddress": "Bharti Crescent, Vasant Kunj, New Delhi 110070"
     }
   ],
   "db_products": [
     {
-      "price": 1500,
-      "unit": "PCS",
-      "sku": "SKU-1779715467693",
-      "name": "Test API Product",
+      "category": "Software Services",
       "hsnSac": "",
       "stockQty": 100,
+      "price": 1500,
       "gstPercent": 18,
+      "sku": "SKU-1779715467693",
+      "name": "Test API Product",
       "id": "p-1779715467693",
-      "category": "Software Services"
+      "unit": "PCS"
     }
   ],
   "db_invoices": [
     {
-      "notes": "",
-      "createdAt": "2026-05-25T13:24:27.703Z",
-      "taxType": "CGST_SGST",
-      "clientName": "Test API Client",
-      "clientId": "c-1",
-      "taxAmount": 0,
+      "clientGst": "URP",
+      "items": [
+        {
+          "gstPercent": 18,
+          "gstAmount": 270,
+          "price": 1500,
+          "qty": 1,
+          "totalAmount": 1770,
+          "productId": "p-1779715467693",
+          "hsnSac": "",
+          "name": "Test API Product"
+        }
+      ],
+      "subtotal": 1500,
+      "dueAmount": 1770,
+      "clientName": "Permission client",
+      "date": "2026-05-25",
+      "notes": "Humble warning: Please quote our invoice serial number in all bank payouts.",
+      "total": 1770,
+      "clientId": "c-1779715195549",
       "readCount": 0,
-      "total": 5000,
-      "invoiceNumber": "APX/26-27/001",
-      "status": "unpaid",
-      "clientGst": "",
-      "dueAmount": 5000,
-      "id": "inv-1779715467703",
-      "paidAmount": 0,
-      "subtotal": 5000,
-      "items": [],
-      "dueDate": "2026-06-09",
+      "invoiceNumber": "APX/26-27/002",
       "discount": 0,
-      "date": "2026-05-25"
+      "taxAmount": 270,
+      "status": "unpaid",
+      "paidAmount": 0,
+      "dueDate": "2026-06-09",
+      "createdAt": "2026-05-30T05:51:05.974Z",
+      "id": "inv-1780120265973",
+      "taxType": "IGST"
     }
   ],
   "db_quotations": [
     {
-      "notes": "",
-      "clientId": "c-1",
+      "items": [],
+      "subtotal": 0,
       "clientName": "Test API Client",
-      "createdAt": "2026-05-25T13:24:27.707Z",
-      "quotationNumber": "EST/26-27/001",
-      "taxAmount": 0,
+      "date": "2026-05-25",
+      "notes": "",
       "total": 4500,
+      "quotationNumber": "EST/26-27/001",
+      "clientId": "c-1",
+      "taxAmount": 0,
+      "discount": 0,
       "status": "draft",
       "expiryDate": "2026-06-24",
-      "id": "q-1779715467707",
-      "subtotal": 0,
-      "items": [],
-      "discount": 0,
-      "date": "2026-05-25"
+      "createdAt": "2026-05-25T13:24:27.707Z",
+      "id": "q-1779715467707"
     }
   ],
-  "db_payments": [],
+  "db_payments": [
+    {
+      "clientId": "c1",
+      "paymentDate": "2026-05-05",
+      "invoiceNumber": "APX/26-27/001",
+      "paymentMode": "Bank Transfer",
+      "referenceNum": "NEFTHDFC908234",
+      "clientName": "Tata Consultancy Services Ltd",
+      "invoiceId": "inv1",
+      "createdAt": "2026-05-05T12:00:00Z",
+      "amount": 88500,
+      "id": "pay1",
+      "remarks": "Full settlement for Server deployment"
+    },
+    {
+      "paymentMode": "Cash",
+      "referenceNum": "CSH-MOCK",
+      "clientId": "c6",
+      "invoiceNumber": "APX/26-27/010",
+      "paymentDate": "2026-05-21",
+      "createdAt": "2026-05-21T09:00:00Z",
+      "amount": 0,
+      "remarks": "Adjustment verification entry",
+      "id": "pay10",
+      "clientName": "HDFC Life Insurance Co Ltd",
+      "invoiceId": "inv10"
+    },
+    {
+      "paymentMode": "Bank Transfer",
+      "referenceNum": "NEFTHDFC123049",
+      "clientId": "c3",
+      "invoiceNumber": "APX/26-27/002",
+      "paymentDate": "2026-05-10",
+      "createdAt": "2026-05-10T14:00:00Z",
+      "amount": 344000,
+      "remarks": "SaaS platform final delivery milestone approval",
+      "id": "pay2",
+      "clientName": "Infosys Limited",
+      "invoiceId": "inv2"
+    },
+    {
+      "createdAt": "2026-05-15T10:30:00Z",
+      "amount": 131800,
+      "id": "pay3",
+      "remarks": "Part-payment mobile licenses bundle",
+      "clientName": "Reliance Retail Ltd",
+      "invoiceId": "inv3",
+      "paymentMode": "UPI",
+      "referenceNum": "UPI263728349247",
+      "clientId": "c2",
+      "paymentDate": "2026-05-15",
+      "invoiceNumber": "APX/26-27/003"
+    },
+    {
+      "remarks": "Advance for design workshop materials",
+      "id": "pay4",
+      "createdAt": "2026-05-16T11:00:00Z",
+      "amount": 6300,
+      "invoiceId": "inv4",
+      "clientName": "Mahindra & Mahindra Ltd",
+      "referenceNum": "CSH-0294",
+      "paymentMode": "Cash",
+      "paymentDate": "2026-05-16",
+      "invoiceNumber": "APX/26-27/004",
+      "clientId": "c5"
+    },
+    {
+      "clientId": "c9",
+      "paymentDate": "2026-05-18",
+      "invoiceNumber": "APX/26-27/007",
+      "paymentMode": "UPI",
+      "referenceNum": "UPI90231201948",
+      "clientName": "Airtel Business Solutions",
+      "invoiceId": "inv7",
+      "amount": 32800,
+      "createdAt": "2026-05-18T16:30:00Z",
+      "remarks": "Payment for marketing digital panels setup",
+      "id": "pay5"
+    },
+    {
+      "paymentDate": "2026-05-02",
+      "invoiceNumber": "APX/26-27/010",
+      "clientId": "c6",
+      "referenceNum": "CHQ560129",
+      "paymentMode": "Cheque",
+      "invoiceId": "inv10",
+      "clientName": "HDFC Life Insurance Co Ltd",
+      "id": "pay6",
+      "remarks": "Cheque clear for translation services invoice 010",
+      "amount": 16800,
+      "createdAt": "2026-05-02T16:45:00Z"
+    },
+    {
+      "referenceNum": "UPI8723902341",
+      "paymentMode": "UPI",
+      "paymentDate": "2026-05-19",
+      "invoiceNumber": "APX/26-27/008",
+      "clientId": "c4",
+      "remarks": "Micro payment retainer backing setup",
+      "id": "pay7",
+      "createdAt": "2026-05-19T09:00:00Z",
+      "amount": 2300,
+      "invoiceId": "inv8",
+      "clientName": "Wipro Limited"
+    },
+    {
+      "amount": 100000,
+      "createdAt": "2026-05-20T14:15:00Z",
+      "remarks": "Second part payment for transceiver boards",
+      "id": "pay8",
+      "clientName": "Reliance Retail Ltd",
+      "invoiceId": "inv3",
+      "paymentMode": "Bank Transfer",
+      "referenceNum": "RTGSHDFC901238",
+      "clientId": "c2",
+      "invoiceNumber": "APX/26-27/003",
+      "paymentDate": "2026-05-20"
+    },
+    {
+      "clientName": "Tata Consultancy Services Ltd",
+      "invoiceId": "inv1",
+      "amount": 10000,
+      "createdAt": "2026-05-20T17:00:00Z",
+      "remarks": "Direct refund ledger balancing key",
+      "id": "pay9",
+      "clientId": "c1",
+      "invoiceNumber": "APX/26-27/001",
+      "paymentDate": "2026-05-20",
+      "paymentMode": "Cash",
+      "referenceNum": "CSH-0299"
+    }
+  ],
   "db_ledger": [
     {
       "createdAt": "2026-05-25T13:24:27.703Z",
+      "description": "Invoice Modified: APX/26-27/001",
+      "date": "2026-05-25",
+      "amount": 1770,
+      "id": "led-1779715467703",
       "clientName": "Test API Client",
-      "clientId": "c-1",
       "runningBalance": 5000,
-      "referenceId": "inv-1779715467703",
-      "amount": 5000,
-      "type": "debit",
-      "date": "2026-05-25",
       "referenceType": "invoice",
-      "description": "Invoice Raised: APX/26-27/001",
-      "id": "led-1779715467703"
-    }
-  ],
-  "db_cashbook": [
+      "referenceId": "inv-1779715467703",
+      "clientId": "c-1",
+      "type": "debit"
+    },
     {
-      "paymentMode": "Cash",
-      "id": "cb-1779715467712",
-      "description": "Test income cash",
-      "runningCashBalance": 300,
+      "clientName": "Permission client",
+      "runningBalance": 1770,
+      "description": "Invoice Raised: APX/26-27/002",
+      "amount": 1770,
       "date": "2026-05-25",
-      "type": "income",
-      "amount": 300,
-      "runningBankBalance": 0,
-      "createdAt": "2026-05-25T13:24:27.712Z"
+      "createdAt": "2026-05-30T05:51:05.975Z",
+      "id": "led-1780120265975",
+      "clientId": "c-1779715195549",
+      "type": "debit",
+      "referenceId": "inv-1780120265973",
+      "referenceType": "invoice"
     }
   ],
+  "db_cashbook": [],
   "db_logs": [
     {
-      "id": "log-1779793117818-654",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "ROLE_PERMISSIONS_UPDATE",
-      "details": "Reconfigured operational permission matrices for Role: Staff",
-      "timestamp": "2026-05-26T10:58:37.818Z"
-    },
-    {
-      "id": "log-1779793104075-98",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "action": "CLIENT_CREATE",
-      "details": "Registered new client: Test Client",
-      "timestamp": "2026-05-26T10:58:24.075Z"
-    },
-    {
-      "userName": "Karan Sharma",
-      "timestamp": "2026-05-25T12:22:35.562Z",
-      "details": "Updated corporate profile settings & banking info",
-      "id": "log-1779711755562-585",
       "action": "SETTINGS_WRITE",
-      "userId": "demo-admin"
+      "timestamp": "2026-05-25T12:22:35.562Z",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Updated corporate profile settings & banking info",
+      "id": "log-1779711755562-585"
     },
     {
       "id": "log-1779714488581-219",
-      "action": "SETTINGS_WRITE",
-      "userId": "demo-admin",
       "userName": "Karan Sharma",
       "details": "Updated corporate profile settings & banking info",
+      "userId": "demo-admin",
+      "action": "SETTINGS_WRITE",
       "timestamp": "2026-05-25T13:08:08.581Z"
     },
     {
-      "id": "log-1779714511579-49",
       "action": "SETTINGS_WRITE",
-      "userId": "demo-admin",
-      "details": "Updated corporate profile settings & banking info",
       "timestamp": "2026-05-25T13:08:31.579Z",
-      "userName": "Karan Sharma"
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Updated corporate profile settings & banking info",
+      "id": "log-1779714511579-49"
     },
     {
+      "id": "log-1779715135596-971",
       "userName": "Karan Sharma",
       "details": "Registered new client: Test Client Local",
-      "timestamp": "2026-05-25T13:18:55.596Z",
       "userId": "demo-admin",
-      "id": "log-1779715135596-971",
-      "action": "CLIENT_CREATE"
+      "action": "CLIENT_CREATE",
+      "timestamp": "2026-05-25T13:18:55.596Z"
     },
     {
-      "userId": "demo-admin",
-      "action": "SETTINGS_WRITE",
       "id": "log-1779715147678-792",
       "userName": "Karan Sharma",
       "details": "Updated corporate profile settings & banking info",
+      "userId": "demo-admin",
+      "action": "SETTINGS_WRITE",
       "timestamp": "2026-05-25T13:19:07.678Z"
     },
     {
-      "userId": "demo-admin",
-      "id": "log-1779715195530-729",
       "action": "CLIENT_CREATE",
-      "details": "Registered new client: Permission client",
       "timestamp": "2026-05-25T13:19:55.530Z",
-      "userName": "Karan Sharma"
-    },
-    {
-      "timestamp": "2026-05-25T13:19:55.545Z",
+      "userId": "demo-admin",
       "details": "Registered new client: Permission client",
       "userName": "Karan Sharma",
+      "id": "log-1779715195530-729"
+    },
+    {
       "userId": "demo-admin",
+      "action": "CLIENT_CREATE",
+      "timestamp": "2026-05-25T13:19:55.545Z",
       "id": "log-1779715195545-939",
+      "userName": "Karan Sharma",
+      "details": "Registered new client: Permission client"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Registered new client: Permission client",
+      "id": "log-1779715195550-368",
+      "action": "CLIENT_CREATE",
+      "timestamp": "2026-05-25T13:19:55.550Z",
+      "userId": "demo-admin"
+    },
+    {
+      "action": "CLIENT_CREATE",
+      "timestamp": "2026-05-25T13:19:55.553Z",
+      "userId": "demo-admin",
+      "details": "Registered new client: Permission client",
+      "userName": "Karan Sharma",
+      "id": "log-1779715195553-978"
+    },
+    {
+      "id": "log-1779715467676-156",
+      "details": "Registered new client: Test API Client",
+      "userName": "Karan Sharma",
+      "userId": "demo-admin",
+      "timestamp": "2026-05-25T13:24:27.676Z",
       "action": "CLIENT_CREATE"
     },
     {
-      "userName": "Karan Sharma",
-      "details": "Registered new client: Permission client",
-      "timestamp": "2026-05-25T13:19:55.550Z",
-      "id": "log-1779715195550-368",
-      "action": "CLIENT_CREATE",
-      "userId": "demo-admin"
-    },
-    {
-      "id": "log-1779715195553-978",
-      "action": "CLIENT_CREATE",
-      "userId": "demo-admin",
-      "userName": "Karan Sharma",
-      "details": "Registered new client: Permission client",
-      "timestamp": "2026-05-25T13:19:55.553Z"
-    },
-    {
-      "userName": "Karan Sharma",
-      "details": "Registered new client: Test API Client",
-      "timestamp": "2026-05-25T13:24:27.676Z",
-      "userId": "demo-admin",
-      "action": "CLIENT_CREATE",
-      "id": "log-1779715467676-156"
-    },
-    {
-      "details": "Added catalogue work item: Test API Product at GST 18%",
-      "timestamp": "2026-05-25T13:24:27.694Z",
-      "userName": "Karan Sharma",
-      "action": "PRODUCT_CREATE",
       "id": "log-1779715467694-438",
-      "userId": "demo-admin"
+      "userName": "Karan Sharma",
+      "details": "Added catalogue work item: Test API Product at GST 18%",
+      "userId": "demo-admin",
+      "timestamp": "2026-05-25T13:24:27.694Z",
+      "action": "PRODUCT_CREATE"
     },
     {
-      "details": "Created new product category: New Test Category",
+      "userId": "demo-admin",
       "timestamp": "2026-05-25T13:24:27.699Z",
-      "userName": "Karan Sharma",
-      "id": "log-1779715467699-491",
       "action": "CATEGORY_CREATE",
-      "userId": "demo-admin"
+      "id": "log-1779715467699-491",
+      "details": "Created new product category: New Test Category",
+      "userName": "Karan Sharma"
     },
     {
       "details": "Generated invoice APX/26-27/001 for Test API Client (INR 5000)",
-      "timestamp": "2026-05-25T13:24:27.704Z",
       "userName": "Karan Sharma",
       "id": "log-1779715467704-945",
       "action": "INVOICE_CREATE",
+      "timestamp": "2026-05-25T13:24:27.704Z",
       "userId": "demo-admin"
     },
     {
-      "userId": "demo-admin",
+      "timestamp": "2026-05-25T13:24:27.708Z",
       "action": "QUOTATION_CREATE",
-      "id": "log-1779715467708-201",
-      "userName": "Karan Sharma",
+      "userId": "demo-admin",
       "details": "Prepared estimate EST/26-27/001 for Test API Client",
-      "timestamp": "2026-05-25T13:24:27.708Z"
+      "userName": "Karan Sharma",
+      "id": "log-1779715467708-201"
     },
     {
-      "userName": "Karan Sharma",
-      "timestamp": "2026-05-25T13:24:27.712Z",
       "details": "Created manual transactional log: Test income cash for INR 300",
+      "userName": "Karan Sharma",
       "id": "log-1779715467712-566",
       "action": "CASHBOOK_ENTRY",
+      "timestamp": "2026-05-25T13:24:27.712Z",
       "userId": "demo-admin"
     },
     {
       "id": "log-1779715467715-914",
-      "action": "SETTINGS_WRITE",
+      "details": "Updated corporate profile settings & banking info",
+      "userName": "Karan Sharma",
       "userId": "demo-admin",
       "timestamp": "2026-05-25T13:24:27.715Z",
+      "action": "SETTINGS_WRITE"
+    },
+    {
+      "timestamp": "2026-05-26T07:19:39.252Z",
+      "action": "SETTINGS_WRITE",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
       "details": "Updated corporate profile settings & banking info",
+      "id": "log-1779779979252-51"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "CLIENT_CREATE",
+      "timestamp": "2026-05-26T10:58:24.075Z",
+      "id": "log-1779793104075-98",
+      "userName": "Karan Sharma",
+      "details": "Registered new client: Test Client"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "ROLE_PERMISSIONS_UPDATE",
+      "timestamp": "2026-05-26T10:58:37.818Z",
+      "id": "log-1779793117818-654",
+      "details": "Reconfigured operational permission matrices for Role: Staff",
+      "userName": "Karan Sharma"
+    },
+    {
+      "action": "SETTINGS_WRITE",
+      "timestamp": "2026-05-26T12:01:22.741Z",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Updated corporate profile settings & banking info",
+      "id": "log-1779796882740-35"
+    },
+    {
+      "action": "INVOICE_UPDATE",
+      "timestamp": "2026-05-30T05:50:52.801Z",
+      "userId": "demo-admin",
+      "details": "Modified invoice APX/26-27/001 for Test Client Local",
+      "userName": "Karan Sharma",
+      "id": "log-1780120252801-67"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "INVOICE_CREATE",
+      "timestamp": "2026-05-30T05:51:05.976Z",
+      "id": "log-1780120265976-264",
+      "details": "Generated invoice APX/26-27/002 for Permission client (INR 1770)",
       "userName": "Karan Sharma"
     },
     {
       "userName": "Karan Sharma",
-      "details": "Updated corporate profile settings & banking info",
-      "timestamp": "2026-05-26T07:19:39.252Z",
-      "action": "SETTINGS_WRITE",
-      "id": "log-1779779979252-51",
+      "details": "Voided and deleted invoice: APX/26-27/001",
+      "id": "log-1780120270094-166",
+      "action": "INVOICE_DELETE",
+      "timestamp": "2026-05-30T05:51:10.094Z",
       "userId": "demo-admin"
+    },
+    {
+      "timestamp": "2026-05-30T06:26:09.275Z",
+      "action": "PAYMENT_DELETE",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Voided and deleted payment of INR 0 from HDFC Life Insurance Co Ltd",
+      "id": "log-1780122369275-549"
+    },
+    {
+      "details": "Voided and deleted payment of INR 88500 from Tata Consultancy Services Ltd",
+      "userName": "Karan Sharma",
+      "id": "log-1780122369339-129",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:09.339Z",
+      "userId": "demo-admin"
+    },
+    {
+      "details": "Voided and deleted payment of INR 344000 from Infosys Limited",
+      "userName": "Karan Sharma",
+      "id": "log-1780122371191-479",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:11.191Z",
+      "userId": "demo-admin"
+    },
+    {
+      "id": "log-1780122373011-660",
+      "userName": "Karan Sharma",
+      "details": "Voided and deleted payment of INR 131800 from Reliance Retail Ltd",
+      "userId": "demo-admin",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:13.011Z"
+    },
+    {
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:14.943Z",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Voided and deleted payment of INR 6300 from Mahindra & Mahindra Ltd",
+      "id": "log-1780122374943-696"
+    },
+    {
+      "id": "log-1780122376879-683",
+      "details": "Voided and deleted payment of INR 16800 from HDFC Life Insurance Co Ltd",
+      "userName": "Karan Sharma",
+      "userId": "demo-admin",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:16.879Z"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:18.617Z",
+      "id": "log-1780122378617-369",
+      "details": "Voided and deleted payment of INR 32800 from Airtel Business Solutions",
+      "userName": "Karan Sharma"
+    },
+    {
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:20.885Z",
+      "userId": "demo-admin",
+      "details": "Voided and deleted payment of INR 2300 from Wipro Limited",
+      "userName": "Karan Sharma",
+      "id": "log-1780122380885-674"
+    },
+    {
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:22.738Z",
+      "userId": "demo-admin",
+      "userName": "Karan Sharma",
+      "details": "Voided and deleted payment of INR 100000 from Reliance Retail Ltd",
+      "id": "log-1780122382738-914"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "PAYMENT_DELETE",
+      "timestamp": "2026-05-30T06:26:25.719Z",
+      "id": "log-1780122385719-447",
+      "details": "Voided and deleted payment of INR 10000 from Tata Consultancy Services Ltd",
+      "userName": "Karan Sharma"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Test Client Local",
+      "id": "log-1780122410994-205",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:26:50.994Z",
+      "userId": "demo-admin"
+    },
+    {
+      "id": "log-1780122412556-998",
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Permission client",
+      "userId": "demo-admin",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:26:52.556Z"
+    },
+    {
+      "userId": "demo-admin",
+      "timestamp": "2026-05-30T06:26:54.072Z",
+      "action": "CLIENT_DELETE",
+      "id": "log-1780122414072-984",
+      "details": "Removed client database row: Permission client",
+      "userName": "Karan Sharma"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Permission client",
+      "id": "log-1780122415472-135",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:26:55.472Z",
+      "userId": "demo-admin"
+    },
+    {
+      "id": "log-1780122416826-132",
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Permission client",
+      "userId": "demo-admin",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:26:56.827Z"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:26:58.178Z",
+      "id": "log-1780122418178-790",
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Test API Client"
+    },
+    {
+      "id": "log-1780122419441-848",
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Test Client",
+      "userId": "demo-admin",
+      "timestamp": "2026-05-30T06:26:59.441Z",
+      "action": "CLIENT_DELETE"
+    },
+    {
+      "details": "Removed client database row: Tata Consultancy Services Ltd",
+      "userName": "Karan Sharma",
+      "id": "log-1780122420947-840",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:00.947Z",
+      "userId": "demo-admin"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Hindustan Unilever Ltd",
+      "id": "log-1780122422910-590",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:02.910Z",
+      "userId": "demo-admin"
+    },
+    {
+      "details": "Removed client database row: Reliance Retail Ltd",
+      "userName": "Karan Sharma",
+      "id": "log-1780122424378-432",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:04.378Z",
+      "userId": "demo-admin"
+    },
+    {
+      "userId": "demo-admin",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:05.721Z",
+      "id": "log-1780122425721-955",
+      "details": "Removed client database row: Infosys Limited",
+      "userName": "Karan Sharma"
+    },
+    {
+      "id": "log-1780122427088-130",
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Wipro Limited",
+      "userId": "demo-admin",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:07.088Z"
+    },
+    {
+      "timestamp": "2026-05-30T06:27:08.545Z",
+      "action": "CLIENT_DELETE",
+      "userId": "demo-admin",
+      "details": "Removed client database row: Mahindra & Mahindra Ltd",
+      "userName": "Karan Sharma",
+      "id": "log-1780122428545-65"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: HDFC Life Insurance Co Ltd",
+      "id": "log-1780122431625-157",
+      "timestamp": "2026-05-30T06:27:11.625Z",
+      "action": "CLIENT_DELETE",
+      "userId": "demo-admin"
+    },
+    {
+      "userName": "Karan Sharma",
+      "details": "Removed client database row: Adani Enterprises Ltd",
+      "id": "log-1780122433466-56",
+      "timestamp": "2026-05-30T06:27:13.466Z",
+      "action": "CLIENT_DELETE",
+      "userId": "demo-admin"
+    },
+    {
+      "details": "Removed client database row: Larsen & Toubro Ltd",
+      "userName": "Karan Sharma",
+      "id": "log-1780122435340-815",
+      "action": "CLIENT_DELETE",
+      "timestamp": "2026-05-30T06:27:15.340Z",
+      "userId": "demo-admin"
+    },
+    {
+      "id": "log-1780122479455-335",
+      "details": "Reconfigured operational permission matrices for Role: Staff",
+      "userName": "Karan Sharma",
+      "userId": "demo-admin",
+      "action": "ROLE_PERMISSIONS_UPDATE",
+      "timestamp": "2026-05-30T06:27:59.455Z"
     }
   ],
-  "db_notifications": [],
+  "db_notifications": [
+    {
+      "type": "warning",
+      "createdAt": "2026-05-23T07:15:00Z",
+      "message": "Invoice APX/26-27/010 from HDFC Life is pending final validation signoff check.",
+      "id": "n1",
+      "title": "Enterprise Overdue Alert",
+      "isRead": false
+    },
+    {
+      "isRead": false,
+      "id": "n10",
+      "title": "Team Privileges Aligned",
+      "message": "Manager write and delete scopes restricted based on updated security directives.",
+      "createdAt": "2026-05-18T14:20:00Z",
+      "type": "warning"
+    },
+    {
+      "isRead": false,
+      "id": "n2",
+      "title": "Configuration Update",
+      "message": "System metadata and business registration settings fully synchronized with G-Ledger.",
+      "createdAt": "2026-05-23T05:30:00Z",
+      "type": "info"
+    },
+    {
+      "id": "n3",
+      "title": "Successful Payment Sync",
+      "isRead": true,
+      "createdAt": "2026-05-22T14:02:00Z",
+      "message": "Infosys Ltd settled APX/26-27/002 fully (INR 3,44,000 auto synced with G-Ledger and Cashbook).",
+      "type": "success"
+    },
+    {
+      "isRead": true,
+      "id": "n4",
+      "title": "Quotation Accepted",
+      "message": "Hindustan Unilever officially approved quotation EST/26-27/004.",
+      "createdAt": "2026-05-22T09:05:00Z",
+      "type": "success"
+    },
+    {
+      "type": "info",
+      "isRead": false,
+      "title": "Client Created",
+      "id": "n5",
+      "message": "Tata Consultancy Services Ltd registered in client index successfully.",
+      "createdAt": "2026-05-21T11:00:00Z"
+    },
+    {
+      "createdAt": "2026-05-21T10:15:00Z",
+      "message": "Invoice for Reliance Retail has been securely cached in local storage.",
+      "title": "Invoice Draft Saved",
+      "id": "n6",
+      "isRead": false,
+      "type": "info"
+    },
+    {
+      "type": "success",
+      "message": "All API communication limits checked and restricted to Authorized Roles.",
+      "createdAt": "2026-05-20T16:00:00Z",
+      "isRead": false,
+      "id": "n7",
+      "title": "Security Policy Hardened"
+    },
+    {
+      "isRead": true,
+      "id": "n8",
+      "title": "Weekly Ledger Reconciled",
+      "message": "Cashbook entries fully balance with verified bank accounts ledger.",
+      "createdAt": "2026-05-19T18:30:00Z",
+      "type": "success"
+    },
+    {
+      "id": "n9",
+      "title": "System Compliance Reconciled",
+      "isRead": true,
+      "createdAt": "2026-05-19T11:45:00Z",
+      "message": "Compliance and taxation validation routines automated for new quotes & billings.",
+      "type": "info"
+    }
+  ],
   "db_users": [
     {
-      "userId": "admin-modulesinternet",
-      "lastLoginAt": "2026-05-23T07:00:00Z",
-      "role": "Admin",
       "email": "modulesinternet@gmail.com",
       "createdAt": "2026-05-01T10:00:00Z",
+      "lastLoginAt": "2026-05-23T07:00:00Z",
+      "status": "active",
       "name": "Admin",
-      "status": "active"
+      "role": "Admin",
+      "userId": "admin-modulesinternet"
+    },
+    {
+      "userId": "u-admin-demo",
+      "email": "admin@demo.com",
+      "name": "Karan Sharma",
+      "role": "Admin",
+      "status": "active",
+      "createdAt": "2026-05-01T10:00:00Z",
+      "lastLoginAt": ""
+    },
+    {
+      "userId": "u-manager-demo",
+      "email": "manager@demo.com",
+      "name": "Meera Nair",
+      "role": "Manager",
+      "status": "active",
+      "createdAt": "2026-05-01T10:00:00Z",
+      "lastLoginAt": ""
+    },
+    {
+      "userId": "u-accountant-demo",
+      "email": "accountant@demo.com",
+      "name": "Rajesh Patel",
+      "role": "Accountant",
+      "status": "active",
+      "createdAt": "2026-05-01T10:00:00Z",
+      "lastLoginAt": ""
+    },
+    {
+      "userId": "u-staff-demo",
+      "email": "staff@demo.com",
+      "name": "Amit Sen",
+      "role": "Staff",
+      "status": "active",
+      "createdAt": "2026-05-01T10:00:00Z",
+      "lastLoginAt": ""
     }
   ],
+  "db_passwords": {
+    "modulesinternet@gmail.com": "admin123",
+    "admin@demo.com": "admin123",
+    "manager@demo.com": "manager123",
+    "accountant@demo.com": "acc123",
+    "staff@demo.com": "staff123"
+  },
   "db_categories": [
     "Software Services",
     "Cloud Infrastructure",
@@ -489,7 +812,17 @@
   "db_roles": [
     {
       "modules": {
-        "clients": {
+        "settings": {
+          "delete": true,
+          "read": true,
+          "write": true
+        },
+        "users": {
+          "delete": true,
+          "read": true,
+          "write": true
+        },
+        "cashbook": {
           "write": true,
           "read": true,
           "delete": true
@@ -499,52 +832,73 @@
           "read": true,
           "write": true
         },
-        "products": {
-          "delete": true,
-          "read": true,
-          "write": true
-        },
         "ledger": {
-          "delete": true,
           "read": true,
+          "delete": true,
           "write": true
         },
-        "settings": {
+        "dashboard": {
+          "write": true,
+          "read": true,
+          "delete": true
+        },
+        "products": {
           "write": true,
           "delete": true,
           "read": true
+        },
+        "payments": {
+          "delete": true,
+          "read": true,
+          "write": true
         },
         "invoices": {
           "write": true,
           "read": true,
           "delete": true
         },
-        "cashbook": {
-          "read": true,
-          "delete": true,
-          "write": true
-        },
-        "users": {
+        "clients": {
           "write": true,
           "read": true,
           "delete": true
-        },
-        "payments": {
-          "write": true,
-          "delete": true,
-          "read": true
-        },
-        "dashboard": {
-          "delete": true,
-          "read": true,
-          "write": true
         }
       },
       "role": "Admin"
     },
     {
+      "role": "Manager",
       "modules": {
-        "dashboard": {
+        "products": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "payments": {
+          "write": true,
+          "read": true,
+          "delete": false
+        },
+        "clients": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "invoices": {
+          "delete": false,
+          "read": true,
+          "write": true
+        },
+        "ledger": {
+          "delete": false,
+          "read": true,
+          "write": true
+        },
+        "quotations": {
+          "write": true,
+          "delete": false,
+          "read": true
+        },
+        "cashbook": {
           "write": true,
           "delete": false,
           "read": true
@@ -554,69 +908,58 @@
           "delete": false,
           "write": true
         },
-        "ledger": {
-          "write": true,
-          "read": true,
-          "delete": false
-        },
-        "payments": {
-          "read": true,
-          "delete": false,
-          "write": true
-        },
         "users": {
-          "write": true,
-          "read": true,
-          "delete": false
-        },
-        "invoices": {
-          "read": true,
           "delete": false,
+          "read": true,
           "write": true
         },
-        "cashbook": {
+        "dashboard": {
           "write": true,
           "delete": false,
           "read": true
-        },
-        "clients": {
-          "write": true,
-          "read": true,
-          "delete": false
-        },
-        "products": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "quotations": {
-          "write": true,
-          "read": true,
-          "delete": false
         }
-      },
-      "role": "Manager"
+      }
     },
     {
       "modules": {
-        "products": {
-          "write": false,
+        "clients": {
+          "delete": false,
           "read": true,
-          "delete": false
+          "write": true
+        },
+        "invoices": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "payments": {
+          "read": true,
+          "delete": false,
+          "write": true
+        },
+        "products": {
+          "delete": false,
+          "read": true,
+          "write": false
+        },
+        "dashboard": {
+          "read": true,
+          "delete": false,
+          "write": false
+        },
+        "ledger": {
+          "write": true,
+          "delete": false,
+          "read": true
         },
         "quotations": {
           "write": false,
           "read": true,
           "delete": false
         },
-        "clients": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "payments": {
-          "write": true,
-          "read": true,
+        "settings": {
+          "write": false,
+          "read": false,
           "delete": false
         },
         "users": {
@@ -625,83 +968,63 @@
           "read": true
         },
         "cashbook": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "invoices": {
-          "write": true,
-          "delete": false,
-          "read": true
-        },
-        "ledger": {
-          "write": true,
           "read": true,
-          "delete": false
-        },
-        "settings": {
           "delete": false,
-          "read": false,
-          "write": false
-        },
-        "dashboard": {
-          "write": false,
-          "read": true,
-          "delete": false
+          "write": true
         }
       },
       "role": "Accountant"
     },
     {
       "modules": {
-        "dashboard": {
-          "read": true,
-          "write": true,
-          "delete": false
-        },
-        "products": {
-          "read": true,
+        "ledger": {
           "write": false,
+          "read": false,
           "delete": false
         },
         "quotations": {
-          "read": true,
           "write": true,
-          "delete": false
-        },
-        "invoices": {
-          "read": true,
-          "write": false,
-          "delete": false
-        },
-        "payments": {
-          "read": false,
-          "write": false,
-          "delete": false
-        },
-        "ledger": {
-          "read": false,
-          "write": false,
-          "delete": false
+          "delete": false,
+          "read": true
         },
         "cashbook": {
-          "read": false,
           "write": false,
-          "delete": false
-        },
-        "clients": {
-          "read": true,
-          "write": false,
-          "delete": false
+          "delete": false,
+          "read": false
         },
         "users": {
-          "read": false,
           "write": false,
+          "read": false,
           "delete": false
         },
         "settings": {
           "read": false,
+          "delete": false,
+          "write": false
+        },
+        "dashboard": {
           "write": false,
+          "read": true,
+          "delete": false
+        },
+        "payments": {
+          "write": false,
+          "read": false,
+          "delete": false
+        },
+        "products": {
+          "write": false,
+          "read": true,
+          "delete": false
+        },
+        "clients": {
+          "read": true,
+          "delete": false,
+          "write": false
+        },
+        "invoices": {
+          "write": false,
+          "read": true,
           "delete": false
         }
       },

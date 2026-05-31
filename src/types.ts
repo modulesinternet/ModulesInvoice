@@ -71,6 +71,8 @@ export interface Invoice {
   createdAt: string;
   notes?: string;
   readCount?: number;
+  pdfUrl?: string;
+  attachments?: { name: string; url: string; size?: number; type?: string }[];
 }
 
 export interface QuotationItem {
