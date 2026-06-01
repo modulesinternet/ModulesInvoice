@@ -37,6 +37,7 @@ export default function PaymentsModule({
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   const filteredPayments = payments.filter(p => 
     p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -89,6 +90,7 @@ export default function PaymentsModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!clientId || !invoiceId || Number(amount) <= 0 || !referenceNumber) {
       alert("Please ensure client, invoice, valid positive amount, and reference code or UPI ref is specified.");
       return;
@@ -102,31 +104,40 @@ export default function PaymentsModule({
       return;
     }
 
-    const payload: Partial<Payment> = {
-      clientId,
-      clientName: clientObj.name,
-      invoiceId,
-      invoiceNumber: invoiceObj.invoiceNumber,
-      amount: Number(amount),
-      paymentDate: new Date().toISOString().split('T')[0],
-      paymentMode: mode,
-      referenceNum: referenceNumber,
-      remarks: notes
-    };
+    setIsSaving(true);
+    try {
+      const payload: Partial<Payment> = {
+        clientId,
+        clientName: clientObj.name,
+        invoiceId,
+        invoiceNumber: invoiceObj.invoiceNumber,
+        amount: Number(amount),
+        paymentDate: new Date().toISOString().split('T')[0],
+        paymentMode: mode,
+        referenceNum: referenceNumber,
+        remarks: notes
+      };
 
-    await onAddPayment(payload);
-    setIsModalOpen(false);
+      await onAddPayment(payload);
+      setIsModalOpen(false);
 
-    // Reset values
-    setClientId('');
-    setInvoiceId('');
-    setAmount('');
-    setReferenceNumber('');
-    setNotes('Payment matched and credited instantly.');
+      // Reset values
+      setClientId('');
+      setInvoiceId('');
+      setAmount('');
+      setReferenceNumber('');
+      setNotes('Payment matched and credited instantly.');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while creating the payment receipt.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!editingPayment) return;
 
     if (!clientId || !invoiceId || Number(amount) <= 0 || !referenceNumber) {
@@ -144,28 +155,36 @@ export default function PaymentsModule({
       return;
     }
 
-    const payload: Partial<Payment> = {
-      clientId,
-      clientName: clientObj.name,
-      invoiceId,
-      invoiceNumber: invoiceObj.invoiceNumber,
-      amount: Number(amount),
-      paymentMode: mode,
-      referenceNum: referenceNumber,
-      remarks: notes
-    };
+    setIsSaving(true);
+    try {
+      const payload: Partial<Payment> = {
+        clientId,
+        clientName: clientObj.name,
+        invoiceId,
+        invoiceNumber: invoiceObj.invoiceNumber,
+        amount: Number(amount),
+        paymentMode: mode,
+        referenceNum: referenceNumber,
+        remarks: notes
+      };
 
-    if (onUpdatePayment) {
-      await onUpdatePayment(editingPayment.id, payload);
+      if (onUpdatePayment) {
+        await onUpdatePayment(editingPayment.id, payload);
+      }
+      setEditingPayment(null);
+
+      // Reset values
+      setClientId('');
+      setInvoiceId('');
+      setAmount('');
+      setReferenceNumber('');
+      setNotes('Payment matched and credited instantly.');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while updating the payment details.");
+    } finally {
+      setIsSaving(false);
     }
-    setEditingPayment(null);
-
-    // Reset values
-    setClientId('');
-    setInvoiceId('');
-    setAmount('');
-    setReferenceNumber('');
-    setNotes('Payment matched and credited instantly.');
   };
 
   const startEditPayment = (p: Payment) => {
@@ -453,9 +472,17 @@ export default function PaymentsModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Approve Ledger Credit
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    'Approve Ledger Credit'
+                  )}
                 </button>
               </div>
             </form>
@@ -563,9 +590,17 @@ export default function PaymentsModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Save Credit Edits
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Credit Edits'
+                  )}
                 </button>
               </div>
             </form>

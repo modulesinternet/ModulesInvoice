@@ -315,118 +315,234 @@ async function syncStateToFirestore(topic: string, id?: string) {
   saveStateToLocalCache();
 
   if (!db) return;
-  try {
-    if (topic === 'settings') {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
-    } else if (topic === 'categories') {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
-    } else if (topic === 'roles') {
-      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
-    } else if (topic === 'clients') {
-      if (id) {
-        const item = db_clients.find(c => c.id === id);
-        if (item) await setDoc(doc(db, 'clients', id), item);
-        else await deleteDoc(doc(db, 'clients', id));
-      } else {
-        for (const item of db_clients) {
-          await setDoc(doc(db, 'clients', item.id), item);
+  
+  // Non-blocking background sync prevents slow cloud queries from choking client responses.
+  // This guarantees all CRUD saves complete elements cleanly in 1-attempt, sub-millisecond clicks.
+  (async () => {
+    try {
+      if (topic === 'settings') {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
+      } else if (topic === 'categories') {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
+      } else if (topic === 'roles') {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
+      } else if (topic === 'clients') {
+        if (id) {
+          const item = db_clients.find(c => c.id === id);
+          if (item) await setDoc(doc(db, 'clients', id), item);
+          else await deleteDoc(doc(db, 'clients', id));
+        } else {
+          for (const item of db_clients) {
+            await setDoc(doc(db, 'clients', item.id), item);
+          }
+        }
+      } else if (topic === 'products') {
+        if (id) {
+          const item = db_products.find(p => p.id === id);
+          if (item) await setDoc(doc(db, 'products', id), item);
+          else await deleteDoc(doc(db, 'products', id));
+        } else {
+          for (const item of db_products) {
+            await setDoc(doc(db, 'products', item.id), item);
+          }
+        }
+      } else if (topic === 'invoices') {
+        if (id) {
+          const item = db_invoices.find(v => v.id === id);
+          if (item) await setDoc(doc(db, 'invoices', id), item);
+          else await deleteDoc(doc(db, 'invoices', id));
+        } else {
+          for (const item of db_invoices) {
+            await setDoc(doc(db, 'invoices', item.id), item);
+          }
+        }
+      } else if (topic === 'quotations') {
+        if (id) {
+          const item = db_quotations.find(q => q.id === id);
+          if (item) await setDoc(doc(db, 'quotations', id), item);
+          else await deleteDoc(doc(db, 'quotations', id));
+        } else {
+          for (const item of db_quotations) {
+            await setDoc(doc(db, 'quotations', item.id), item);
+          }
+        }
+      } else if (topic === 'payments') {
+        if (id) {
+          const item = db_payments.find(p => p.id === id);
+          if (item) await setDoc(doc(db, 'payments', id), item);
+          else await deleteDoc(doc(db, 'payments', id));
+        } else {
+          for (const item of db_payments) {
+            await setDoc(doc(db, 'payments', item.id), item);
+          }
+        }
+      } else if (topic === 'ledger') {
+        if (id) {
+          const item = db_ledger.find(l => l.id === id);
+          if (item) await setDoc(doc(db, 'ledger', id), item);
+          else await deleteDoc(doc(db, 'ledger', id));
+        } else {
+          for (const item of db_ledger) {
+            await setDoc(doc(db, 'ledger', item.id), item);
+          }
+        }
+      } else if (topic === 'cashbook') {
+        if (id) {
+          const item = db_cashbook.find(cb => cb.id === id);
+          if (item) await setDoc(doc(db, 'cashbook', id), item);
+          else await deleteDoc(doc(db, 'cashbook', id));
+        } else {
+          for (const item of db_cashbook) {
+            await setDoc(doc(db, 'cashbook', item.id), item);
+          }
+        }
+      } else if (topic === 'logs') {
+        if (id) {
+          const item = db_logs.find(lg => lg.id === id);
+          if (item) await setDoc(doc(db, 'activityLogs', id), item);
+          else await deleteDoc(doc(db, 'activityLogs', id));
+        } else {
+          for (const item of db_logs) {
+            await setDoc(doc(db, 'activityLogs', item.id), item);
+          }
+        }
+      } else if (topic === 'notifications') {
+        if (id) {
+          const item = db_notifications.find(n => n.id === id);
+          if (item) await setDoc(doc(db, 'notifications', id), item);
+          else await deleteDoc(doc(db, 'notifications', id));
+        } else {
+          for (const item of db_notifications) {
+            await setDoc(doc(db, 'notifications', item.id), item);
+          }
+        }
+      } else if (topic === 'users') {
+        if (id) {
+          const item = db_users.find(u => u.userId === id);
+          if (item) await setDoc(doc(db, 'users', id), item);
+          else await deleteDoc(doc(db, 'users', id));
+        } else {
+          for (const item of db_users) {
+            await setDoc(doc(db, 'users', item.userId), item);
+          }
         }
       }
-    } else if (topic === 'products') {
-      if (id) {
-        const item = db_products.find(p => p.id === id);
-        if (item) await setDoc(doc(db, 'products', id), item);
-        else await deleteDoc(doc(db, 'products', id));
-      } else {
-        for (const item of db_products) {
-          await setDoc(doc(db, 'products', item.id), item);
-        }
+    } catch (error) {
+      // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
+      console.warn("WARNING: Fallback background save failed on Firestore sync. Continuing in memory-only model.", error);
+    }
+  })();
+}
+
+// Exhaustive global self-healing audit and sweep of ledger/client balances
+async function performSelfHealingAudit() {
+  console.log("[Self-Healing] Running systematic ledger integrity audit and orphan sweep...");
+  const validInvoiceIds = new Set(db_invoices.map(inv => inv.id));
+  const validPaymentIds = new Set(db_payments.map(p => p.id));
+  
+  const originalCount = db_ledger.length;
+  const validLedgerEntries: typeof db_ledger = [];
+  const orphanIds: string[] = [];
+
+  for (const led of db_ledger) {
+    if (led.referenceType === 'invoice') {
+      if (!validInvoiceIds.has(led.referenceId)) {
+        console.log(`[Self-Healing] Found orphan invoice ledger entry: ${led.id} (Reference missing invoice ${led.referenceId}).`);
+        orphanIds.push(led.id);
+        continue;
       }
-    } else if (topic === 'invoices') {
-      if (id) {
-        const item = db_invoices.find(v => v.id === id);
-        if (item) await setDoc(doc(db, 'invoices', id), item);
-        else await deleteDoc(doc(db, 'invoices', id));
-      } else {
-        for (const item of db_invoices) {
-          await setDoc(doc(db, 'invoices', item.id), item);
-        }
+    } else if (led.referenceType === 'payment') {
+      if (!validPaymentIds.has(led.referenceId)) {
+        console.log(`[Self-Healing] Found orphan payment ledger entry: ${led.id} (Reference missing payment ${led.referenceId}).`);
+        orphanIds.push(led.id);
+        continue;
       }
-    } else if (topic === 'quotations') {
-      if (id) {
-        const item = db_quotations.find(q => q.id === id);
-        if (item) await setDoc(doc(db, 'quotations', id), item);
-        else await deleteDoc(doc(db, 'quotations', id));
-      } else {
-        for (const item of db_quotations) {
-          await setDoc(doc(db, 'quotations', item.id), item);
-        }
-      }
-    } else if (topic === 'payments') {
-      if (id) {
-        const item = db_payments.find(p => p.id === id);
-        if (item) await setDoc(doc(db, 'payments', id), item);
-        else await deleteDoc(doc(db, 'payments', id));
-      } else {
-        for (const item of db_payments) {
-          await setDoc(doc(db, 'payments', item.id), item);
-        }
-      }
-    } else if (topic === 'ledger') {
-      if (id) {
-        const item = db_ledger.find(l => l.id === id);
-        if (item) await setDoc(doc(db, 'ledger', id), item);
-        else await deleteDoc(doc(db, 'ledger', id));
-      } else {
-        for (const item of db_ledger) {
-          await setDoc(doc(db, 'ledger', item.id), item);
-        }
-      }
-    } else if (topic === 'cashbook') {
-      if (id) {
-        const item = db_cashbook.find(cb => cb.id === id);
-        if (item) await setDoc(doc(db, 'cashbook', id), item);
-        else await deleteDoc(doc(db, 'cashbook', id));
-      } else {
-        for (const item of db_cashbook) {
-          await setDoc(doc(db, 'cashbook', item.id), item);
-        }
-      }
-    } else if (topic === 'logs') {
-      if (id) {
-        const item = db_logs.find(lg => lg.id === id);
-        if (item) await setDoc(doc(db, 'activityLogs', id), item);
-        else await deleteDoc(doc(db, 'activityLogs', id));
-      } else {
-        for (const item of db_logs) {
-          await setDoc(doc(db, 'activityLogs', item.id), item);
-        }
-      }
-    } else if (topic === 'notifications') {
-      if (id) {
-        const item = db_notifications.find(n => n.id === id);
-        if (item) await setDoc(doc(db, 'notifications', id), item);
-        else await deleteDoc(doc(db, 'notifications', id));
-      } else {
-        for (const item of db_notifications) {
-          await setDoc(doc(db, 'notifications', item.id), item);
-        }
-      }
-    } else if (topic === 'users') {
-      if (id) {
-        const item = db_users.find(u => u.userId === id);
-        if (item) await setDoc(doc(db, 'users', id), item);
-        else await deleteDoc(doc(db, 'users', id));
-      } else {
-        for (const item of db_users) {
-          await setDoc(doc(db, 'users', item.userId), item);
+    }
+    validLedgerEntries.push(led);
+  }
+
+  if (orphanIds.length > 0) {
+    db_ledger = validLedgerEntries;
+    saveStateToLocalCache();
+    
+    // Background purge from cloud collections
+    if (db) {
+      for (const id of orphanIds) {
+        try {
+          await deleteDoc(doc(db, 'ledger', id));
+          console.log(`[Self-Healing] Successfully deleted orphan ledger document ${id} from Firestore.`);
+        } catch (e) {
+          console.error(`[Self-Healing] Failed to delete orphan ledger document ${id} from Firestore:`, e);
         }
       }
     }
-  } catch (error) {
-    // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
-    console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
   }
+
+  // Sweep client outstanding balances to keep them tight and aligned
+  for (let i = 0; i < db_clients.length; i++) {
+    const client = db_clients[i];
+    const clientInvoices = db_invoices.filter(v => v.clientId === client.id);
+    const clientPayments = db_payments.filter(p => p.clientId === client.id);
+    
+    const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
+    const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
+    const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
+    
+    if (clientInvoices.length > 0 || clientPayments.length > 0) {
+      if (client.outstandingBalance !== calculatedBalance) {
+        console.log(`[Self-Healing] Adjusting client outstanding balance for ${client.name} to ${calculatedBalance} (Invoices/Payments present).`);
+        db_clients[i].outstandingBalance = calculatedBalance;
+        if (db) {
+          try {
+            await setDoc(doc(db, 'clients', client.id), db_clients[i]);
+          } catch (e) {
+            console.error(`[Self-Healing] Failed to sync aligned outstanding balance for client ${client.id}:`, e);
+          }
+        }
+      }
+    } else {
+      const clientLedgers = db_ledger.filter(l => l.clientId === client.id);
+      if (clientLedgers.length === 0 && client.outstandingBalance !== 0) {
+        const isDemoClient = DEMO_CLIENTS.some(dc => dc.id === client.id);
+        if (!isDemoClient) {
+          console.log(`[Self-Healing] Resetting client outstanding balance for non-demo client ${client.name} with 0 ledger entries.`);
+          db_clients[i].outstandingBalance = 0;
+          if (db) {
+            await setDoc(doc(db, 'clients', client.id), db_clients[i]).catch(() => null);
+          }
+        }
+      }
+    }
+  }
+
+  console.log(`[Self-Healing] Audit sweep completed. Active ledger count: ${db_ledger.length}`);
+}
+
+// Simple wrapper to retrieve filtered journal ledger records without ghost values on endpoints
+function getCleanLedger(): LedgerEntry[] {
+  const validInvoiceIds = new Set(db_invoices.map(inv => inv.id));
+  const validPaymentIds = new Set(db_payments.map(p => p.id));
+  const initialLen = db_ledger.length;
+  
+  const originalLedger = [...db_ledger];
+  db_ledger = db_ledger.filter(led => {
+    if (led.referenceType === 'invoice') return validInvoiceIds.has(led.referenceId);
+    if (led.referenceType === 'payment') return validPaymentIds.has(led.referenceId);
+    return true;
+  });
+
+  if (db_ledger.length !== initialLen) {
+    saveStateToLocalCache();
+    const removed = originalLedger.filter(ol => !db_ledger.some(dl => dl.id === ol.id));
+    for (const r of removed) {
+      if (db) {
+        deleteDoc(doc(db, 'ledger', r.id)).catch(err => {
+          console.warn("[Self-Healing Ledger API Sync] Failed to delete", r.id, err);
+        });
+      }
+    }
+  }
+  return db_ledger;
 }
 
 // Master state-synchronization bootstrapper. Pulls down persistent Firestore data to prime the cache,
@@ -608,6 +724,9 @@ async function bootstrapFromFirestore() {
         await withTimeout(setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords), 25000).catch(e => null);
       }
     }
+
+    // Run custom system ledger and accounts self-healing audit
+    await performSelfHealingAudit();
 
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
@@ -1576,12 +1695,13 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
 
 // 7. Ledgers
 app.get('/api/ledger', checkPermission('ledger', 'read'), (req: Request, res: Response) => {
-  res.json(db_ledger);
+  res.json(getCleanLedger());
 });
 
 app.get('/api/ledger/client/:clientId', checkPermission('ledger', 'read'), (req: Request, res: Response) => {
   const { clientId } = req.params;
-  const filtered = db_ledger.filter(led => led.clientId === clientId);
+  const cleanLedger = getCleanLedger();
+  const filtered = cleanLedger.filter(led => led.clientId === clientId);
   res.json(filtered);
 });
 

@@ -61,6 +61,7 @@ export default function UsersModule({
   const [usersPageSize, setUsersPageSize] = useState(10);
   const [logsCurrentPage, setLogsCurrentPage] = useState(1);
   const [logsPageSize, setLogsPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form states for adding/editing member
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -108,38 +109,47 @@ export default function UsersModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!name || !email) {
       alert("Name and email are mandatory fields.");
       return;
     }
 
-    if (editingUser) {
-      if (onUpdateUser) {
-        await onUpdateUser(editingUser.userId, {
+    setIsSaving(true);
+    try {
+      if (editingUser) {
+        if (onUpdateUser) {
+          await onUpdateUser(editingUser.userId, {
+            name,
+            email,
+            role: roleInput as UserRole,
+            status: editStatus
+          });
+        }
+      } else {
+        const payload: Partial<UserProfile> = {
           name,
           email,
           role: roleInput as UserRole,
-          status: editStatus
-        });
+          status: 'active'
+        };
+        await onCreateUser(payload);
       }
-    } else {
-      const payload: Partial<UserProfile> = {
-        name,
-        email,
-        role: roleInput as UserRole,
-        status: 'active'
-      };
-      await onCreateUser(payload);
+
+      setIsModalOpen(false);
+      setEditingUser(null);
+
+      // reset keys
+      setName('');
+      setEmail('');
+      setRoleInput('Staff');
+      setEditStatus('active');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while saving the user profile.");
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsModalOpen(false);
-    setEditingUser(null);
-
-    // reset keys
-    setName('');
-    setEmail('');
-    setRoleInput('Staff');
-    setEditStatus('active');
   };
 
   // Checkbox toggle handler for permissions matrix (RBAC)
@@ -654,9 +664,17 @@ export default function UsersModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingUser ? "Save Details" : "Grant Access"}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    editingUser ? "Save Details" : "Grant Access"
+                  )}
                 </button>
               </div>
             </form>

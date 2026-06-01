@@ -50,6 +50,7 @@ export default function ProductsModule({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Category Configuration Modal states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -97,39 +98,54 @@ export default function ProductsModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!name || !price) {
       alert("Name and Price are mandatory values!");
       return;
     }
 
-    const payload: Partial<Product> = {
-      name,
-      sku: sku || `SKU-${Date.now().toString().slice(-6)}`,
-      category,
-      price: Number(price),
-      gstPercent: businessSettings?.gstOption === 'zero_tax' ? 0 : Number(gstPercent),
-      hsnSac: hsnSac || '',
-      stockQty: Number(stockQty) || 999,
-      unit: unit || ''
-    };
+    setIsSaving(true);
+    try {
+      const payload: Partial<Product> = {
+        name,
+        sku: sku || `SKU-${Date.now().toString().slice(-6)}`,
+        category,
+        price: Number(price),
+        gstPercent: businessSettings?.gstOption === 'zero_tax' ? 0 : Number(gstPercent),
+        hsnSac: hsnSac || '',
+        stockQty: Number(stockQty) || 999,
+        unit: unit || ''
+      };
 
-    if (editingProduct) {
-      await onUpdateProduct(editingProduct.id, payload);
-    } else {
-      await onAddProduct(payload);
+      if (editingProduct) {
+        await onUpdateProduct(editingProduct.id, payload);
+      } else {
+        await onAddProduct(payload);
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while saving product details.");
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   // Category Actions
   const handleCreateCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!newCategoryName.trim()) return;
+    
+    setIsSaving(true);
     try {
       await onAddCategory(newCategoryName.trim());
       setNewCategoryName('');
     } catch (err: any) {
-      alert(err.message || "Failed to create category");
+      console.error(err);
+      alert(err.message || "Failed to create category.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -417,9 +433,17 @@ export default function ProductsModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingProduct ? 'Save Changes' : 'Confirm Catalogue Item'}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    editingProduct ? 'Save Changes' : 'Confirm Catalogue Item'
+                  )}
                 </button>
               </div>
             </form>
@@ -463,11 +487,16 @@ export default function ProductsModule({
                   />
                   <button
                     type="submit"
-                    className="gradient-btn rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                    disabled={isSaving}
+                    className="gradient-btn rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     id="submit-new-category-btn"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Create</span>
+                    {isSaving ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    <span>{isSaving ? 'Creating...' : 'Create'}</span>
                   </button>
                 </div>
               </form>

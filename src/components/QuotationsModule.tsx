@@ -50,6 +50,7 @@ export default function QuotationsModule({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   // States to keep track of quotation edits
   const [isEditing, setIsEditing] = useState(false);
@@ -134,6 +135,7 @@ export default function QuotationsModule({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!clientId) {
       alert("A client selection is required.");
       return;
@@ -143,54 +145,62 @@ export default function QuotationsModule({
       return;
     }
 
-    const clientObj = clients.find(c => c.id === clientId);
-    const clientName = clientObj ? clientObj.name : "Unknown Client";
-    const isZeroTax = businessSettings.gstOption === 'zero_tax';
-    
-    // Build full items payloads
-    const finalItems: QuotationItem[] = addedItems.map(item => {
-      const prod = products.find(p => p.id === item.productId);
-      const base = item.qty * item.price;
-      const rate = isZeroTax ? 0 : (prod ? prod.gstPercent : 18);
-      const tax = base * (rate / 100);
-      return {
-        productId: item.productId,
-        name: prod ? prod.name : "Custom Item",
-        hsnSac: prod ? (prod.hsnSac || '') : '',
-        qty: item.qty,
-        price: item.price,
-        gstPercent: rate,
-        gstAmount: tax,
-        totalAmount: base + tax
+    setIsSaving(true);
+    try {
+      const clientObj = clients.find(c => c.id === clientId);
+      const clientName = clientObj ? clientObj.name : "Unknown Client";
+      const isZeroTax = businessSettings.gstOption === 'zero_tax';
+      
+      // Build full items payloads
+      const finalItems: QuotationItem[] = addedItems.map(item => {
+        const prod = products.find(p => p.id === item.productId);
+        const base = item.qty * item.price;
+        const rate = isZeroTax ? 0 : (prod ? prod.gstPercent : 18);
+        const tax = base * (rate / 100);
+        return {
+          productId: item.productId,
+          name: prod ? prod.name : "Custom Item",
+          hsnSac: prod ? (prod.hsnSac || '') : '',
+          qty: item.qty,
+          price: item.price,
+          gstPercent: rate,
+          gstAmount: tax,
+          totalAmount: base + tax
+        };
+      });
+
+      const payload: Partial<Quotation> = {
+        clientId,
+        clientName: clientName,
+        date,
+        expiryDate,
+        items: finalItems,
+        subtotal: draftSubtotal,
+        discount: draftDiscountNum,
+        taxAmount: draftTax,
+        total: draftTotal,
+        status: isEditing ? (quotations.find(q => q.id === editingQuotationId)?.status || 'sent') : 'sent',
+        notes
       };
-    });
 
-    const payload: Partial<Quotation> = {
-      clientId,
-      clientName: clientName,
-      date,
-      expiryDate,
-      items: finalItems,
-      subtotal: draftSubtotal,
-      discount: draftDiscountNum,
-      taxAmount: draftTax,
-      total: draftTotal,
-      status: isEditing ? (quotations.find(q => q.id === editingQuotationId)?.status || 'sent') : 'sent',
-      notes
-    };
-
-    if (isEditing && onUpdateQuotation) {
-      await onUpdateQuotation(editingQuotationId!, payload);
-    } else {
-      await onCreateQuotation(payload);
+      if (isEditing && onUpdateQuotation) {
+        await onUpdateQuotation(editingQuotationId!, payload);
+      } else {
+        await onCreateQuotation(payload);
+      }
+      
+      setIsCreateOpen(false);
+      setIsEditing(false);
+      setEditingQuotationId(null);
+      setClientId('');
+      setAddedItems([]);
+      setDiscount('0');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while saving the quotation.");
+    } finally {
+      setIsSaving(false);
     }
-    
-    setIsCreateOpen(false);
-    setIsEditing(false);
-    setEditingQuotationId(null);
-    setClientId('');
-    setAddedItems([]);
-    setDiscount('0');
   };
 
   const getStatusStyle = (status: string) => {
@@ -747,9 +757,17 @@ export default function QuotationsModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isEditing ? "Save Proposal Changes" : "Dispatch Proposal Estimate"}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    isEditing ? "Save Proposal Changes" : "Dispatch Proposal Estimate"
+                  )}
                 </button>
               </div>
             </form>

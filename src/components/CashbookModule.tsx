@@ -37,6 +37,7 @@ export default function CashbookModule({
   const [editingEntry, setEditingEntry] = useState<CashbookEntry | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Categories states
   const [category, setCategory] = useState('General');
@@ -77,33 +78,43 @@ export default function CashbookModule({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!description || Number(amount) <= 0 || !reference) {
       alert("Please check that description, reference, and numeric amount fields are completed.");
       return;
     }
 
-    const payload: Partial<CashbookEntry> = {
-      date,
-      description,
-      type: entryType,
-      amount: Number(amount),
-      paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
-      referenceId: reference,
-      category: entryType === 'expense' ? (category || 'General') : 'General'
-    };
+    setIsSaving(true);
+    try {
+      const payload: Partial<CashbookEntry> = {
+        date,
+        description,
+        type: entryType,
+        amount: Number(amount),
+        paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
+        referenceId: reference,
+        category: entryType === 'expense' ? (category || 'General') : 'General'
+      };
 
-    await onCreateCashbookEntry(payload);
-    setIsModalOpen(false);
+      await onCreateCashbookEntry(payload);
+      setIsModalOpen(false);
 
-    // reset Form
-    setDescription('');
-    setAmount('');
-    setReference('');
-    setCategory('General');
+      // reset Form
+      setDescription('');
+      setAmount('');
+      setReference('');
+      setCategory('General');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while posting this cashbook entry.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!editingEntry) return;
 
     if (!description || Number(amount) <= 0 || !reference) {
@@ -111,26 +122,34 @@ export default function CashbookModule({
       return;
     }
 
-    const payload: Partial<CashbookEntry> = {
-      date,
-      description,
-      type: entryType,
-      amount: Number(amount),
-      paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
-      referenceId: reference,
-      category: entryType === 'expense' ? (category || 'General') : 'General'
-    };
+    setIsSaving(true);
+    try {
+      const payload: Partial<CashbookEntry> = {
+        date,
+        description,
+        type: entryType,
+        amount: Number(amount),
+        paymentMode: account === 'bank' ? 'UPI/Bank Transfer' : 'Cash',
+        referenceId: reference,
+        category: entryType === 'expense' ? (category || 'General') : 'General'
+      };
 
-    if (onUpdateCashbookEntry) {
-      await onUpdateCashbookEntry(editingEntry.id, payload);
+      if (onUpdateCashbookEntry) {
+        await onUpdateCashbookEntry(editingEntry.id, payload);
+      }
+      setEditingEntry(null);
+
+      // reset Form
+      setDescription('');
+      setAmount('');
+      setReference('');
+      setCategory('General');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while modifying this cashbook entry.");
+    } finally {
+      setIsSaving(false);
     }
-    setEditingEntry(null);
-
-    // reset Form
-    setDescription('');
-    setAmount('');
-    setReference('');
-    setCategory('General');
   };
 
   const startEdit = (entry: CashbookEntry) => {
@@ -539,9 +558,17 @@ export default function CashbookModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Approve Entry Post
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    'Approve Entry Post'
+                  )}
                 </button>
               </div>
             </form>
@@ -711,9 +738,17 @@ export default function CashbookModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Save Entry Edits
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Entry Edits'
+                  )}
                 </button>
               </div>
             </form>

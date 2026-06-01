@@ -37,6 +37,7 @@ export default function SettingsModule({
   onImportBackup
 }: SettingsModuleProps) {
   const [success, setSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form parameters
   const [companyName, setCompanyName] = useState(settings?.companyName || '');
@@ -276,11 +277,13 @@ export default function SettingsModule({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!companyName) {
       alert("Registered Firm Name is a required setting!");
       return;
     }
 
+    setIsSaving(true);
     try {
       const payload: Partial<BusinessSettings> = {
         companyName,
@@ -332,6 +335,8 @@ export default function SettingsModule({
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
       alert("Error saving settings: " + (err.message || err));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1304,11 +1309,21 @@ export default function SettingsModule({
 
             <button 
               type="submit"
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white transition rounded-2xl text-xs font-bold font-sans shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-indigo-700/20 active:scale-[0.99]"
+              disabled={isSaving}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white transition rounded-2xl text-xs font-bold font-sans shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-indigo-700/20 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
               id="save-settings-btn"
             >
-              <Save className="w-4 h-4 text-white" />
-              <span>Save Settings</span>
+              {isSaving ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 text-white" />
+                  <span>Save Settings</span>
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -151,6 +151,7 @@ export default function InvoicesModule({
   };
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [invoiceTemplate, setInvoiceTemplate] = useState<InvoiceLayoutTemplate>((businessSettings?.invoiceTheme as any) || 'navy');
 
@@ -294,6 +295,7 @@ export default function InvoicesModule({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!clientId) {
       alert("Please designate a corporate client first.");
       return;
@@ -303,66 +305,74 @@ export default function InvoicesModule({
       return;
     }
 
-    const clientObj = clients.find(c => c.id === clientId)!;
-    const isZeroTax = businessSettings.gstOption === 'zero_tax';
+    setIsSaving(true);
+    try {
+      const clientObj = clients.find(c => c.id === clientId)!;
+      const isZeroTax = businessSettings.gstOption === 'zero_tax';
 
-    const finalItems: InvoiceItem[] = addedItems.map(item => {
-      const prod = products.find(p => p.id === item.productId)!;
-      const base = item.qty * item.price;
-      const rate = isZeroTax ? 0 : prod.gstPercent;
-      const tax = base * (rate / 100);
-      return {
-        productId: item.productId,
-        name: prod.name,
-        hsnSac: prod.hsnSac || '',
-        qty: item.qty,
-        price: item.price,
-        gstPercent: rate,
-        gstAmount: tax,
-        totalAmount: base + tax
+      const finalItems: InvoiceItem[] = addedItems.map(item => {
+        const prod = products.find(p => p.id === item.productId)!;
+        const base = item.qty * item.price;
+        const rate = isZeroTax ? 0 : prod.gstPercent;
+        const tax = base * (rate / 100);
+        return {
+          productId: item.productId,
+          name: prod.name,
+          hsnSac: prod.hsnSac || '',
+          qty: item.qty,
+          price: item.price,
+          gstPercent: rate,
+          gstAmount: tax,
+          totalAmount: base + tax
+        };
+      });
+
+      const finalPaidAmount = isEditing && editingInvoiceId 
+        ? (invoices.find(inv => inv.id === editingInvoiceId)?.paidAmount || 0) 
+        : 0;
+      const finalDueAmount = Math.max(0, draftTotal - finalPaidAmount);
+      let finalStatus: 'paid' | 'partially_paid' | 'unpaid' = 'unpaid';
+      if (finalDueAmount <= 0) {
+        finalStatus = 'paid';
+      } else if (finalPaidAmount > 0) {
+        finalStatus = 'partially_paid';
+      }
+
+      const payload: Partial<Invoice> = {
+        clientId,
+        clientName: clientObj.name,
+        clientGst: clientObj.gstIn || 'URP',
+        date,
+        dueDate,
+        items: finalItems,
+        subtotal: draftSubtotal,
+        discount: draftDiscountNum,
+        taxType: (clientObj.gstIn || '').startsWith(homeStateCode) ? "CGST_SGST" : "IGST",
+        taxAmount: draftTax,
+        total: draftTotal,
+        paidAmount: finalPaidAmount,
+        dueAmount: finalDueAmount,
+        status: finalStatus,
+        notes,
+        invoiceNumber
       };
-    });
 
-    const finalPaidAmount = isEditing && editingInvoiceId 
-      ? (invoices.find(inv => inv.id === editingInvoiceId)?.paidAmount || 0) 
-      : 0;
-    const finalDueAmount = Math.max(0, draftTotal - finalPaidAmount);
-    let finalStatus: 'paid' | 'partially_paid' | 'unpaid' = 'unpaid';
-    if (finalDueAmount <= 0) {
-      finalStatus = 'paid';
-    } else if (finalPaidAmount > 0) {
-      finalStatus = 'partially_paid';
+      if (isEditing && editingInvoiceId && onUpdateInvoice) {
+        await onUpdateInvoice(editingInvoiceId, payload);
+      } else {
+        await onAddInvoice(payload);
+      }
+      setIsCreateOpen(false);
+      setIsEditing(false);
+      setEditingInvoiceId(null);
+      setAddedItems([]);
+      setDiscount('0');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "An error occurred while creating/updating the invoice.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const payload: Partial<Invoice> = {
-      clientId,
-      clientName: clientObj.name,
-      clientGst: clientObj.gstIn || 'URP',
-      date,
-      dueDate,
-      items: finalItems,
-      subtotal: draftSubtotal,
-      discount: draftDiscountNum,
-      taxType: (clientObj.gstIn || '').startsWith(homeStateCode) ? "CGST_SGST" : "IGST",
-      taxAmount: draftTax,
-      total: draftTotal,
-      paidAmount: finalPaidAmount,
-      dueAmount: finalDueAmount,
-      status: finalStatus,
-      notes,
-      invoiceNumber
-    };
-
-    if (isEditing && editingInvoiceId && onUpdateInvoice) {
-      await onUpdateInvoice(editingInvoiceId, payload);
-    } else {
-      await onAddInvoice(payload);
-    }
-    setIsCreateOpen(false);
-    setIsEditing(false);
-    setEditingInvoiceId(null);
-    setAddedItems([]);
-    setDiscount('0');
   };
 
   // PDF Export Engine via html2canvas plus jsPDF
@@ -1427,9 +1437,17 @@ export default function InvoicesModule({
                 </button>
                 <button 
                   type="submit"
-                  className="gradient-btn px-5 py-2.5 text-xs font-semibold rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="gradient-btn px-5 py-2.5 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isEditing ? "Save & Update Invoice" : "Authorize & Post Invoice"}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    isEditing ? "Save & Update Invoice" : "Authorize & Post Invoice"
+                  )}
                 </button>
               </div>
             </form>
