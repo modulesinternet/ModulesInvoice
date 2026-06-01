@@ -8,7 +8,7 @@ import {
   Edit2,
   Trash2
 } from 'lucide-react';
-import { Payment, Client, Invoice } from '../types';
+import { Payment, Client, Invoice, formatDisplayDate } from '../types';
 import Pagination from './Pagination';
 
 interface PaymentsModuleProps {
@@ -301,7 +301,7 @@ export default function PaymentsModule({
           <tbody className="divide-y divide-slate-100 text-xs">
             {filteredPayments.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p) => (
               <tr key={p.id} className="hover:bg-slate-50/5 transition">
-                <td className="py-4 px-5 text-slate-500 font-mono">{p.paymentDate}</td>
+                <td className="py-4 px-5 text-slate-500 font-mono">{formatDisplayDate(p.paymentDate)}</td>
                 <td className="py-4 px-5 font-mono font-bold text-slate-900">{p.referenceNum}</td>
                 <td className="py-4 px-5 font-semibold text-slate-700">{p.clientName}</td>
                 <td className="py-4 px-5 text-indigo-700 font-semibold">{p.invoiceNumber}</td>

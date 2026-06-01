@@ -169,13 +169,10 @@ export default function ProductsModule({
   };
 
   const handleDeleteCategoryClick = async (cat: string) => {
-    if (cat.toLowerCase() === 'uncategorized') {
-      alert("The default category 'Uncategorized' cannot be deleted.");
-      return;
-    }
+    const fallbackCategory = categories.find(c => c.toLowerCase() !== cat.toLowerCase()) || 'General';
     const linkedProductsCount = products.filter(p => p.category?.toLowerCase() === cat.toLowerCase()).length;
     const confirmMessage = linkedProductsCount > 0 
-      ? `Are you sure you want to delete category "${cat}"? This will move ${linkedProductsCount} linked catalog product(s) to "Uncategorized".`
+      ? `Are you sure you want to delete category "${cat}"? This will move ${linkedProductsCount} linked catalog product(s) to "${fallbackCategory}".`
       : `Are you sure you want to delete the category "${cat}" permanently?`;
       
     if (confirm(confirmMessage)) {

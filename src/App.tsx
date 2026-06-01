@@ -22,7 +22,10 @@ import {
   User as UserIcon,
   Sparkles,
   Info,
-  Search
+  Search,
+  AlertCircle,
+  Clock,
+  CheckCircle
 } from 'lucide-react';
 import { api } from './services/api';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
@@ -1310,9 +1313,41 @@ export default function App() {
       
       {/* TOAST PANEL WRAPPER */}
       {toast && (
-        <div className="fixed top-5 right-5 z-50 animate-bounce cursor-pointer flex items-center gap-3 p-4 rounded-xl shadow-lg border text-white transition-all duration-300 max-w-sm bg-slate-900 border-slate-800">
-          <Sparkles className="w-5 h-5 text-purple-400 shrink-0" />
-          <span className="text-xs font-semibold">{toast.message}</span>
+        <div 
+          onClick={() => setToast(null)}
+          className={`fixed top-6 right-6 z-[100] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-4 transition-all duration-500 transform translate-y-0 scale-100 flex items-start gap-3.5 cursor-pointer overflow-hidden group select-none ${
+            toast.type === 'error' ? 'border-l-4 border-l-rose-500' : 
+            toast.type === 'info' ? 'border-l-4 border-l-indigo-500' : 'border-l-4 border-l-emerald-500'
+          }`}
+          id="system-professional-toast"
+        >
+          <div className={`shrink-0 rounded-full p-2 flex items-center justify-center ${
+            toast.type === 'error' ? 'bg-rose-50 text-rose-600' :
+            toast.type === 'info' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'
+          } group-hover:scale-110 transition duration-300`}>
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 animate-pulse" />
+            ) : toast.type === 'info' ? (
+              <Clock className="w-5 h-5" />
+            ) : (
+              <CheckCircle className="w-5 h-5 animate-bounce text-emerald-600" />
+            )}
+          </div>
+          
+          <div className="flex-1 space-y-0.5">
+            <h4 className="text-[10px] font-bold text-slate-900 font-sans tracking-wide uppercase select-none flex items-center gap-1 select-none">
+              {toast.type === 'error' ? 'System Error' : toast.type === 'info' ? 'Status Alert' : 'Sync Saved Successfully'}
+              <Sparkles className={`w-3.5 h-3.5 ${toast.type === 'error' ? 'text-rose-400' : toast.type === 'info' ? 'text-indigo-400' : 'text-emerald-500'} animate-pulse`} />
+            </h4>
+            <p className="text-[11.5px] leading-relaxed font-semibold text-slate-700">{toast.message}</p>
+          </div>
+
+          <div 
+            className={`absolute bottom-0 left-0 h-1 animate-progress-drain ${
+              toast.type === 'error' ? 'bg-rose-500' :
+              toast.type === 'info' ? 'bg-indigo-500' : 'bg-emerald-500'
+            }`} 
+          />
         </div>
       )}
 

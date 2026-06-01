@@ -16,7 +16,7 @@ import {
   RefreshCw,
   Sparkles
 } from 'lucide-react';
-import { UserProfile, ActivityLog, RolePermissions, UserRole, RoleModulePermission } from '../types';
+import { UserProfile, ActivityLog, RolePermissions, UserRole, RoleModulePermission, formatDisplayDate } from '../types';
 import { api } from '../services/api';
 import Pagination from './Pagination';
 
@@ -384,7 +384,14 @@ export default function UsersModule({
                   <div className="space-y-1 flex-1">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                       <span className="font-bold text-slate-800">{log.action}</span>
-                      <span className="text-[10.5px] font-mono text-slate-400">{log.timestamp.slice(0, 16).replace('T', ' ')}</span>
+                      <span className="text-[10.5px] font-mono text-slate-400">
+                        {(() => {
+                          const dt = log.timestamp.split('T');
+                          const dateFormatted = formatDisplayDate(dt[0]);
+                          const timeFormatted = dt[1] ? dt[1].slice(0, 5) : '';
+                          return `${dateFormatted} ${timeFormatted}`;
+                        })()}
+                      </span>
                     </div>
                     <p className="text-slate-650 text-xs mt-1">{log.details}</p>
                     <div className="flex items-center gap-3 text-[11px] text-slate-450 border-t border-dashed border-slate-100 pt-1 mt-1 font-sans">

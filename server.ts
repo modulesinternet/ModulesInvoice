@@ -1075,28 +1075,31 @@ app.put('/api/categories', checkPermission('products', 'write'), async (req: Req
 });
 
 app.delete('/api/categories', checkPermission('products', 'delete'), async (req: Request, res: Response) => {
-  const { name } = req.body;
+  const name = req.body?.name || req.query?.name;
   if (!name) return res.status(400).json({ error: "Category name is required" });
-  const target = name.trim();
+  const target = (name as string).trim();
   db_categories = db_categories.filter(c => c.toLowerCase() !== target.toLowerCase());
   
-  // Set linked products' category back to a safe default "Uncategorized"
+  // Dynamic fallback category for products that are linked to this category
+  const fallbackCat = db_categories[0] || 'General';
+  
   let count = 0;
   db_products = db_products.map(p => {
     if (p.category && p.category.toLowerCase() === target.toLowerCase()) {
       count++;
-      return { ...p, category: 'Uncategorized' };
+      return { ...p, category: fallbackCat };
     }
     return p;
   });
   
-  if (!db_categories.includes('Uncategorized')) {
-    db_categories.push('Uncategorized');
+  // If we have no categories left, establish a basic default General category
+  if (db_categories.length === 0) {
+    db_categories.push('General');
   }
   
   await syncStateToFirestore('categories');
   await syncStateToFirestore('products');
-  logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "Uncategorized")`);
+  logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "${fallbackCat}")`);
   res.json({ success: true, categories: db_categories });
 });
 

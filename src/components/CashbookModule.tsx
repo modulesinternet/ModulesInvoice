@@ -8,7 +8,7 @@ import {
   Edit2,
   Trash2
 } from 'lucide-react';
-import { CashbookEntry } from '../types';
+import { CashbookEntry, formatDisplayDate } from '../types';
 import Pagination from './Pagination';
 
 interface CashbookModuleProps {
@@ -332,7 +332,7 @@ export default function CashbookModule({
             <tbody className="divide-y divide-slate-100 text-xs font-medium">
               {filteredCashbook.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/20">
-                  <td className="py-3.5 px-5 font-mono text-slate-550">{row.date}</td>
+                  <td className="py-3.5 px-5 font-mono text-slate-550">{formatDisplayDate(row.date)}</td>
                   <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">{row.referenceId || "N/A"}</td>
                   <td className="py-3.5 px-5 text-slate-650">
                     <div className="flex flex-col">

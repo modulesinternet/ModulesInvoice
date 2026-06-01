@@ -11,7 +11,7 @@ import {
   Calendar,
   FileSpreadsheet
 } from 'lucide-react';
-import { LedgerEntry, Client } from '../types';
+import { LedgerEntry, Client, formatDisplayDate } from '../types';
 import Pagination from './Pagination';
 
 interface LedgerModuleProps {
@@ -147,7 +147,7 @@ export default function LedgerModule({
 
                 {clientLedger.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/20">
-                    <td className="py-3.5 px-5 text-slate-500 font-mono">{row.date}</td>
+                    <td className="py-3.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
                     <td className="py-3.5 px-5 font-mono font-bold text-slate-800 uppercase">{row.referenceId}</td>
                     <td className="py-3.5 px-5 text-slate-600 font-medium">{row.description}</td>
                     <td className="py-3.5 px-5 text-right font-mono font-bold text-rose-600">

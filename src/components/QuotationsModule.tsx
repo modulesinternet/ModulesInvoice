@@ -17,7 +17,7 @@ import {
   Check,
   Edit3
 } from 'lucide-react';
-import { Quotation, Client, Product, QuotationItem } from '../types';
+import { Quotation, Client, Product, QuotationItem, formatDisplayDate } from '../types';
 import Pagination from './Pagination';
 
 interface QuotationsModuleProps {
@@ -338,8 +338,8 @@ export default function QuotationsModule({
                   {selectedQuotation.status}
                 </span>
                 <div className="text-xs text-slate-500 font-mono pt-3 space-y-0.5">
-                  <p>Issue Date: <b>{selectedQuotation.date}</b></p>
-                  <p>Expiry Date: <b className="text-rose-600">{selectedQuotation.expiryDate}</b></p>
+                  <p>Issue Date: <b>{formatDisplayDate(selectedQuotation.date)}</b></p>
+                  <p>Expiry Date: <b className="text-rose-600">{formatDisplayDate(selectedQuotation.expiryDate)}</b></p>
                 </div>
               </div>
             </div>
@@ -474,8 +474,8 @@ export default function QuotationsModule({
                     <tr key={q.id} className="hover:bg-slate-50/50 transition">
                       <td className="py-4 px-5 font-mono font-bold text-slate-900">{q.quotationNumber}</td>
                       <td className="py-4 px-5 font-semibold text-slate-700">{q.clientName}</td>
-                      <td className="py-4 px-5 text-slate-500">{q.date}</td>
-                      <td className="py-4 px-5 text-slate-400 font-mono">{q.expiryDate}</td>
+                      <td className="py-4 px-5 text-slate-500">{formatDisplayDate(q.date)}</td>
+                      <td className="py-4 px-5 text-slate-400 font-mono">{formatDisplayDate(q.expiryDate)}</td>
                       <td className="py-4 px-5 text-right font-mono font-bold text-slate-800">{formatCurrency(q.total)}</td>
                       <td className="py-4 px-5 text-center">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusStyle(q.status)} uppercase`}>

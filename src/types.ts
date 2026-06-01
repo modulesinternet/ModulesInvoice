@@ -234,3 +234,35 @@ export interface RolePermissions {
   };
 }
 
+export function formatDisplayDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return "N/A";
+  
+  // Extract date portion if it contains T or space
+  const cleanStr = dateStr.includes('T') 
+    ? dateStr.split('T')[0] 
+    : (dateStr.includes(' ') ? dateStr.split(' ')[0] : dateStr);
+  
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD -> DD-MM-YYYY
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    // If it's already in DD-MM-YYYY
+    return cleanStr;
+  }
+  
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    }
+  } catch (e) {}
+
+  return dateStr;
+}
+
+

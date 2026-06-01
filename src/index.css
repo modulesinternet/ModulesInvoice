@@ -134,3 +134,13 @@
   }
 }
 
+/* Toast countdown progress bar animation */
+@keyframes progress-drain {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.animate-progress-drain {
+  animation: progress-drain 4000ms linear forwards;
+}
+

@@ -594,7 +594,7 @@ export const api = {
       logLocalActivity("CATEGORY_DELETE", `Removed product category "${trimmed}"`);
       return Promise.resolve({ success: true, categories: filtered });
     }
-    return request<{ success: boolean; categories: string[] }>('/api/categories', 'DELETE', { name });
+    return request<{ success: boolean; categories: string[] }>(`/api/categories?name=${encodeURIComponent(name)}`, 'DELETE', { name });
   },
 
   // 5. Invoices CRUD

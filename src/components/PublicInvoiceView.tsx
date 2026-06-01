@@ -12,7 +12,7 @@ import {
   Info
 } from 'lucide-react';
 import { api } from '../services/api';
-import { Invoice, BusinessSettings } from '../types';
+import { Invoice, BusinessSettings, formatDisplayDate } from '../types';
 
 interface PublicInvoiceViewProps {
   invoiceNumber: string;
@@ -166,7 +166,7 @@ export default function PublicInvoiceView({ invoiceNumber }: PublicInvoiceViewPr
                 </tr>
                 <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
                   <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Date of Issue</td>
-                  <td className="py-3.5 px-4 text-slate-700">{invoice.date || invoice.createdAt?.split('T')[0] || "N/A"}</td>
+                  <td className="py-3.5 px-4 text-slate-700">{formatDisplayDate(invoice.date || invoice.createdAt)}</td>
                 </tr>
                 <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
                   <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Total Amount</td>

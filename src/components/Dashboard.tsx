@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDisplayDate } from '../types';
 import { 
   IndianRupee, 
   Users, 
@@ -314,7 +315,7 @@ export default function Dashboard({
                   <tr key={inv.id} className="hover:bg-slate-50/50 group transition">
                     <td className="py-3 px-3 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
                     <td className="py-3 px-3 font-medium text-slate-700">{inv.clientName}</td>
-                    <td className="py-3 px-3 text-slate-500">{inv.date}</td>
+                    <td className="py-3 px-3 text-slate-500">{formatDisplayDate(inv.date)}</td>
                     <td className="py-3 px-3 text-right font-semibold font-mono text-slate-800">{formatCurrency(inv.total)}</td>
                     <td className="py-3 px-3 text-center">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(inv.status)} uppercase`}>

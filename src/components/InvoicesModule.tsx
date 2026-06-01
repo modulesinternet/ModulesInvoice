@@ -24,7 +24,7 @@ import {
   Globe,
   Edit3
 } from 'lucide-react';
-import { Invoice, Client, Product, InvoiceItem } from '../types';
+import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import Pagination from './Pagination';
@@ -683,8 +683,8 @@ export default function InvoicesModule({
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 font-mono pt-3 space-y-0.5">
-                  <p>Invoiced Date: <b>{selectedInvoice.date}</b></p>
-                  <p>Due By: <b className="text-rose-600">{selectedInvoice.dueDate}</b></p>
+                  <p>Invoiced Date: <b>{formatDisplayDate(selectedInvoice.date)}</b></p>
+                  <p>Due By: <b className="text-rose-600">{formatDisplayDate(selectedInvoice.dueDate)}</b></p>
                 </div>
               </div>
             </div>
@@ -1117,8 +1117,8 @@ export default function InvoicesModule({
                         </div>
                       </td>
                       <td className="py-4 px-5 font-semibold text-slate-700">{inv.clientName}</td>
-                      <td className="py-4 px-5 text-slate-500">{inv.date}</td>
-                      <td className="py-4 px-5 text-rose-500 font-mono select-none">{inv.dueDate}</td>
+                      <td className="py-4 px-5 text-slate-500">{formatDisplayDate(inv.date)}</td>
+                      <td className="py-4 px-5 text-rose-500 font-mono select-none">{formatDisplayDate(inv.dueDate)}</td>
                       <td className="py-4 px-5 text-right font-mono text-slate-800">{formatCurrency(inv.total)}</td>
                       <td className="py-4 px-5 text-right font-mono font-bold text-slate-800">
                         {inv.dueAmount > 0 ? (
