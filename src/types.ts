@@ -73,6 +73,9 @@ export interface Invoice {
   readCount?: number;
   pdfUrl?: string;
   attachments?: { name: string; url: string; size?: number; type?: string }[];
+  challanUrl?: string;
+  challanName?: string;
+  challanType?: string;
 }
 
 export interface QuotationItem {

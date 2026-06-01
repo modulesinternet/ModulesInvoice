@@ -21,7 +21,8 @@ import {
   Building,
   User as UserIcon,
   Sparkles,
-  Info
+  Info,
+  Search
 } from 'lucide-react';
 import { api } from './services/api';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
@@ -217,6 +218,83 @@ export default function App() {
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
   const [categories, setCategories] = useState<string[]>([]);
   
+  // GLOBAL ERP SEARCH ENGINE (POINT 16)
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showGlobalResults, setShowGlobalResults] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+
+  const getGlobalResults = () => {
+    if (!globalSearch.trim()) return [];
+    const query = globalSearch.toLowerCase().trim();
+    const results: { type: 'Invoice' | 'Customer' | 'Product' | 'Ledger'; title: string; subtitle: string; action: () => void }[] = [];
+    
+    const formatRuleCurrency = (amount: number) => {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+      }).format(amount);
+    };
+
+    // 1. Search Invoices
+    invoices.forEach(inv => {
+      if (inv.invoiceNumber.toLowerCase().includes(query) || inv.clientName.toLowerCase().includes(query)) {
+        results.push({
+          type: 'Invoice',
+          title: inv.invoiceNumber,
+          subtitle: `Client: ${inv.clientName} | Total: ${formatRuleCurrency(inv.total)} - ${inv.status.replace('_', ' ')}`,
+          action: () => {
+            setActiveTab('invoices');
+          }
+        });
+      }
+    });
+
+    // 2. Search Clients (Customers)
+    clients.forEach(c => {
+      if (c.name.toLowerCase().includes(query) || c.email.toLowerCase().includes(query) || (c.gstIn || '').toLowerCase().includes(query)) {
+        results.push({
+          type: 'Customer',
+          title: c.name,
+          subtitle: `Email: ${c.email} | Outstanding: ${formatRuleCurrency(c.outstandingBalance)}`,
+          action: () => {
+            setActiveTab('clients');
+          }
+        });
+      }
+    });
+
+    // 3. Search Products
+    products.forEach(p => {
+      if (p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query)) {
+        results.push({
+          type: 'Product',
+          title: p.name,
+          subtitle: `Rate: ${formatRuleCurrency(p.price)} | Segment: ${p.category}`,
+          action: () => {
+            setActiveTab('products');
+          }
+        });
+      }
+    });
+
+    // 4. Search Ledger logs
+    ledger.forEach(led => {
+      if (led.description.toLowerCase().includes(query) || led.clientName.toLowerCase().includes(query)) {
+        results.push({
+          type: 'Ledger',
+          title: led.description,
+          subtitle: `Partner: ${led.clientName} | ${led.type.toUpperCase()}: ${formatRuleCurrency(led.amount)}`,
+          action: () => {
+            setActiveTab('ledger');
+          }
+        });
+      }
+    });
+
+    return results.slice(0, 8);
+  };
+  
   // User login status tracking
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('current_user');
@@ -260,7 +338,7 @@ export default function App() {
     return defaults;
   });
 
-  const companyNameText = businessSettings?.titleBarText || businessSettings?.companyName || "Apex Digital Solutions";
+  const companyNameText = businessSettings?.titleBarText || businessSettings?.companyName || "Your Corporate Platform";
   const companyInitials = companyNameText
     .split(/\s+/)
     .map((word) => word.charAt(0))
@@ -1423,6 +1501,20 @@ export default function App() {
 
         {/* Right action block: Notification block & Profile avatar */}
         <div className="flex items-center gap-2">
+          {/* Mobile global search trigger */}
+          <button 
+            onClick={() => {
+              setShowMobileSearch(!showMobileSearch);
+              if (!showMobileSearch) {
+                setTimeout(() => document.getElementById('mobile-search-query')?.focus(), 80);
+              }
+            }}
+            className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer bg-white transition relative focus:outline-none"
+            title="Toggle Search"
+          >
+            <Search className="w-4 h-4 text-slate-600" />
+          </button>
+
           {/* Notification Alert System for Mobile */}
           <div className="relative">
             <button 
@@ -1487,11 +1579,81 @@ export default function App() {
         </div>
       </div>
 
+      {/* MOBILE DYNAMIC SEARCH DROPDOWN DRAWER */}
+      {showMobileSearch && (
+        <div className="bg-white border-b border-slate-200 p-3 md:hidden no-print animate-fade-in space-y-2">
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input
+              id="mobile-search-query"
+              type="text"
+              placeholder="Search invoices, clients, products..."
+              value={globalSearch}
+              onChange={(e) => {
+                setGlobalSearch(e.target.value);
+                setShowGlobalResults(true);
+              }}
+              onFocus={() => setShowGlobalResults(true)}
+              className="w-full text-xs pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#5B21FF]"
+            />
+            {globalSearch && (
+              <button 
+                onClick={() => { setGlobalSearch(''); }}
+                className="absolute right-2.5 inset-y-0 text-slate-400 hover:text-slate-600 flex items-center"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {showGlobalResults && globalSearch.trim() && (() => {
+            const results = getGlobalResults();
+            return (
+              <div className="bg-white border border-slate-150 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                {results.length === 0 ? (
+                  <div className="p-3 text-center text-slate-400 text-[11px]">
+                    No matches found.
+                  </div>
+                ) : (
+                  results.map((r, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        r.action();
+                        setShowGlobalResults(false);
+                        setShowMobileSearch(false);
+                        setGlobalSearch('');
+                      }}
+                      className="w-full text-left p-2.5 hover:bg-slate-50 transition flex flex-col gap-1 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                          r.type === 'Invoice' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                          r.type === 'Customer' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                          r.type === 'Product' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                          'bg-pink-50 text-pink-700 border-pink-100'
+                        }`}>
+                          {r.type}
+                        </span>
+                        <span className="text-xs font-bold text-slate-800 truncate">{r.title}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 truncate">{r.subtitle}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* MASTER SCROLLABLE COMPONENT PANEL CONTAINER */}
       <main className="flex-1 flex flex-col overflow-y-auto h-full">
         {/* Top Operational Status Bar */}
-        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in gap-4">
+          <div className="flex items-center gap-4 flex-1 max-w-md">
             {/* High-visibility toggle for desktop */}
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -1500,8 +1662,72 @@ export default function App() {
             >
               <Menu className="w-4.5 h-4.5 text-slate-600" />
             </button>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 select-none animate-ping"></span>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest font-mono">live central server online</span>
+            
+            {/* PREMIUM INTUITIVE GLOBAL SEARCH */}
+            <div className="relative flex-1 group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-[#5B21FF] transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Global ERP Search (Invoices, Customers, Products, Ledger)..."
+                value={globalSearch}
+                onChange={(e) => {
+                  setGlobalSearch(e.target.value);
+                  setShowGlobalResults(true);
+                }}
+                onFocus={() => setShowGlobalResults(true)}
+                className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#5B21FF] focus:bg-white transition font-sans"
+              />
+              {showGlobalResults && globalSearch.trim() && (() => {
+                const results = getGlobalResults();
+                return (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowGlobalResults(false)}
+                    />
+                    <div className="absolute left-0 mt-2 w-full bg-white border border-slate-250 border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100 font-sans max-h-96 overflow-y-auto">
+                      <div className="p-2.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                        <span>Dynamic Matches ({results.length})</span>
+                        <span className="text-[9px] lowercase font-normal">click to navigate</span>
+                      </div>
+                      {results.length === 0 ? (
+                        <div className="p-4 text-center text-slate-400 text-xs">
+                          No matching ERP records found.
+                        </div>
+                      ) : (
+                        results.map((r, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              r.action();
+                              setShowGlobalResults(false);
+                              setGlobalSearch('');
+                            }}
+                            className="w-full text-left p-3 hover:bg-slate-50/80 transition flex flex-col gap-1 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                r.type === 'Invoice' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                r.type === 'Customer' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                r.type === 'Product' ? 'bg-amber-55 bg-amber-50 text-amber-700 border-amber-100' :
+                                'bg-pink-50 text-pink-700 border-pink-100'
+                              }`}>
+                                {r.type}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800 truncate">{r.title}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 leading-normal">{r.subtitle}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
 
           <div className="flex items-center gap-4">

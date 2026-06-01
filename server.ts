@@ -1114,16 +1114,44 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), async (re
   if (index !== -1) {
     const inv = db_invoices[index];
     
-    // Reverse ledger / Client Outstanding Adjustments
+    // 1. Remove corresponding ledger entries
+    const ledIndices: number[] = [];
+    db_ledger.forEach((led, i) => {
+      if (led.referenceType === "invoice" && led.referenceId === id) {
+        ledIndices.push(i);
+      }
+    });
+    
+    // Remove from Firestore and in-memory list
+    for (const ledIdx of ledIndices) {
+      const ledId = db_ledger[ledIdx].id;
+      if (db) {
+        try {
+          await deleteDoc(doc(db, 'ledger', ledId));
+        } catch (e) {
+          console.error(`Failed to delete doc ledger/${ledId}:`, e);
+        }
+      }
+    }
+    // Filter db_ledger
+    db_ledger = db_ledger.filter(led => !(led.referenceType === "invoice" && led.referenceId === id));
+    
+    // 2. Delete the actual invoice
+    db_invoices.splice(index, 1);
+    await syncStateToFirestore('invoices', id);
+
+    // 3. Recalculate Client Outstanding Adjustments (robust full recalculation)
     const clientIndex = db_clients.findIndex(c => c.id === inv.clientId);
     if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - inv.dueAmount);
+      const clientInvoices = db_invoices.filter(v => v.clientId === inv.clientId);
+      const clientPayments = db_payments.filter(p => p.clientId === inv.clientId);
+      const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
+      const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
+      db_clients[clientIndex].outstandingBalance = Math.max(0, totalInvoiced - totalPaid);
       await syncStateToFirestore('clients', inv.clientId);
     }
     
-    db_invoices.splice(index, 1);
-    await syncStateToFirestore('invoices', id);
-    logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber}`);
+    logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber} and updated ledger ties`);
     res.json({ success: true });
   } else {
     res.status(404).json({ error: "Invoice not found" });
@@ -1565,8 +1593,13 @@ app.get('/api/cashbook', checkPermission('cashbook', 'read'), (req: Request, res
 app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
   const amount = Number(data.amount || 0);
-  const type = data.type || "income"; // income, expense, bank_deposit, withdrawal, adjustment
+  const type = data.type || "expense"; // Default to expense/debit
   const mode = data.paymentMode || "Cash";
+
+  // Enforce Cashbook strictly forbidden Income manual creation rule (Point 15)
+  if (type === 'income') {
+    return res.status(400).json({ error: "Operation Blocked: Manual 'Cash In' (Income) entries are strictly forbidden. Income must only reflect automatically from Payments Received, Invoice Collections, or Customer Payments." });
+  }
 
   const sortedCashForEntry = [...db_cashbook].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
@@ -1617,6 +1650,11 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Requ
 app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const data = req.body;
+  
+  if (data.type === 'income') {
+    return res.status(400).json({ error: "Operation Blocked: Manual 'Cash In' (Income) entries are strictly forbidden. Income must only reflect automatically from Payments Received, Invoice Collections, or Customer Payments." });
+  }
+
   const index = db_cashbook.findIndex(cb => cb.id === id);
   if (index !== -1) {
     db_cashbook[index] = { ...db_cashbook[index], ...data };

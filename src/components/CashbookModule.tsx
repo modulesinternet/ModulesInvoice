@@ -487,7 +487,6 @@ export default function CashbookModule({
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
                   >
                     <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
-                    <option value="income" className="text-emerald-600 font-bold">Credit / Receipt (+)</option>
                     <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
                     <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>
                   </select>
@@ -660,7 +659,6 @@ export default function CashbookModule({
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
                   >
                     <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
-                    <option value="income" className="text-emerald-600 font-bold">Credit / Receipt (+)</option>
                     <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
                     <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>
                   </select>
