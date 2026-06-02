@@ -472,6 +472,18 @@ export default function App() {
       setUsers(usersFinal);
       setLogs(logsFinal);
       setNotifications(notificationsFinal);
+
+      // Auto-synchronize currentUser with latest profile to prevent stale names/roles loaded from localStorage on page refresh
+      if (currentUser) {
+        const latestProfile = usersFinal.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
+        if (latestProfile) {
+          if (latestProfile.name !== currentUser.name || latestProfile.role !== currentUser.role || latestProfile.status !== currentUser.status) {
+            const updatedUser = { ...currentUser, ...latestProfile };
+            setCurrentUser(updatedUser);
+            localStorage.setItem('current_user', JSON.stringify(updatedUser));
+          }
+        }
+      }
       
       if (Object.keys(passwordsFinal).length > 0) {
         setUserPasswords(passwordsFinal);

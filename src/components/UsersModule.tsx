@@ -259,9 +259,9 @@ export default function UsersModule({
       </div>
 
       {activeSubTab === 'members' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* TEAM MEMBERS SHEET */}
-          <div className="lg:col-span-1 bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm space-y-4" id="team-members-list">
+          <div className="lg:col-span-5 bg-white rounded-3xl border border-[#E5E7EB] p-6 shadow-sm space-y-5" id="team-members-list">
             <div>
               <h3 className="font-bold text-slate-900 text-sm font-display">Authorized Operators</h3>
               <p className="text-[11.5px] text-slate-400 font-sans">Registered teammate accounts holding system clearance</p>
@@ -356,17 +356,31 @@ export default function UsersModule({
               )}
             </div>
 
-            <Pagination
-              currentPage={usersCurrentPage}
-              totalItems={users.length}
-              pageSize={usersPageSize}
-              onPageChange={setUsersCurrentPage}
-              onPageSizeChange={setUsersPageSize}
-            />
+            {users.length > usersPageSize && (
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 text-xs text-slate-500 font-medium">
+                <span>Page {usersCurrentPage} of {Math.ceil(users.length / usersPageSize)}</span>
+                <div className="flex items-center gap-1.5 font-bold">
+                  <button
+                    disabled={usersCurrentPage === 1}
+                    onClick={() => setUsersCurrentPage(p => Math.max(1, p - 1))}
+                    className="px-2.5 py-1 text-[10px] font-bold border border-slate-200 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    disabled={usersCurrentPage >= Math.ceil(users.length / usersPageSize)}
+                    onClick={() => setUsersCurrentPage(p => p + 1)}
+                    className="px-2.5 py-1 text-[10px] font-bold border border-slate-200 bg-white rounded-lg hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* COMPREHENSIVE COMPLIANCE SECURITY AUDIT LOG */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm space-y-4" id="accounting-audit-trail">
+          <div className="lg:col-span-7 bg-white rounded-3xl border border-[#E5E7EB] p-6 shadow-sm space-y-4" id="accounting-audit-trail">
             <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-[#E5E7EB]">
               <div className="flex items-center gap-2 text-indigo-700">
                 <Activity className="w-4.5 h-4.5 animate-pulse" />

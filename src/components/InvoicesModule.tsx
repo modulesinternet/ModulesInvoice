@@ -177,29 +177,29 @@ export default function InvoicesModule({
 
     // Generate beautifully formatted plain-text invoice table
     const itemsTable = selectedInvoice.items.map(item => {
-      const name = item.name.length > 20 ? item.name.substring(0, 17) + "..." : item.name;
-      const qty = String(item.qty).padStart(3);
-      const prc = String(item.price).padStart(6);
-      const tot = String(item.totalAmount).padStart(7);
-      return `${name.padEnd(20)} | ${qty} | ${prc} | ${tot}`;
+      const name = item.name.length > 25 ? item.name.substring(0, 22) + "..." : item.name;
+      const qty = String(item.qty).padStart(4);
+      const prc = String(item.price).padStart(8);
+      const tot = String(item.totalAmount).padStart(8);
+      return `${name.padEnd(25)} | ${qty} | ${prc} | ${tot}`;
     }).join('\n');
 
-    const qrText = `INVOICE ENCODED RECORDS
-----------------------------------------
+    const qrText = `INVOICE BILL OF DATA (VERIFIED STATUS)
+======================================================
 Invoice No : ${selectedInvoice.invoiceNumber}
-Date       : ${formatDisplayDate(selectedInvoice.date)}
-Client     : ${selectedInvoice.clientName}
-${selectedInvoice.clientGst ? 'GSTIN      : ' + selectedInvoice.clientGst : ''}
-----------------------------------------
-Item Name            | Qty | Price  | Total
-----------------------------------------
+Issue Date : ${formatDisplayDate(selectedInvoice.date)}
+Client Name: ${selectedInvoice.clientName}
+${selectedInvoice.clientGst ? 'Client GST : ' + selectedInvoice.clientGst : ''}
+======================================================
+Item Name                 |  Qty |    Price |    Total
+------------------------------------------------------
 ${itemsTable}
-----------------------------------------
+======================================================
 Subtotal   : INR ${selectedInvoice.subtotal}
 GST Taxes  : INR ${selectedInvoice.taxAmount}
 Total Amt  : INR ${selectedInvoice.total}
 Due Amount : INR ${selectedInvoice.dueAmount}
-----------------------------------------
+======================================================
 Thank you for your business!`;
 
     QRCode.toDataURL(qrText, { margin: 1, width: 250 }, (err, url) => {

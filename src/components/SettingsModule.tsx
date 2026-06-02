@@ -141,7 +141,10 @@ export default function SettingsModule({
   ): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // ONLY apply crossOrigin for foreign web links to prevent security lockout issues on local data or files
+      if (typeof fileOrBase64 === 'string' && fileOrBase64.startsWith('http')) {
+        img.crossOrigin = 'anonymous';
+      }
 
       img.onload = () => {
         let width = img.width;
@@ -756,107 +759,145 @@ export default function SettingsModule({
               <span>Invoice Payment QR Options</span>
             </h3>
 
-            <div className="space-y-3">
-              <label className="flex items-start gap-2 text-xs text-slate-700 font-medium cursor-pointer selection:bg-transparent">
+            <div className="space-y-4">
+              {/* Option 1: Master Enable QR Code on Invoices */}
+              <label className="flex items-start gap-2.5 text-xs text-slate-700 font-medium cursor-pointer selection:bg-transparent">
                 <input 
                   type="checkbox"
-                  checked={useCustomQrCode}
-                  onChange={(e) => setUseCustomQrCode(e.target.checked)}
+                  checked={showInvoiceQrCode}
+                  onChange={(e) => setShowInvoiceQrCode(e.target.checked)}
                   className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0 mt-0.5"
                 />
                 <div className="space-y-0.5">
-                  <span className="font-bold text-slate-850">Use Custom QR Code</span>
+                  <span className="font-bold text-slate-850">Show Payment QR Code on Invoices</span>
                   <p className="text-[10px] text-slate-400 font-sans">
-                    Display an uploaded custom QR image instead of the auto-generated UPI deep-link QR.
+                    Display a scan-to-pay QR code block on generated taxes / sales invoices for client payment.
                   </p>
                 </div>
               </label>
 
-              {useCustomQrCode && (
-                <div className="space-y-3.5 pt-2 border-t border-dashed border-slate-100">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Upload Custom QR Code Image</label>
-                  
-                  <div 
-                    className={`border-2 border-dashed rounded-2xl p-4 transition duration-200 flex flex-col items-center justify-center text-center space-y-2.5 ${
-                      isDraggingQr ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDraggingQr(true);
-                    }}
-                    onDragLeave={() => setIsDraggingQr(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsDraggingQr(false);
-                      const file = e.dataTransfer.files?.[0];
-                      if (file) {
-                        processImageUpload(file, setCustomQrUrl, 300, 300);
-                      }
-                    }}
-                  >
-                    {customQrUrl ? (
-                      <div className="relative p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center h-28 w-28 shadow-xs group">
-                        <img 
-                          src={customQrUrl} 
-                          className="max-h-full max-w-full object-contain rounded-lg" 
-                          alt="Custom QR preview" 
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCustomQrUrl('');
-                          }}
-                          className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md transition font-bold cursor-pointer"
-                          title="Remove custom QR"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-2">
-                        <QrCode className="w-8 h-8 text-slate-400 mb-1 animate-pulse" />
-                        <p className="text-[11px] text-slate-500">Drag &amp; drop QR image here, or</p>
-                      </div>
-                    )}
+              {showInvoiceQrCode && (
+                <div className="space-y-4 pt-3 border-t border-dashed border-slate-150 pl-6">
+                  {/* Dynamic radio options */}
+                  <label className="flex items-start gap-2 text-xs text-slate-700 font-medium cursor-pointer selection:bg-transparent">
+                    <input 
+                      type="radio"
+                      name="qr_type_selection"
+                      checked={!useCustomQrCode}
+                      onChange={() => setUseCustomQrCode(false)}
+                      className="border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-slate-800">Auto-Generate Dynamic UPI QR Code</span>
+                      <p className="text-[10px] text-slate-400 font-sans">
+                        Automatically compile structured Indian UPI deep-link QR codes containing the invoice reference, total, and UPI ID.
+                      </p>
+                    </div>
+                  </label>
 
-                    <div className="flex flex-wrap gap-2 items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('qr-file-picker')?.click()}
-                        className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                      >
-                        <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Browse image</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const url = prompt("Enter web URL of your payment QR code image:");
-                          if (url) {
-                            setCustomQrUrl(url);
+                  <label className="flex items-start gap-2 text-xs text-slate-700 font-medium cursor-pointer selection:bg-transparent">
+                    <input 
+                      type="radio"
+                      name="qr_type_selection"
+                      checked={useCustomQrCode}
+                      onChange={() => setUseCustomQrCode(true)}
+                      className="border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-slate-800">Use Uploaded Custom QR Code Image</span>
+                      <p className="text-[10px] text-slate-400 font-sans">
+                        Display a static custom QR code image instead of auto-generating deep links (e.g. for bank-merchant stamps).
+                      </p>
+                    </div>
+                  </label>
+
+                  {useCustomQrCode && (
+                    <div className="space-y-3.5 pt-2 pl-6 border-l-2 border-indigo-150">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase font-sans">Upload Custom QR Code Image</label>
+                      
+                      <div 
+                        className={`border-2 border-dashed rounded-2xl p-4 transition duration-200 flex flex-col items-center justify-center text-center space-y-2.5 ${
+                          isDraggingQr ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200 hover:border-slate-300 bg-slate-50/50"
+                        }`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDraggingQr(true);
+                        }}
+                        onDragLeave={() => setIsDraggingQr(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDraggingQr(false);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) {
+                            processImageUpload(file, setCustomQrUrl, 300, 300);
                           }
                         }}
-                        className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-[10px] font-semibold rounded-xl transition cursor-pointer flex items-center gap-1"
                       >
-                        <Link className="w-3 h-3 text-slate-500" />
-                        <span>Paste URL</span>
-                      </button>
+                        {customQrUrl ? (
+                          <div className="relative p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center h-28 w-28 shadow-xs group">
+                            <img 
+                              src={customQrUrl} 
+                              className="max-h-full max-w-full object-contain rounded-lg" 
+                              alt="Custom QR preview" 
+                              referrerPolicy="no-referrer"
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCustomQrUrl('');
+                              }}
+                              className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md transition font-bold cursor-pointer"
+                              title="Remove custom QR"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-2">
+                            <QrCode className="w-8 h-8 text-slate-400 mb-1 animate-pulse" />
+                            <p className="text-[11px] text-slate-500">Drag &amp; drop QR image here, or</p>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('qr-file-picker')?.click()}
+                            className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                          >
+                            <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Browse image</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = prompt("Enter web URL of your payment QR code image:");
+                              if (url) {
+                                setCustomQrUrl(url);
+                              }
+                            }}
+                            className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-[10px] font-semibold rounded-xl transition cursor-pointer flex items-center gap-1"
+                          >
+                            <Link className="w-3" />
+                            <span>Paste URL</span>
+                          </button>
+                        </div>
+                        <input 
+                          type="file"
+                          accept="image/*"
+                          id="qr-file-picker"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              processImageUpload(file, setCustomQrUrl, 300, 300);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </div>
                     </div>
-                    <input 
-                      type="file"
-                      accept="image/*"
-                      id="qr-file-picker"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          processImageUpload(file, setCustomQrUrl, 300, 300);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1245,15 +1286,6 @@ export default function SettingsModule({
                         className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
                       />
                       <span>Show UPI ID Line</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
-                      <input 
-                        type="checkbox"
-                        checked={showInvoiceQrCode}
-                        onChange={(e) => setShowInvoiceQrCode(e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
-                      />
-                      <span>Show Scan-to-Pay QR</span>
                     </label>
                     <label className="flex items-center gap-2 text-[11px] text-slate-600 font-medium whitespace-nowrap cursor-pointer selection:bg-transparent">
                       <input 
