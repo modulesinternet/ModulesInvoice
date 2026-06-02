@@ -234,7 +234,14 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
   if (body) {
     config.body = JSON.stringify(body);
   }
-  const response = await fetch(getApiUrl(url), config);
+  
+  let targetUrl = url;
+  if (method === 'GET') {
+    const separator = targetUrl.includes('?') ? '&' : '?';
+    targetUrl = `${targetUrl}${separator}t=${Date.now()}`;
+  }
+
+  const response = await fetch(getApiUrl(targetUrl), config);
   if (!response.ok) {
     let errMsg = `Request failed: ${response.statusText}`;
     try {

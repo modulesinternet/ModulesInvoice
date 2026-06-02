@@ -175,32 +175,7 @@ export default function InvoicesModule({
       return;
     }
 
-    // Generate beautifully formatted plain-text invoice table
-    const itemsTable = selectedInvoice.items.map(item => {
-      const name = item.name.length > 25 ? item.name.substring(0, 22) + "..." : item.name;
-      const qty = String(item.qty).padStart(4);
-      const prc = String(item.price).padStart(8);
-      const tot = String(item.totalAmount).padStart(8);
-      return `${name.padEnd(25)} | ${qty} | ${prc} | ${tot}`;
-    }).join('\n');
-
-    const qrText = `INVOICE BILL OF DATA (VERIFIED STATUS)
-======================================================
-Invoice No : ${selectedInvoice.invoiceNumber}
-Issue Date : ${formatDisplayDate(selectedInvoice.date)}
-Client Name: ${selectedInvoice.clientName}
-${selectedInvoice.clientGst ? 'Client GST : ' + selectedInvoice.clientGst : ''}
-======================================================
-Item Name                 |  Qty |    Price |    Total
-------------------------------------------------------
-${itemsTable}
-======================================================
-Subtotal   : INR ${selectedInvoice.subtotal}
-GST Taxes  : INR ${selectedInvoice.taxAmount}
-Total Amt  : INR ${selectedInvoice.total}
-Due Amount : INR ${selectedInvoice.dueAmount}
-======================================================
-Thank you for your business!`;
+    const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
 
     QRCode.toDataURL(qrText, { margin: 1, width: 250 }, (err, url) => {
       if (!err && url) {
@@ -814,7 +789,7 @@ Thank you for your business!`;
                       crossOrigin="anonymous"
                     />
                     <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                      Scan to Fetch Details &amp; Pay
+                      Scan to Verify
                     </span>
                   </div>
                 )}
@@ -842,7 +817,7 @@ Thank you for your business!`;
                           crossOrigin="anonymous"
                         />
                         <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                          Scan to Fetch Details &amp; Pay
+                          Scan to Verify
                         </span>
                       </div>
                     )}
@@ -859,7 +834,7 @@ Thank you for your business!`;
                       crossOrigin="anonymous"
                     />
                     <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                      Scan to Fetch Details &amp; Pay
+                      Scan to Verify
                     </span>
                   </div>
                 )}

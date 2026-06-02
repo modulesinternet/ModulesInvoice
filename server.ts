@@ -1411,106 +1411,111 @@ app.get('/api/payments', checkPermission('payments', 'read'), (req: Request, res
 });
 
 app.post('/api/payments', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
-  const data = req.body;
-  const payId = `pay-${Date.now()}`;
-  const amountPaid = Number(data.amount || 0);
+  try {
+    const data = req.body;
+    const payId = `pay-${Date.now()}`;
+    const amountPaid = Number(data.amount || 0);
 
-  const newPayment: Payment = {
-    id: payId,
-    invoiceId: data.invoiceId,
-    invoiceNumber: data.invoiceNumber || "",
-    clientId: data.clientId,
-    clientName: data.clientName,
-    amount: amountPaid,
-    paymentDate: data.paymentDate || new Date().toISOString().split('T')[0],
-    paymentMode: data.paymentMode || "UPI",
-    referenceNum: data.referenceNum || `REF-${Date.now()}`,
-    remarks: data.remarks || "No comments",
-    createdAt: new Date().toISOString()
-  };
+    const newPayment: Payment = {
+      id: payId,
+      invoiceId: data.invoiceId,
+      invoiceNumber: data.invoiceNumber || "",
+      clientId: data.clientId,
+      clientName: data.clientName,
+      amount: amountPaid,
+      paymentDate: data.paymentDate || new Date().toISOString().split('T')[0],
+      paymentMode: data.paymentMode || "UPI",
+      referenceNum: data.referenceNum || `REF-${Date.now()}`,
+      remarks: data.remarks || "No comments",
+      createdAt: new Date().toISOString()
+    };
 
-  db_payments.unshift(newPayment);
+    db_payments.unshift(newPayment);
 
-  // AUTOMATION TRIGGER 1: Auto Sync Invoice paid status update
-  const invIndex = db_invoices.findIndex(i => i.id === newPayment.invoiceId);
-  if (invIndex !== -1) {
-    const inv = db_invoices[invIndex];
-    inv.paidAmount += amountPaid;
-    inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-    
-    if (inv.dueAmount === 0) {
-      inv.status = 'paid';
-    } else if (inv.paidAmount > 0) {
-      inv.status = 'partially_paid';
+    // AUTOMATION TRIGGER 1: Auto Sync Invoice paid status update with NaN protection
+    const invIndex = db_invoices.findIndex(i => i.id === newPayment.invoiceId);
+    if (invIndex !== -1) {
+      const inv = db_invoices[invIndex];
+      inv.paidAmount = Number(inv.paidAmount || 0) + amountPaid;
+      inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
+      
+      if (inv.dueAmount === 0) {
+        inv.status = 'paid';
+      } else if (inv.paidAmount > 0) {
+        inv.status = 'partially_paid';
+      }
+      await syncStateToFirestore('invoices', newPayment.invoiceId);
     }
-    await syncStateToFirestore('invoices', newPayment.invoiceId);
+
+    // AUTOMATION TRIGGER 2: Auto outstanding updates in Client entity with NaN protection
+    const clientIndex = db_clients.findIndex(c => c.id === newPayment.clientId);
+    let runningClientBalance = 0;
+    if (clientIndex !== -1) {
+      db_clients[clientIndex].outstandingBalance = Math.max(0, Number(db_clients[clientIndex].outstandingBalance || 0) - amountPaid);
+      runningClientBalance = db_clients[clientIndex].outstandingBalance;
+      await syncStateToFirestore('clients', newPayment.clientId);
+    }
+
+    // AUTOMATION TRIGGER 3: Auto ledger record credits
+    const newLedger: LedgerEntry = {
+      id: `led-${Date.now()}`,
+      clientId: newPayment.clientId,
+      clientName: newPayment.clientName,
+      date: newPayment.paymentDate,
+      description: `Payment Receipt: ${newPayment.id} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
+      type: "credit",
+      amount: amountPaid,
+      runningBalance: runningClientBalance,
+      referenceType: "payment",
+      referenceId: payId,
+      createdAt: new Date().toISOString()
+    };
+    db_ledger.unshift(newLedger);
+
+    // AUTOMATION TRIGGER 4: Cashbook auto synchronizer running bank & cash accounts
+    const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return a.id.localeCompare(b.id);
+    });
+    const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
+    let cashChange = 0;
+    let bankChange = 0;
+
+    if (newPayment.paymentMode === 'Cash') {
+      cashChange = amountPaid;
+    } else {
+      bankChange = amountPaid;
+    }
+
+    const newCashbook: CashbookEntry = {
+      id: `cb-${Date.now()}`,
+      date: newPayment.paymentDate,
+      description: `Invoiced Collection [${newPayment.clientName}] Ref ${newPayment.referenceNum}`,
+      type: "income",
+      paymentMode: newPayment.paymentMode,
+      amount: amountPaid,
+      referenceId: payId,
+      runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
+      runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
+      createdAt: new Date().toISOString()
+    };
+    db_cashbook.unshift(newCashbook);
+
+    await syncStateToFirestore('payments', payId);
+    await syncStateToFirestore('ledger', newLedger.id);
+    await syncStateToFirestore('cashbook', newCashbook.id);
+
+    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
+    res.status(201).json(newPayment);
+  } catch (err: any) {
+    console.error("Critical payment log execution failed: ", err);
+    res.status(500).json({ error: `Could not approve ledger credit of payment receipt: ${err.message}` });
   }
-
-  // AUTOMATION TRIGGER 2: Auto outstanding updates in Client entity
-  const clientIndex = db_clients.findIndex(c => c.id === newPayment.clientId);
-  let runningClientBalance = 0;
-  if (clientIndex !== -1) {
-    db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - amountPaid);
-    runningClientBalance = db_clients[clientIndex].outstandingBalance;
-    await syncStateToFirestore('clients', newPayment.clientId);
-  }
-
-  // AUTOMATION TRIGGER 3: Auto ledger record credits
-  const newLedger: LedgerEntry = {
-    id: `led-${Date.now()}`,
-    clientId: newPayment.clientId,
-    clientName: newPayment.clientName,
-    date: newPayment.paymentDate,
-    description: `Payment Receipt: ${newPayment.id} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
-    type: "credit",
-    amount: amountPaid,
-    runningBalance: runningClientBalance,
-    referenceType: "payment",
-    referenceId: payId,
-    createdAt: new Date().toISOString()
-  };
-  db_ledger.unshift(newLedger);
-
-  // AUTOMATION TRIGGER 4: Cashbook auto synchronizer running bank & cash accounts
-  const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    if (dateA !== dateB) return dateA - dateB;
-    const timeA = new Date(a.createdAt).getTime();
-    const timeB = new Date(b.createdAt).getTime();
-    if (timeA !== timeB) return timeA - timeB;
-    return a.id.localeCompare(b.id);
-  });
-  const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
-  let cashChange = 0;
-  let bankChange = 0;
-
-  if (newPayment.paymentMode === 'Cash') {
-    cashChange = amountPaid;
-  } else {
-    bankChange = amountPaid;
-  }
-
-  const newCashbook: CashbookEntry = {
-    id: `cb-${Date.now()}`,
-    date: newPayment.paymentDate,
-    description: `Invoiced Collection [${newPayment.clientName}] Ref ${newPayment.referenceNum}`,
-    type: "income",
-    paymentMode: newPayment.paymentMode,
-    amount: amountPaid,
-    referenceId: payId,
-    runningCashBalance: lastCashbookEntry.runningCashBalance + cashChange,
-    runningBankBalance: lastCashbookEntry.runningBankBalance + bankChange,
-    createdAt: new Date().toISOString()
-  };
-  db_cashbook.unshift(newCashbook);
-
-  await syncStateToFirestore('payments', payId);
-  await syncStateToFirestore('ledger', newLedger.id);
-  await syncStateToFirestore('cashbook', newCashbook.id);
-
-  logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
-  res.status(201).json(newPayment);
 });
 
 app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
