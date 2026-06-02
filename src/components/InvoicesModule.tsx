@@ -22,7 +22,8 @@ import {
   ExternalLink,
   ChevronDown,
   Globe,
-  Edit3
+  Edit3,
+  Paperclip
 } from 'lucide-react';
 import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
 import jsPDF from 'jspdf';
@@ -174,21 +175,34 @@ export default function InvoicesModule({
       return;
     }
 
-    // Handle subfolder deployments on GitHub Pages dynamically
-    let basePath = window.location.pathname;
-    if (basePath.includes('/public/invoice/')) {
-      basePath = basePath.split('/public/invoice/')[0];
-    }
-    if (basePath.endsWith('.html')) {
-      const parts = basePath.split('/');
-      parts.pop();
-      basePath = parts.join('/');
-    }
-    if (!basePath.endsWith('/')) {
-      basePath += '/';
-    }
-    const publicScanUrl = `${window.location.origin}${basePath}public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-    QRCode.toDataURL(publicScanUrl, { margin: 1, width: 250 }, (err, url) => {
+    // Generate beautifully formatted plain-text invoice table
+    const itemsTable = selectedInvoice.items.map(item => {
+      const name = item.name.length > 20 ? item.name.substring(0, 17) + "..." : item.name;
+      const qty = String(item.qty).padStart(3);
+      const prc = String(item.price).padStart(6);
+      const tot = String(item.totalAmount).padStart(7);
+      return `${name.padEnd(20)} | ${qty} | ${prc} | ${tot}`;
+    }).join('\n');
+
+    const qrText = `INVOICE ENCODED RECORDS
+----------------------------------------
+Invoice No : ${selectedInvoice.invoiceNumber}
+Date       : ${formatDisplayDate(selectedInvoice.date)}
+Client     : ${selectedInvoice.clientName}
+${selectedInvoice.clientGst ? 'GSTIN      : ' + selectedInvoice.clientGst : ''}
+----------------------------------------
+Item Name            | Qty | Price  | Total
+----------------------------------------
+${itemsTable}
+----------------------------------------
+Subtotal   : INR ${selectedInvoice.subtotal}
+GST Taxes  : INR ${selectedInvoice.taxAmount}
+Total Amt  : INR ${selectedInvoice.total}
+Due Amount : INR ${selectedInvoice.dueAmount}
+----------------------------------------
+Thank you for your business!`;
+
+    QRCode.toDataURL(qrText, { margin: 1, width: 250 }, (err, url) => {
       if (!err && url) {
         setQrCodeDataUrl(url);
       }
@@ -899,148 +913,27 @@ export default function InvoicesModule({
               </div>
             </div>
 
-            {/* CLOUD SECURED STORAGE & ATTACHMENTS PANEL */}
-            <div className="bg-slate-50 rounded-3xl border border-slate-200/60 p-8 mt-6 max-w-4xl mx-auto space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2 font-display">
-                    <FileText className="w-5 h-5 text-indigo-500" />
-                    <span>Real-Time Corporate Records &amp; Storage Attachments</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Upload and synchronize related files (contracts, purchase orders, receipt receipts, built PDFs) straight into Firebase Cloud Storage for instant cross-device access control.
-                  </p>
+            {selectedInvoice.challanUrl && (
+              <div className="mt-8 pt-8 border-t border-slate-250 border-slate-200 animate-fade-in" id="challan-attachment-section">
+                <div className="text-left mb-3 flex items-center justify-between">
+                  <div>
+                    <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan</span>
+                    <span className="text-xs font-bold text-slate-700 font-mono">Attachment Name: {selectedInvoice.challanName || 'Challan Image'}</span>
+                  </div>
+                  <div className="text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full select-none">
+                    Delivery Challan Document
+                  </div>
                 </div>
-                
-                {/* Manual Attachment Trigger */}
-                <div>
-                  <label className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition shadow-sm">
-                    <PlusCircle className="w-4 h-4 text-indigo-500" />
-                    <span>Upload Attachment</span>
-                    <input 
-                      type="file" 
-                      onChange={handleFileUpload} 
-                      disabled={isUploading} 
-                      className="hidden" 
-                    />
-                  </label>
+                <div className="border border-slate-200 rounded-3xl overflow-hidden p-4 bg-slate-50 flex items-center justify-center">
+                  <img 
+                    src={selectedInvoice.challanUrl} 
+                    className="max-h-[750px] w-auto object-contain rounded-2xl shadow-sm animate-fade-in" 
+                    alt="Delivery Challan Link" 
+                    crossOrigin="anonymous"
+                  />
                 </div>
               </div>
-
-              {/* Uploading Status Progress bar */}
-              {isUploading && (
-                <div className="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl space-y-2">
-                  <div className="flex justify-between items-center text-xs text-indigo-700 font-bold">
-                    <span>Streaming attachment to Google Cloud Storage...</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className="bg-indigo-600 h-full rounded-full transition-all duration-300" 
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Attachments & System back-ups Gallery */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* 1. Automated System PDF Back-up card */}
-                {selectedInvoice.pdfUrl ? (
-                  <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 transition shadow-sm">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate">
-                          System_Generated_Invoice_{selectedInvoice.invoiceNumber.replace('/', '_')}.pdf
-                        </p>
-                        <p className="text-[10px] text-emerald-600 font-semibold font-mono mt-0.5">
-                          ● Fully Synced (Cloud Storage Backup)
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <a 
-                        href={selectedInvoice.pdfUrl} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 block transition"
-                        title="View Cloud PDF backup"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between p-4 bg-slate-100/50 border border-dashed border-slate-200 rounded-2xl">
-                    <div className="flex items-center gap-3 text-slate-400">
-                      <div className="p-2.5 bg-slate-200/50 rounded-xl shrink-0">
-                        <Clock className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold">Live PDF Backup Pending</p>
-                        <p className="text-[10px] italic">Saves to Storage as soon as you click 'Save PDF'</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Manually uploaded attachments list */}
-                {(selectedInvoice.attachments || []).map((file, idx) => {
-                  const displaySize = file.size 
-                    ? file.size > 1024 * 1024 
-                      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-                      : `${(file.size / 1024).toFixed(0)} KB` 
-                    : 'Unknown Size';
-                  return (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 transition shadow-sm">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>
-                            {file.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {displaySize}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <a 
-                          href={file.url} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 block transition"
-                          title="Open document"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                        <button 
-                          onClick={() => handleDeleteAttachment(idx)}
-                          className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 hover:text-rose-700 transition"
-                          title="Remove attachment"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Empty state attachments display */}
-              {(!selectedInvoice.pdfUrl && (!selectedInvoice.attachments || selectedInvoice.attachments.length === 0)) && (
-                <div className="text-center py-6 bg-white border border-dashed border-slate-200 rounded-2xl">
-                  <p className="text-xs text-slate-400">No storage attachments uploaded yet.</p>
-                  <p className="text-[10px] text-slate-400 mt-1">Download PDF to backing up, or upload documents above manually.</p>
-                </div>
-              )}
-            </div>
+            )}
 
           </div>
         </div>
@@ -1167,6 +1060,53 @@ export default function InvoicesModule({
                             title="Edit Invoice / Bill"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canWrite && (
+                          <div className="inline-block relative">
+                            <label 
+                              className="p-1 px-1.5 border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition cursor-pointer flex items-center justify-center inline-flex"
+                              title={inv.challanUrl ? `Update Challan (Attached: ${inv.challanName || 'Yes'})` : "Attach Delivery Challan"}
+                            >
+                              <Paperclip className={`w-3.5 h-3.5 ${inv.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = async () => {
+                                      const base64String = reader.result as string;
+                                      await onUpdateInvoice(inv.id, { 
+                                        challanUrl: base64String, 
+                                        challanName: file.name,
+                                        challanType: file.type
+                                      });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                        {canWrite && inv.challanUrl && (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Remove the attached delivery challan '${inv.challanName || ""}'?`)) {
+                                await onUpdateInvoice(inv.id, {
+                                  challanUrl: undefined,
+                                  challanName: undefined,
+                                  challanType: undefined
+                                });
+                              }
+                            }}
+                            className="p-1 px-1.5 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                            title={`Remove Challan: ${inv.challanName || ""}`}
+                          >
+                            <X className="w-3.5 h-3.5 text-amber-600 font-bold" />
                           </button>
                         )}
                         {canDelete && (

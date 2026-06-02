@@ -93,7 +93,10 @@
         "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid", "overdue"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "pdfUrl": { "type": "string", "description": "Cloud storage URL for generated invoice PDF." },
-        "attachments": { "type": "array", "description": "Array of linked attachment files." }
+        "attachments": { "type": "array", "description": "Array of linked attachment files." },
+        "challanUrl": { "type": "string", "description": "Base64 or Cloud storage URL for the attached Challan." },
+        "challanName": { "type": "string", "description": "Filename of the attached Challan." },
+        "challanType": { "type": "string", "description": "MIME type of the attached Challan." }
       },
       "required": ["id", "invoiceNumber", "clientId", "items", "total", "paidAmount", "dueAmount", "status"]
     },

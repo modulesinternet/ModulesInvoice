@@ -316,122 +316,119 @@ async function syncStateToFirestore(topic: string, id?: string) {
 
   if (!db) return;
   
-  // Non-blocking background sync prevents slow cloud queries from choking client responses.
-  // This guarantees all CRUD saves complete elements cleanly in 1-attempt, sub-millisecond clicks.
-  (async () => {
-    try {
-      if (topic === 'settings') {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), 5000);
-      } else if (topic === 'categories') {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), 5000);
-      } else if (topic === 'roles') {
-        await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), 5000);
-      } else if (topic === 'clients') {
-        if (id) {
-          const item = db_clients.find(c => c.id === id);
-          if (item) await setDoc(doc(db, 'clients', id), item);
-          else await deleteDoc(doc(db, 'clients', id));
-        } else {
-          for (const item of db_clients) {
-            await setDoc(doc(db, 'clients', item.id), item);
-          }
-        }
-      } else if (topic === 'products') {
-        if (id) {
-          const item = db_products.find(p => p.id === id);
-          if (item) await setDoc(doc(db, 'products', id), item);
-          else await deleteDoc(doc(db, 'products', id));
-        } else {
-          for (const item of db_products) {
-            await setDoc(doc(db, 'products', item.id), item);
-          }
-        }
-      } else if (topic === 'invoices') {
-        if (id) {
-          const item = db_invoices.find(v => v.id === id);
-          if (item) await setDoc(doc(db, 'invoices', id), item);
-          else await deleteDoc(doc(db, 'invoices', id));
-        } else {
-          for (const item of db_invoices) {
-            await setDoc(doc(db, 'invoices', item.id), item);
-          }
-        }
-      } else if (topic === 'quotations') {
-        if (id) {
-          const item = db_quotations.find(q => q.id === id);
-          if (item) await setDoc(doc(db, 'quotations', id), item);
-          else await deleteDoc(doc(db, 'quotations', id));
-        } else {
-          for (const item of db_quotations) {
-            await setDoc(doc(db, 'quotations', item.id), item);
-          }
-        }
-      } else if (topic === 'payments') {
-        if (id) {
-          const item = db_payments.find(p => p.id === id);
-          if (item) await setDoc(doc(db, 'payments', id), item);
-          else await deleteDoc(doc(db, 'payments', id));
-        } else {
-          for (const item of db_payments) {
-            await setDoc(doc(db, 'payments', item.id), item);
-          }
-        }
-      } else if (topic === 'ledger') {
-        if (id) {
-          const item = db_ledger.find(l => l.id === id);
-          if (item) await setDoc(doc(db, 'ledger', id), item);
-          else await deleteDoc(doc(db, 'ledger', id));
-        } else {
-          for (const item of db_ledger) {
-            await setDoc(doc(db, 'ledger', item.id), item);
-          }
-        }
-      } else if (topic === 'cashbook') {
-        if (id) {
-          const item = db_cashbook.find(cb => cb.id === id);
-          if (item) await setDoc(doc(db, 'cashbook', id), item);
-          else await deleteDoc(doc(db, 'cashbook', id));
-        } else {
-          for (const item of db_cashbook) {
-            await setDoc(doc(db, 'cashbook', item.id), item);
-          }
-        }
-      } else if (topic === 'logs') {
-        if (id) {
-          const item = db_logs.find(lg => lg.id === id);
-          if (item) await setDoc(doc(db, 'activityLogs', id), item);
-          else await deleteDoc(doc(db, 'activityLogs', id));
-        } else {
-          for (const item of db_logs) {
-            await setDoc(doc(db, 'activityLogs', item.id), item);
-          }
-        }
-      } else if (topic === 'notifications') {
-        if (id) {
-          const item = db_notifications.find(n => n.id === id);
-          if (item) await setDoc(doc(db, 'notifications', id), item);
-          else await deleteDoc(doc(db, 'notifications', id));
-        } else {
-          for (const item of db_notifications) {
-            await setDoc(doc(db, 'notifications', item.id), item);
-          }
-        }
-      } else if (topic === 'users') {
-        if (id) {
-          const item = db_users.find(u => u.userId === id);
-          if (item) await setDoc(doc(db, 'users', id), item);
-          else await deleteDoc(doc(db, 'users', id));
-        } else {
-          for (const item of db_users) {
-            await setDoc(doc(db, 'users', item.userId), item);
-          }
+  try {
+    const timeoutVal = 15000; // Tolerant 15-second write limit for heavy logo/mohar data payloads
+    if (topic === 'settings') {
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), timeoutVal);
+    } else if (topic === 'categories') {
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), timeoutVal);
+    } else if (topic === 'roles') {
+      await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), timeoutVal);
+    } else if (topic === 'clients') {
+      if (id) {
+        const item = db_clients.find(c => c.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'clients', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'clients', id)), timeoutVal);
+      } else {
+        for (const item of db_clients) {
+          await withTimeout(setDoc(doc(db, 'clients', item.id), item), timeoutVal);
         }
       }
-    } catch (error) {
-      // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
-      console.warn("WARNING: Fallback background save failed on Firestore sync. Continuing in memory-only model.", error);
+    } else if (topic === 'products') {
+      if (id) {
+        const item = db_products.find(p => p.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'products', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'products', id)), timeoutVal);
+      } else {
+        for (const item of db_products) {
+          await withTimeout(setDoc(doc(db, 'products', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'invoices') {
+      if (id) {
+        const item = db_invoices.find(v => v.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'invoices', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'invoices', id)), timeoutVal);
+      } else {
+        for (const item of db_invoices) {
+          await withTimeout(setDoc(doc(db, 'invoices', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'quotations') {
+      if (id) {
+        const item = db_quotations.find(q => q.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'quotations', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'quotations', id)), timeoutVal);
+      } else {
+        for (const item of db_quotations) {
+          await withTimeout(setDoc(doc(db, 'quotations', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'payments') {
+      if (id) {
+        const item = db_payments.find(p => p.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'payments', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'payments', id)), timeoutVal);
+      } else {
+        for (const item of db_payments) {
+          await withTimeout(setDoc(doc(db, 'payments', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'ledger') {
+      if (id) {
+        const item = db_ledger.find(l => l.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'ledger', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'ledger', id)), timeoutVal);
+      } else {
+        for (const item of db_ledger) {
+          await withTimeout(setDoc(doc(db, 'ledger', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'cashbook') {
+      if (id) {
+        const item = db_cashbook.find(cb => cb.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'cashbook', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'cashbook', id)), timeoutVal);
+      } else {
+        for (const item of db_cashbook) {
+          await withTimeout(setDoc(doc(db, 'cashbook', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'logs') {
+      if (id) {
+        const item = db_logs.find(lg => lg.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'activityLogs', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'activityLogs', id)), timeoutVal);
+      } else {
+        for (const item of db_logs) {
+          await withTimeout(setDoc(doc(db, 'activityLogs', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'notifications') {
+      if (id) {
+        const item = db_notifications.find(n => n.id === id);
+        if (item) await withTimeout(setDoc(doc(db, 'notifications', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'notifications', id)), timeoutVal);
+      } else {
+        for (const item of db_notifications) {
+          await withTimeout(setDoc(doc(db, 'notifications', item.id), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'users') {
+      if (id) {
+        const item = db_users.find(u => u.userId === id);
+        if (item) await withTimeout(setDoc(doc(db, 'users', id), item), timeoutVal);
+        else await withTimeout(deleteDoc(doc(db, 'users', id)), timeoutVal);
+      } else {
+        for (const item of db_users) {
+          await withTimeout(setDoc(doc(db, 'users', item.userId), item), timeoutVal);
+        }
+      }
     }
-  })();
+  } catch (error) {
+    // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
+    console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
+  }
 }
 
 // Exhaustive global self-healing audit and sweep of ledger/client balances
