@@ -26,12 +26,28 @@ import {
   Paperclip
 } from 'lucide-react';
 import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Pagination from './Pagination';
 import QRCode from 'qrcode';
 import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+async function toBase64(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn("Could not pre-convert URL to base64 due to CORS, continuing with original:", err);
+    return url;
+  }
+}
 
 interface InvoicesModuleProps {
   invoices: Invoice[];
@@ -62,7 +78,41 @@ export default function InvoicesModule({
 }: InvoicesModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [selectedInvoiceRaw, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  const selectedInvoice = selectedInvoiceRaw 
+    ? (invoices.find(inv => inv.id === selectedInvoiceRaw.id) || selectedInvoiceRaw) 
+    : null;
+
+  const [base64Logo, setBase64Logo] = useState<string>('');
+  const [base64Signature, setBase64Signature] = useState<string>('');
+
+  React.useEffect(() => {
+    async function convertImages() {
+      if (businessSettings?.logoUrl) {
+        try {
+          const b64 = await toBase64(businessSettings.logoUrl);
+          setBase64Logo(b64);
+        } catch (e) {
+          console.warn("Failed logo convert", e);
+        }
+      } else {
+        setBase64Logo('');
+      }
+
+      if (businessSettings?.signatureUrl) {
+        try {
+          const b64 = await toBase64(businessSettings.signatureUrl);
+          setBase64Signature(b64);
+        } catch (e) {
+          console.warn("Failed signature convert", e);
+        }
+      } else {
+        setBase64Signature('');
+      }
+    }
+    convertImages();
+  }, [businessSettings]);
 
   // Storage Upload and Offline Recovery States (fully customized for Cloud Storage)
   const [isUploading, setIsUploading] = useState(false);
@@ -396,17 +446,22 @@ export default function InvoicesModule({
     };
 
     try {
-      const canvas = await html2canvas(printableRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
+
+      const bodyEl = document.getElementById('invoice-main-body');
+      if (!bodyEl) throw new Error("Invoice main body block not found");
+
+      // Render Page 1 (Invoice body)
+      const canvas = await html2canvas(bodyEl, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      const imgData = canvas.toDataURL('image/png');
       
       const imgWidth = 210; // A4 standard width in mm
       const pageHeight = 297; // A4 standard height in mm
@@ -424,6 +479,30 @@ export default function InvoicesModule({
       const yOffset = 6;
       
       pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+
+      // Render Page 2 (Attached Delivery Challan) if it exists
+      const challanEl = document.getElementById('challan-attachment-section');
+      if (selectedInvoice?.challanUrl && challanEl) {
+        pdf.addPage();
+        const canvas2 = await html2canvas(challanEl, {
+          scale: 2,
+          useCORS: true,
+          logging: false
+        });
+        const imgData2 = canvas2.toDataURL('image/png');
+        let renderedWidth2 = imgWidth;
+        let renderedHeight2 = (canvas2.height * imgWidth) / canvas2.width;
+
+        if (renderedHeight2 > pageHeight - 12) {
+          const scale2 = (pageHeight - 12) / renderedHeight2;
+          renderedWidth2 = renderedWidth2 * scale2;
+          renderedHeight2 = pageHeight - 12;
+        }
+        const xOffset2 = (imgWidth - renderedWidth2) / 2;
+        const yOffset2 = 6;
+        pdf.addImage(imgData2, 'PNG', xOffset2, yOffset2, renderedWidth2, renderedHeight2);
+      }
+
       pdf.save(`Invoice_${selectedInvoice?.invoiceNumber.replace('/', '_')}.pdf`);
 
       // Parallelly stream the generated PDF as a backup blob to Firebase Cloud Storage
@@ -580,6 +659,69 @@ export default function InvoicesModule({
                   <span>Edit Bill</span>
                 </button>
               )}
+              {canWrite && onUpdateInvoice && (
+                <div className="inline-block relative">
+                  <label 
+                    className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:border-slate-300 transition"
+                    title={selectedInvoice.challanUrl ? `Update Attached Delivery Challan` : "Attach Delivery Challan Image"}
+                  >
+                    <Paperclip className={`w-4 h-4 ${selectedInvoice.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
+                    <span>{selectedInvoice.challanUrl ? "Update Challan" : "Attach Challan"}</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = async () => {
+                            const base64String = reader.result as string;
+                            await onUpdateInvoice(selectedInvoice.id, { 
+                              challanUrl: base64String, 
+                              challanName: file.name,
+                              challanType: file.type
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+              {canWrite && onUpdateInvoice && selectedInvoice.challanUrl && (
+                <button
+                  onClick={async () => {
+                    if (confirm(`Remove the attached delivery challan '${selectedInvoice.challanName || ""}'?`)) {
+                      await onUpdateInvoice(selectedInvoice.id, {
+                        challanUrl: undefined,
+                        challanName: undefined,
+                        challanType: undefined
+                      });
+                    }
+                  }}
+                  className="p-2 border border-amber-200 rounded-xl bg-white text-amber-600 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1.5 transition"
+                  title="Remove Attached Challan"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Remove Challan</span>
+                </button>
+              )}
+              {selectedInvoice && (
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                    navigator.clipboard.writeText(url);
+                    alert(`Public Verification Portal URL Copied:\n${url}`);
+                  }}
+                  className="p-2 border border-emerald-200 rounded-xl bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                  title="Copy verification portal link to share or access from other devices"
+                >
+                  <ExternalLink className="w-4 h-4 text-emerald-600" />
+                  <span>Copy Verification URL</span>
+                </button>
+              )}
               <button 
                 onClick={() => handleOpenEmail(selectedInvoice)}
                 className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5"
@@ -610,13 +752,14 @@ export default function InvoicesModule({
             className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl overflow-visible p-8 pb-12 space-y-8 max-w-4xl mx-auto`}
             id="print-invoice-layout"
           >
+            <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
             <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderTheme || 'border-slate-200'} pb-8`}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  {((businessSettings?.showInvoiceLogo ?? true) !== false && businessSettings?.logoUrl) ? (
+                  {((businessSettings?.showInvoiceLogo ?? true) !== false && (base64Logo || businessSettings?.logoUrl)) ? (
                     <img 
-                      src={businessSettings.logoUrl} 
+                      src={base64Logo || businessSettings.logoUrl} 
                       className="w-20 h-20 rounded-xl object-contain shadow-sm" 
                       alt="Logo" 
                       crossOrigin="anonymous"
@@ -780,26 +923,33 @@ export default function InvoicesModule({
               {/* Left QR Code and Notes */}
               <div className="flex flex-wrap gap-6 items-center">
                 {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
+                  <div 
+                    onClick={() => {
+                      const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      window.open(qrText, '_blank');
+                    }}
+                    className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center hover:bg-slate-100 cursor-pointer transition select-none group`}
+                    title="Click to view/verify public invoice page in new tab"
+                  >
                     <img 
                       src={qrCodeDataUrl} 
-                      className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                      className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
                       alt="Payment QR Code" 
                       id="upi-instant-qr"
                       crossOrigin="anonymous"
                     />
-                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                      Scan to Verify
+                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
+                      Click to Verify ↗
                     </span>
                   </div>
                 )}
-                {((businessSettings?.showInvoiceSignature ?? true) !== false && businessSettings?.signatureUrl) && (
+                {((businessSettings?.showInvoiceSignature ?? true) !== false && (base64Signature || businessSettings?.signatureUrl)) && (
                   <div className="flex flex-row items-center gap-6">
                     <div>
                       <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
                       <div className="py-2">
                          <img 
-                          src={businessSettings.signatureUrl} 
+                          src={base64Signature || businessSettings.signatureUrl} 
                           style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
                           className="w-auto max-w-[240px]" 
                           alt="Stamp signature" 
@@ -808,16 +958,23 @@ export default function InvoicesModule({
                       </div>
                     </div>
                     {(businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                      <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-50 transition`}>
+                      <div 
+                        onClick={() => {
+                          const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                          window.open(qrText, '_blank');
+                        }}
+                        className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-100 cursor-pointer transition select-none group`}
+                        title="Click to view/verify public invoice page in new tab"
+                      >
                         <img 
                           src={qrCodeDataUrl} 
-                          className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                          className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
                           alt="Payment QR Code" 
                           id="upi-instant-qr-beside-mohar"
                           crossOrigin="anonymous"
                         />
-                        <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                          Scan to Verify
+                        <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
+                          Click to Verify ↗
                         </span>
                       </div>
                     )}
@@ -825,16 +982,23 @@ export default function InvoicesModule({
                 )}
                 {/* Fallback to show QR Code beside mohar place even if signature is disabled or blank */}
                 {((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl) && (businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                  <div className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center`}>
+                  <div 
+                    onClick={() => {
+                      const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      window.open(qrText, '_blank');
+                    }}
+                    className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center hover:bg-slate-100 cursor-pointer transition select-none group`}
+                    title="Click to view/verify public invoice page in new tab"
+                  >
                     <img 
                       src={qrCodeDataUrl} 
-                      className="w-24 h-24 object-contain rounded-lg animate-fade-in" 
+                      className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
                       alt="Payment QR Code" 
                       id="upi-instant-qr-beside-mohar-fallback"
                       crossOrigin="anonymous"
                     />
-                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-semibold tracking-wide text-center mt-1 block`}>
-                      Scan to Verify
+                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
+                      Click to Verify ↗
                     </span>
                   </div>
                 )}
@@ -886,6 +1050,7 @@ export default function InvoicesModule({
                   This is an electronically generated document, manual signature not required.
                 </p>
               </div>
+            </div>
             </div>
 
             {selectedInvoice.challanUrl && (

@@ -39,7 +39,18 @@ export default function PaymentsModule({
   const [pageSize, setPageSize] = useState(10);
   const [isSaving, setIsSaving] = useState(false);
 
-  const filteredPayments = payments.filter(p => 
+  const sortedPayments = [...payments].sort((a, b) => {
+    const dateA = new Date(a.paymentDate).getTime();
+    const dateB = new Date(b.paymentDate).getTime();
+    if (dateA !== dateB) return dateB - dateA;
+    // Break ties with id/createdAt
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (timeA !== timeB) return timeB - timeA;
+    return b.id.localeCompare(a.id);
+  });
+
+  const filteredPayments = sortedPayments.filter(p => 
     p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.referenceNum && p.referenceNum.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -121,6 +132,7 @@ export default function PaymentsModule({
 
       await onAddPayment(payload);
       setIsModalOpen(false);
+      setCurrentPage(1);
 
       // Reset values
       setClientId('');

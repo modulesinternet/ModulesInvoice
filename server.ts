@@ -1908,16 +1908,21 @@ app.post('/api/settings', checkPermission('settings', 'write'), async (req: Requ
 });
 
 // 11.5 Public Invoice and Passwords sync routes
-app.get('/api/public/invoice/:invoiceNumber', (req: Request, res: Response) => {
-  const { invoiceNumber } = req.params;
-  const inv = db_invoices.find(v => v.invoiceNumber === invoiceNumber);
-  if (inv) {
-    res.json({
-      invoice: inv,
-      settings: db_settings
-    });
-  } else {
-    res.status(404).json({ error: "Invoice not found or deleted" });
+app.get('/api/public/invoice/*', (req: Request, res: Response) => {
+  try {
+    const rawParam = req.params[0] || req.path.substring('/api/public/invoice/'.length);
+    const invoiceNumber = decodeURIComponent(rawParam).trim();
+    const inv = db_invoices.find(v => v.invoiceNumber.trim() === invoiceNumber);
+    if (inv) {
+      res.json({
+        invoice: inv,
+        settings: db_settings
+      });
+    } else {
+      res.status(404).json({ error: "Invoice not found or deleted" });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: `Internal query failed: ${err.message}` });
   }
 });
 
