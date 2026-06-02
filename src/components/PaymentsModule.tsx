@@ -51,6 +51,7 @@ export default function PaymentsModule({
   const [mode, setMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('Payment matched and credited instantly.');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat(businessSettings?.currency === 'INR' ? 'en-IN' : 'en-US', {
@@ -112,7 +113,7 @@ export default function PaymentsModule({
         invoiceId,
         invoiceNumber: invoiceObj.invoiceNumber,
         amount: Number(amount),
-        paymentDate: new Date().toISOString().split('T')[0],
+        paymentDate: paymentDate || new Date().toISOString().split('T')[0],
         paymentMode: mode,
         referenceNum: referenceNumber,
         remarks: notes
@@ -127,6 +128,7 @@ export default function PaymentsModule({
       setAmount('');
       setReferenceNumber('');
       setNotes('Payment matched and credited instantly.');
+      setPaymentDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       console.error(err);
       alert(err.message || "An error occurred while creating the payment receipt.");
@@ -163,6 +165,7 @@ export default function PaymentsModule({
         invoiceId,
         invoiceNumber: invoiceObj.invoiceNumber,
         amount: Number(amount),
+        paymentDate: paymentDate || new Date().toISOString().split('T')[0],
         paymentMode: mode,
         referenceNum: referenceNumber,
         remarks: notes
@@ -179,6 +182,7 @@ export default function PaymentsModule({
       setAmount('');
       setReferenceNumber('');
       setNotes('Payment matched and credited instantly.');
+      setPaymentDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       console.error(err);
       alert(err.message || "An error occurred while updating the payment details.");
@@ -195,6 +199,7 @@ export default function PaymentsModule({
     setMode(p.paymentMode as any);
     setReferenceNumber(p.referenceNum);
     setNotes(p.remarks || '');
+    setPaymentDate(p.paymentDate ? p.paymentDate.split('T')[0] : new Date().toISOString().split('T')[0]);
   };
 
   const handleDeletePayment = async (p: Payment) => {
@@ -428,17 +433,29 @@ export default function PaymentsModule({
                 </div>
               </div>
 
-              {/* Reference */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Reference Code / Bank ID *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. TXN991209120 or UPI RRN code..."
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
-                />
+              {/* Payment Date and Reference */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Payment Date *</label>
+                  <input 
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500 bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Reference Code / Bank ID *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. TXN991209120 or UPI RRN code..."
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               {/* Notes */}
@@ -546,17 +563,29 @@ export default function PaymentsModule({
                 </div>
               </div>
 
-              {/* Reference */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Reference Code / Bank ID *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. TXN991209120 or UPI RRN code..."
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
-                />
+              {/* Payment Date and Reference */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Payment Date *</label>
+                  <input 
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500 bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Reference Code / Bank ID *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. TXN991209120 or UPI RRN code..."
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-mono focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               {/* Notes */}
