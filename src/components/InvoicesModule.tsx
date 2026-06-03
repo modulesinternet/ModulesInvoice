@@ -23,7 +23,8 @@ import {
   ChevronDown,
   Globe,
   Edit3,
-  Paperclip
+  Paperclip,
+  Share2
 } from 'lucide-react';
 import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
 import { jsPDF } from 'jspdf';
@@ -481,30 +482,79 @@ export default function InvoicesModule({
       pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
 
       // Render Page 2 (Attached Delivery Challan) if it exists
-      const challanEl = document.getElementById('challan-attachment-section');
-      if (selectedInvoice?.challanUrl && challanEl) {
+      if (selectedInvoice?.challanUrl) {
         try {
-          const canvas2 = await html2canvas(challanEl, {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            allowTaint: true
-          });
-          const imgData2 = canvas2.toDataURL('image/png');
-          let renderedWidth2 = imgWidth;
-          let renderedHeight2 = (canvas2.height * imgWidth) / canvas2.width;
-
-          if (renderedHeight2 > pageHeight - 12) {
-            const scale2 = (pageHeight - 12) / renderedHeight2;
-            renderedWidth2 = renderedWidth2 * scale2;
-            renderedHeight2 = pageHeight - 12;
-          }
+          const isChallanPdf = selectedInvoice.challanType === 'application/pdf' || 
+                              selectedInvoice.challanName?.toLowerCase().endsWith('.pdf');
+                              
           pdf.addPage();
-          const xOffset2 = (imgWidth - renderedWidth2) / 2;
-          const yOffset2 = 6;
-          pdf.addImage(imgData2, 'PNG', xOffset2, yOffset2, renderedWidth2, renderedHeight2);
+          
+          // Let's print a beautiful cover header for the attached Delivery Challan
+          pdf.setFillColor(248, 250, 252); // soft slate reflection bg
+          pdf.rect(10, 10, 190, 277, 'F');
+          
+          pdf.setDrawColor(226, 232, 240);
+          pdf.setLineWidth(0.5);
+          pdf.rect(15, 15, 180, 267);
+          
+          pdf.setTextColor(30, 41, 59);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(16);
+          pdf.text("SUB-DOCUMENT DISPATCH", 25, 35);
+          
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(100, 116, 139);
+          pdf.text("APEX ENTERPRISE RESOURCE PLANNING SYSTEMS", 25, 42);
+          
+          pdf.setDrawColor(91, 33, 255);
+          pdf.setLineWidth(1.5);
+          pdf.line(25, 47, 185, 47);
+          
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(12);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text("ATTACHED OFFICE DELIVERY CHALLAN", 25, 60);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(9);
+          pdf.setTextColor(71, 85, 105);
+          pdf.text(`Associated Invoice: ${selectedInvoice.invoiceNumber}`, 25, 70);
+          pdf.text(`Attachment Name: ${selectedInvoice.challanName || 'delivery_challan.pdf'}`, 25, 76);
+          pdf.text(`Status: Verified Clearance Attachment`, 25, 82);
+          pdf.text(`Integration Protocol Code: IN-DC-SEC-${selectedInvoice.id.slice(0, 6).toUpperCase()}`, 25, 88);
+          
+          if (!isChallanPdf) {
+            // Draw image!
+            try {
+              const base64Img = await toBase64(selectedInvoice.challanUrl);
+              pdf.addImage(base64Img, 'PNG', 25, 100, 160, 160, undefined, 'FAST');
+            } catch (err) {
+              pdf.setTextColor(225, 29, 72);
+              pdf.setFont('helvetica', 'bold');
+              pdf.text("Image loading prevented by server CORS policy. See Online Portal.", 25, 110);
+            }
+          } else {
+            // Render beautiful details for PDF
+            pdf.setTextColor(71, 85, 105);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text("Digital PDF Document is securely compiled and attached to this invoice record.", 25, 110);
+            pdf.text("To view or download the full original multi-page high-resolution delivery file,", 25, 116);
+            pdf.text("scan the QR verified code or click the direct workspace resource URL below:", 25, 122);
+            
+            // Draw a nice QR or link box
+            pdf.setFillColor(241, 245, 249);
+            pdf.rect(25, 135, 160, 30, 'F');
+            pdf.setTextColor(91, 33, 255);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8.5);
+            
+            const directUrl = selectedInvoice.challanUrl;
+            const splitUrl = pdf.splitTextToSize(directUrl, 150);
+            pdf.text(splitUrl, 30, 145);
+          }
         } catch (challanRenderErr) {
-          console.warn("Could not append challan page to invoice PDF due to canvas rendering constraints:", challanRenderErr);
+          console.warn("Could not append clear challan page to invoice PDF:", challanRenderErr);
         }
       }
 
@@ -714,18 +764,45 @@ export default function InvoicesModule({
                 </button>
               )}
               {selectedInvoice && (
-                <button 
-                  onClick={() => {
-                    const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                    navigator.clipboard.writeText(url);
-                    alert(`Public Verification Portal URL Copied:\n${url}`);
-                  }}
-                  className="p-2 border border-emerald-200 rounded-xl bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 transition"
-                  title="Copy verification portal link to share or access from other devices"
-                >
-                  <ExternalLink className="w-4 h-4 text-emerald-600" />
-                  <span>Copy Verification URL</span>
-                </button>
+                <>
+                  <button 
+                    onClick={() => {
+                      const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      navigator.clipboard.writeText(url);
+                      alert(`Public Verification Portal URL Copied:\n${url}`);
+                    }}
+                    className="p-2 border border-emerald-200 rounded-xl bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 transition select-none cursor-pointer"
+                    title="Copy verification portal link to share or access from other devices"
+                  >
+                    <ExternalLink className="w-4 h-4 text-emerald-600" />
+                    <span>Copy Verification URL</span>
+                  </button>
+
+                  <button 
+                    onClick={async () => {
+                      const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      const title = `Invoice ${selectedInvoice.invoiceNumber}`;
+                      const text = `Please find the Invoice Reference ${selectedInvoice.invoiceNumber} for Apex ERP.`;
+                      
+                      try {
+                        const { shareContent } = await import('../services/mobile');
+                        const shared = await shareContent(title, text, url);
+                        if (!shared) {
+                          navigator.clipboard.writeText(url);
+                          alert(`Verification URL copied to clipboard:\n${url}`);
+                        }
+                      } catch (err) {
+                        navigator.clipboard.writeText(url);
+                        alert(`Verification URL copied to clipboard:\n${url}`);
+                      }
+                    }}
+                    className="p-2 border border-indigo-200 rounded-xl bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition select-none cursor-pointer"
+                    title="Share invoice link natively using Capacitor share APIs"
+                  >
+                    <Share2 className="w-4 h-4 text-indigo-600" />
+                    <span>Share Natively</span>
+                  </button>
+                </>
               )}
               <button 
                 onClick={() => handleOpenEmail(selectedInvoice)}

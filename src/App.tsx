@@ -28,6 +28,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { api } from './services/api';
+import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto } from './services/mobile';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { DEFAULT_SETTINGS } from './lib/demoData';
@@ -202,6 +203,7 @@ export default function App() {
     localStorage.setItem('active_tab', activeTab);
   }, [activeTab]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -576,6 +578,40 @@ export default function App() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Native connectivity & lifecycle resume integration
+  useEffect(() => {
+    let networkHandle: any = null;
+    let lifecycleHandle: any = null;
+
+    getNetworkStatus().then(status => {
+      setIsConnected(status.connected);
+    });
+
+    addNetworkListener(status => {
+      setIsConnected(status.connected);
+      if (status.connected) {
+        showToast("Network restored. Syncing with cloud central register...", "success");
+        loadMasterData();
+      } else {
+        showToast("Platform offline. Showing local ERP snapshot view.", "error");
+      }
+    }).then(handle => {
+      networkHandle = handle;
+    });
+
+    addLifecycleListener(() => {
+      console.log("App resumed foreground execution. Synchronizing active records...");
+      loadMasterData();
+    }).then(handle => {
+      lifecycleHandle = handle;
+    });
+
+    return () => {
+      if (networkHandle) networkHandle.remove();
+      if (lifecycleHandle) lifecycleHandle.remove();
+    };
   }, []);
 
   // API Callbacks inside state handlers (automatically trigger reload to fetch updated totals!)
@@ -1330,15 +1366,26 @@ export default function App() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
       
-      {/* PROFESSIONAL SYSTEM LOADERS */}
+      {/* PROFESSIONAL SYSTEM LOADERS - CENTERED CIRCULAR REFRESH OVERLAY TO PREVENT OLD DATA GLITCHES */}
       {loading && (
-        <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-[#5B21FF] to-pink-500 z-[9999] animate-pulse"></div>
-      )}
-
-      {loading && dashboardMetrics && (
-        <div className="fixed bottom-6 right-6 bg-slate-900/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/50 flex items-center gap-3 z-[999] animate-fade-in text-xs font-semibold font-sans">
-          <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
-          <span>Synchronizing central cloud registers...</span>
+        <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in" id="global-refresh-barrier">
+          <div className="relative flex items-center justify-center">
+            {/* Radial pulsing waves */}
+            <div className="absolute w-28 h-28 rounded-full border-2 border-indigo-100/60 animate-ping duration-1500"></div>
+            <div className="absolute w-20 h-20 rounded-full bg-indigo-50/50 animate-pulse"></div>
+            
+            {/* Centered spinning design circle */}
+            <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-indigo-600 border-r-indigo-400 animate-spin"></div>
+            
+            {/* Center icon */}
+            <div className="absolute flex items-center justify-center">
+              <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin [animation-duration:3s]" />
+            </div>
+          </div>
+          <div className="mt-6 text-center space-y-1 select-none">
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">Synchronizing Workspace</h3>
+            <p className="text-[11px] font-semibold text-slate-500">Loading ledger balances & live GST invoices...</p>
+          </div>
         </div>
       )}
 
@@ -1575,6 +1622,16 @@ export default function App() {
 
         {/* Right action block: Notification block & Profile avatar */}
         <div className="flex items-center gap-2">
+          {/* Connection status indicator */}
+          <div className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 transition text-[10px] font-bold ${
+            isConnected 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+              : 'bg-rose-50 text-rose-700 border-rose-150 animate-pulse'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} />
+            <span>{isConnected ? "online" : "offline"}</span>
+          </div>
+
           {/* Mobile global search trigger */}
           <button 
             onClick={() => {
@@ -1805,6 +1862,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Direct connectivity indicator */}
+            <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 transition text-xs font-bold ${
+              isConnected 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+            }`} title={isConnected ? "App is connected to centralized Firestore cloud" : "App is currently offline"}>
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} />
+              <span>{isConnected ? "Cloud Online" : "Connection Loss"}</span>
+            </div>
+
             {/* Direct manual cloud recheck button */}
             <button 
               onClick={loadMasterData}

@@ -214,11 +214,12 @@ function getApiUrl(url: string) {
     return `${base}${url}`;
   }
 
+  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' || window.location.protocol === 'capacitor:';
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  // If the app is loaded from GitHub Pages (or any custom domain / third-party server remotely),
+  // If running inside Capacitor, or loaded from GitHub Pages / third-party server remotely,
   // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
-  const base = (!isCloudRun && !isLocalhost)
+  const base = (isCapacitor || (!isCloudRun && !isLocalhost))
     ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
     : '';
   return `${base}${url}`;
