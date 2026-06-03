@@ -1092,10 +1092,15 @@ export default function InvoicesModule({
           {/* MASTER VISUAL DRAW TARGET */}
           <div 
             ref={printableRef}
-            className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl overflow-visible p-8 pb-12 space-y-8 max-w-4xl mx-auto`}
+            className="space-y-12 max-w-4xl mx-auto w-full overflow-visible print:space-y-0"
             id="print-invoice-layout"
           >
-            <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
+            {/* PAGE 1: TAX INVOICE CARD */}
+            <div 
+              id="invoice-page-1"
+              className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl p-8 pb-12 space-y-8 print:p-0 print:border-none print:shadow-none print:rounded-none`}
+            >
+              <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
             <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderTheme || 'border-slate-200'} pb-8`}>
               <div className="space-y-4">
@@ -1395,6 +1400,7 @@ export default function InvoicesModule({
               </div>
             </div>
             </div>
+            </div>
 
             {selectedInvoice.challanUrl && (() => {
               const isPdf = selectedInvoice.challanType === 'application/pdf' || 
@@ -1439,28 +1445,25 @@ export default function InvoicesModule({
               };
 
               return (
-                <div className="mt-8 pt-8 border-t border-slate-200 animate-fade-in print:break-before-page print:mt-0 print:pt-0" id="challan-attachment-section">
-                  <div className="text-left mb-3 flex items-center justify-between no-print">
+                <div 
+                  id="challan-attachment-section"
+                  className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl p-8 pb-12 space-y-8 animate-fade-in mt-12 print:mt-0 print:p-0 print:border-none print:shadow-none print:rounded-none`}
+                >
+                  <div className="text-left mb-2 flex items-center justify-between no-print border-b border-slate-100 pb-4">
                     <div>
-                      <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan</span>
+                      <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan &amp; Packing Slip</span>
                       <span className="text-xs font-bold text-slate-700 font-mono">Attachment Name: {selectedInvoice.challanName || 'Challan Document'}</span>
                     </div>
                     <div className="text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full select-none">
                       {isPdf ? "Delivery Challan PDF Document" : "Delivery Challan Image"}
                     </div>
                   </div>
-                  <div className="border border-slate-200 rounded-3xl overflow-hidden p-6 bg-slate-50 flex flex-col items-center justify-center min-h-[220px] print:block print:w-full print:h-auto print:min-h-0 print:border-none print:p-0 print:bg-transparent">
+
+                  <div className="w-full flex flex-col space-y-8 print:block print:w-full print:border-none print:p-0 print:bg-transparent">
                     {isPdf ? (
-                      <div className="w-full space-y-4 print:space-y-0">
-                        {/* Live PDF view for screen */}
-                        <iframe 
-                          src={selectedInvoice.challanUrl} 
-                          className="w-full h-[650px] print:hidden border border-slate-200 rounded-2xl bg-white shadow-inner"
-                          title="Interactive Delivery Challan Preview"
-                        />
-                        
-                        {/* Pristine Print-Only Official Delivery Challan Layout */}
-                        <div className="hidden print:block w-full text-left bg-white font-sans mt-0 p-6 border border-slate-300 rounded-3xl">
+                      <div className="w-full space-y-8 print:space-y-0">
+                        {/* Pristine Native Delivery Challan Layout: Always visible on screen & prints beautiful Page 2 */}
+                        <div className="w-full text-left bg-white font-sans mt-0 p-6 md:p-8 border border-slate-200 print:border-none rounded-2xl print:rounded-none flex flex-col">
                           <div className="flex justify-between items-start border-b border-slate-300 pb-5">
                             <div>
                               <span className="text-[10px] uppercase tracking-widest text-[#5B21FF] font-bold font-mono">Official Invoice Sub-Attachment</span>
@@ -1498,7 +1501,7 @@ export default function InvoicesModule({
                             </div>
                           </div>
 
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden mt-6">
+                          <div className="border border-slate-200 rounded-2xl overflow-hidden mt-6 animate-fade-in">
                             <table className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="bg-slate-50 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
@@ -1539,52 +1542,109 @@ export default function InvoicesModule({
                           </div>
                         </div>
 
-                        <div className="no-print flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                          <button 
-                            type="button"
-                            onClick={openBase64Pdf}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
-                          >
-                            <ExternalLink className="w-4 h-4 text-indigo-400" />
-                            <span>Preview PDF in New Window</span>
-                          </button>
+                        {/* Interactive Digital PDF Sandbox: Screen Preview Only - Hidden in Print */}
+                        <div className="no-print w-full space-y-4 pt-8 border-t border-dashed border-slate-200">
+                          <div className="text-left">
+                            <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Interactive Attachment sandbox (Original PDF)</span>
+                            <span className="text-xs text-slate-500 font-sans">Below is the live scrollable copy of the uploaded background file <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'document.pdf'}</strong> for immediate validation:</span>
+                          </div>
                           
-                          <a 
-                            href={selectedInvoice.challanUrl}
-                            download={selectedInvoice.challanName || "delivery_challan.pdf"}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
-                          >
-                            <Download className="w-4 h-4 text-slate-400" />
-                            <span>Download Offline Copy</span>
-                          </a>
+                          <iframe 
+                            src={selectedInvoice.challanUrl} 
+                            className="w-full h-[600px] border border-slate-200 rounded-2xl bg-white shadow-inner"
+                            title="Interactive Original PDF Delivery Challan Upload"
+                          />
+                          
+                          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                            <button 
+                              type="button"
+                              onClick={openBase64Pdf}
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
+                            >
+                              <ExternalLink className="w-4 h-4 text-indigo-400" />
+                              <span>Preview PDF in New Window</span>
+                            </button>
+                            
+                            <a 
+                              href={selectedInvoice.challanUrl}
+                              download={selectedInvoice.challanName || "delivery_challan.pdf"}
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
+                            >
+                              <Download className="w-4 h-4 text-slate-400" />
+                              <span>Download Offline Copy</span>
+                            </a>
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full space-y-4 print:space-y-0 text-left">
-                        {/* Pristine Print-Only Header for Scanned Image Challan */}
-                        <div className="hidden print:block w-full text-left bg-white font-sans mt-0 mb-6 pb-5 border-b border-slate-300">
-                          <div className="flex justify-between items-start">
+                      <div className="w-full space-y-8 print:space-y-0 text-left">
+                        {/* Pristine Native Delivery Challan Layout: Always visible on screen & prints beautiful Page 2 */}
+                        <div className="w-full text-left bg-white font-sans mt-0 p-6 md:p-8 border border-slate-200 print:border-none rounded-2xl print:rounded-none flex flex-col space-y-6">
+                          <div className="flex justify-between items-start border-b border-slate-300 pb-5">
                             <div>
                               <span className="text-[10px] uppercase tracking-widest text-[#5B21FF] font-bold font-mono">Official Invoice Sub-Attachment</span>
-                              <h3 className="text-xl font-extrabold text-slate-950 uppercase tracking-tight font-display mt-0.5 font-sans">DELIVERY CHALLAN &amp; PACKING SLIP</h3>
+                              <h3 className="text-xl font-extrabold text-slate-950 uppercase tracking-tight font-display mt-0.5">DELIVERY CHALLAN &amp; PACKING SLIP</h3>
                               <p className="text-xs text-slate-500 font-mono mt-0.5">Reference ID: DC-{selectedInvoice.invoiceNumber}</p>
                             </div>
-                            <div className="text-right font-sans">
+                            <div className="text-right">
                               <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full uppercase tracking-wider font-mono">
                                 Verified Image Attachment
                               </span>
                               <p className="text-xs text-slate-400 font-mono mt-1.5">Date: {formatDisplayDate(selectedInvoice.date)}</p>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Display image on screen and beautiful layout on print */}
-                        <img 
-                          src={selectedInvoice.challanUrl} 
-                          className="max-h-[750px] w-auto mx-auto object-contain rounded-2xl shadow-sm animate-fade-in print:max-h-none print:w-full print:rounded-none print:shadow-none print:mt-2" 
-                          alt="Delivery Challan Link" 
-                          crossOrigin="anonymous"
-                        />
+                          <div className="grid grid-cols-2 gap-8">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">Consignor (Issued From)</span>
+                              <h4 className="text-sm font-black text-slate-800 uppercase mt-1">{businessSettings?.companyName || "APEX ENTERPRISE"}</h4>
+                              <p className="text-xs text-slate-500 leading-normal mt-0.5">{businessSettings?.address || "Corporate Business Address Block"}</p>
+                              {businessSettings?.gstIn && <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">GSTIN: {businessSettings.gstIn}</p>}
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">Consignee (Delivered To)</span>
+                              <h4 className="text-sm font-black text-slate-800 uppercase mt-1">{selectedInvoice.clientName}</h4>
+                              <p className="text-xs text-slate-500 leading-normal mt-0.5">
+                                {clients.find(c => c.name === selectedInvoice.clientName)?.shippingAddress || 
+                                 clients.find(c => c.name === selectedInvoice.clientName)?.billingAddress || 
+                                 "Client Business Headquarters Address"}
+                              </p>
+                              {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn && (
+                                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">
+                                  GSTIN: {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Embedded Attachment Image */}
+                          <div className="border border-slate-100 rounded-2xl overflow-hidden bg-slate-50/50 p-4">
+                            <span className="font-extrabold text-[9px] text-slate-400 uppercase tracking-widest block mb-2">Attached Image File</span>
+                            <img 
+                              src={selectedInvoice.challanUrl} 
+                              className="max-h-[600px] w-auto mx-auto object-contain rounded-xl shadow-sm animate-fade-in print:max-h-none print:w-full print:rounded-none print:shadow-none print:mt-2" 
+                              alt="Delivery Challan Link" 
+                              crossOrigin="anonymous"
+                            />
+                          </div>
+
+                          <div className="bg-slate-50/80 border border-slate-200 p-4 rounded-xl">
+                            <p className="text-[10px] leading-relaxed text-slate-500 italic">
+                              This image attachment serves as legal proof of dispatch verification. Please sign and stamp the digital file to validate physical clearances.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-12 mt-12 pt-10 border-t border-dashed border-slate-300 font-sans">
+                            <div className="text-center">
+                              <div className="h-10 border-b border-slate-200"></div>
+                              <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Receiver's Signature / Seal</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="h-10 border-b border-slate-200"></div>
+                              <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Authorized Signatory / Seal</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
