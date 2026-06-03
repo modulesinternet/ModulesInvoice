@@ -415,7 +415,7 @@ export default function InvoicesModule({
     }
   };
 
-  // PDF Export Engine via html2canvas plus jsPDF
+  // PDF Export Engine via html2canvas plus jsPDF with reliable pure vector fallback
   const handleDownloadPDF = async () => {
     if (!printableRef.current) return;
     
@@ -456,30 +456,290 @@ export default function InvoicesModule({
       const bodyEl = document.getElementById('invoice-main-body');
       if (!bodyEl) throw new Error("Invoice main body block not found");
 
-      // Render Page 1 (Invoice body)
-      const canvas = await html2canvas(bodyEl, {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-      const imgData = canvas.toDataURL('image/png');
-      
-      const imgWidth = 210; // A4 standard width in mm
-      const pageHeight = 297; // A4 standard height in mm
-      let renderedWidth = imgWidth;
-      let renderedHeight = (canvas.height * imgWidth) / canvas.width;
+      let useVectorFallback = false;
+      let canvas;
 
-      // If the rendered height exceeds the A4 page height, scale down so it fits on a single page
-      if (renderedHeight > pageHeight - 12) { // 6mm margins top and bottom
-        const scale = (pageHeight - 12) / renderedHeight;
-        renderedWidth = renderedWidth * scale;
-        renderedHeight = pageHeight - 12;
+      try {
+        // Render Page 1 (Invoice body) via html2canvas
+        canvas = await html2canvas(bodyEl, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          allowTaint: true
+        });
+      } catch (canvasErr) {
+        console.warn("Canvas capture failed (likely CORS or browser constraints). Generating pristine vector PDF fallback.", canvasErr);
+        useVectorFallback = true;
       }
-      
-      const xOffset = (imgWidth - renderedWidth) / 2;
-      const yOffset = 6;
-      
-      pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+
+      if (useVectorFallback || !canvas) {
+        // VECTOR COMPILATION FALLBACK: Crisp, clean, vector design that never fails
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(18);
+        pdf.text(businessSettings?.companyName || "APEX ENTERPRISE", 20, 25);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(businessSettings?.address || "Corporate Business Address Block", 20, 31);
+        if (businessSettings?.gstIn) {
+          pdf.text(`GSTIN/UIN: ${businessSettings.gstIn}`, 20, 36);
+        }
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(91, 33, 255);
+        pdf.text(`TAX INVOICE`, 140, 25);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(`Invoice No: ${selectedInvoice?.invoiceNumber}`, 140, 31);
+        pdf.text(`Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.date) : ''}`, 140, 36);
+        pdf.text(`Due Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : ''}`, 140, 41);
+        
+        // Horizontal dividing line
+        pdf.setDrawColor(226, 232, 240);
+        pdf.setLineWidth(0.3);
+        pdf.line(20, 48, 190, 48);
+        
+        // Billed to Customer Block
+        pdf.setTextColor(148, 163, 184);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("BILLED TO:", 20, 56);
+        
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(10);
+        pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 20, 62);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(71, 85, 105);
+        
+        // Check if matching client has detailed metadata
+        const clientObj = clients.find(c => c.name === selectedInvoice?.clientName);
+        if (clientObj) {
+          pdf.text(clientObj.billingAddress || "Client Business Headquarters Address", 20, 68);
+          pdf.text(`Mobile: ${clientObj.phone || 'N/A'} | Email: ${clientObj.email || 'N/A'}`, 20, 73);
+          if (clientObj.gstIn) {
+            pdf.text(`Client GSTIN: ${clientObj.gstIn}`, 20, 78);
+          }
+        } else {
+          pdf.text("Client Account Partner Details Block", 20, 68);
+        }
+        
+        // Items Table Headers
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(20, 85, 170, 8, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(71, 85, 105);
+        pdf.text("Particulars / Service Rendered", 23, 90.5);
+        pdf.text("Qty", 125, 90.5);
+        pdf.text("Rate Unit", 145, 90.5);
+        pdf.text("Amount Total", 170, 90.5);
+        
+        // Render rows dynamically
+        let currentY = 100;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.5);
+        
+        if (selectedInvoice?.items) {
+          selectedInvoice.items.forEach((item: any) => {
+            if (currentY > 260) {
+              pdf.addPage();
+              currentY = 25;
+            }
+            const nameText = item.name || item.productName || "Product/Service Detail";
+            pdf.text(nameText, 23, currentY);
+            pdf.text(String(item.quantity || item.qty || 1), 127, currentY);
+            pdf.text(formatCurrency(item.price || item.rate || 0), 147, currentY);
+            pdf.text(formatCurrency((item.quantity || item.qty || 1) * (item.price || item.rate || 0)), 172, currentY);
+            currentY += 8;
+          });
+        }
+        
+        // Line before totals
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(20, currentY, 190, currentY);
+        currentY += 8;
+        
+        // Totals
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.text("Subtotal:", 130, currentY);
+        pdf.text(formatCurrency(selectedInvoice?.subtotal || 0), 170, currentY);
+        currentY += 6;
+        
+        if (selectedInvoice && selectedInvoice.discount > 0) {
+          pdf.text("Discount:", 130, currentY);
+          pdf.text(`-${formatCurrency(selectedInvoice.discount)}`, 170, currentY);
+          currentY += 6;
+        }
+        
+        pdf.text("Total Value:", 130, currentY);
+        pdf.text(formatCurrency(selectedInvoice?.total || 0), 170, currentY);
+        currentY += 6;
+        
+        pdf.text("Outstanding Due:", 130, currentY);
+        pdf.setTextColor(225, 29, 72);
+        pdf.text(formatCurrency(selectedInvoice?.dueAmount || 0), 170, currentY);
+        
+        // Terms Footer
+        pdf.setTextColor(148, 163, 184);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.text("This is an electronically consolidated vector invoice file certified as direct clear copies.", 20, 275);
+      } else {
+        // IMAGE OVERLAY (html2canvas was successful!)
+        let imgData = '';
+        try {
+          imgData = canvas.toDataURL('image/png');
+        } catch (taintErr) {
+          console.warn("Unable to export canvas as image due to CORS constraints (tainted canvas). Direct clear vector fallback initiated.", taintErr);
+          useVectorFallback = true;
+        }
+
+        if (useVectorFallback || !imgData) {
+          // Re-trigger vector creation because canvas extraction was blocked by CORS
+          pdf.setTextColor(30, 41, 59);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(18);
+          pdf.text(businessSettings?.companyName || "APEX ENTERPRISE", 20, 25);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(businessSettings?.address || "Corporate Business Address Block", 20, 31);
+          if (businessSettings?.gstIn) {
+            pdf.text(`GSTIN/UIN: ${businessSettings.gstIn}`, 20, 36);
+          }
+
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(14);
+          pdf.setTextColor(91, 33, 255);
+          pdf.text(`TAX INVOICE`, 140, 25);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(71, 85, 105);
+          pdf.text(`Invoice No: ${selectedInvoice?.invoiceNumber}`, 140, 31);
+          pdf.text(`Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.date) : ''}`, 140, 36);
+          pdf.text(`Due Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : ''}`, 140, 41);
+          
+          // Horizontal dividing line
+          pdf.setDrawColor(226, 232, 240);
+          pdf.setLineWidth(0.3);
+          pdf.line(20, 48, 190, 48);
+          
+          // Billed to Customer Block
+          pdf.setTextColor(148, 163, 184);
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text("BILLED TO:", 20, 56);
+          
+          pdf.setTextColor(15, 23, 42);
+          pdf.setFontSize(10);
+          pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 20, 62);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(71, 85, 105);
+          
+          const clientObj = clients.find(c => c.name === selectedInvoice?.clientName);
+          if (clientObj) {
+            pdf.text(clientObj.billingAddress || "Client Business Headquarters Address", 20, 68);
+            pdf.text(`Mobile: ${clientObj.phone || 'N/A'} | Email: ${clientObj.email || 'N/A'}`, 20, 73);
+            if (clientObj.gstIn) {
+              pdf.text(`Client GSTIN: ${clientObj.gstIn}`, 20, 78);
+            }
+          } else {
+            pdf.text("Client Account Partner Details Block", 20, 68);
+          }
+          
+          // Items Table Headers
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(20, 85, 170, 8, 'F');
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8);
+          pdf.setTextColor(71, 85, 105);
+          pdf.text("Particulars / Service Rendered", 23, 90.5);
+          pdf.text("Qty", 125, 90.5);
+          pdf.text("Rate Unit", 145, 90.5);
+          pdf.text("Amount Total", 170, 90.5);
+          
+          // Render rows dynamically
+          let currentY = 100;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          
+          if (selectedInvoice?.items) {
+            selectedInvoice.items.forEach((item: any) => {
+              if (currentY > 260) {
+                pdf.addPage();
+                currentY = 25;
+              }
+              const nameText = item.name || item.productName || "Product/Service Detail";
+              pdf.text(nameText, 23, currentY);
+              pdf.text(String(item.quantity || item.qty || 1), 127, currentY);
+              pdf.text(formatCurrency(item.price || item.rate || 0), 147, currentY);
+              pdf.text(formatCurrency((item.quantity || item.qty || 1) * (item.price || item.rate || 0)), 172, currentY);
+              currentY += 8;
+            });
+          }
+          
+          // Line before totals
+          pdf.setDrawColor(226, 232, 240);
+          pdf.line(20, currentY, 190, currentY);
+          currentY += 8;
+          
+          // Totals
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(9);
+          pdf.text("Subtotal:", 130, currentY);
+          pdf.text(formatCurrency(selectedInvoice?.subtotal || 0), 170, currentY);
+          currentY += 6;
+          
+          if (selectedInvoice && selectedInvoice.discount > 0) {
+            pdf.text("Discount:", 130, currentY);
+            pdf.text(`-${formatCurrency(selectedInvoice.discount)}`, 170, currentY);
+            currentY += 6;
+          }
+          
+          pdf.text("Total Value:", 130, currentY);
+          pdf.text(formatCurrency(selectedInvoice?.total || 0), 170, currentY);
+          currentY += 6;
+          
+          pdf.text("Outstanding Due:", 130, currentY);
+          pdf.setTextColor(225, 29, 72);
+          pdf.text(formatCurrency(selectedInvoice?.dueAmount || 0), 170, currentY);
+          
+          // Terms Footer
+          pdf.setTextColor(148, 163, 184);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7.5);
+          pdf.text("This is an electronically consolidated vector invoice file certified as direct clear copies.", 20, 275);
+        } else {
+          const imgWidth = 210; // A4 standard width in mm
+          const pageHeight = 297; // A4 standard height in mm
+          let renderedWidth = imgWidth;
+          let renderedHeight = (canvas.height * imgWidth) / canvas.width;
+
+          // If the rendered height exceeds the A4 page height, scale down so it fits on a single page
+          if (renderedHeight > pageHeight - 12) { // 6mm margins top and bottom
+            const scale = (pageHeight - 12) / renderedHeight;
+            renderedWidth = renderedWidth * scale;
+            renderedHeight = pageHeight - 12;
+          }
+          
+          const xOffset = (imgWidth - renderedWidth) / 2;
+          const yOffset = 6;
+          
+          pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+        }
+      }
 
       // Render Page 2 (Attached Delivery Challan) if it exists
       if (selectedInvoice?.challanUrl) {
@@ -558,13 +818,14 @@ export default function InvoicesModule({
         }
       }
 
-      pdf.save(`Invoice_${selectedInvoice?.invoiceNumber.replace('/', '_')}.pdf`);
+      const safeInvoiceName = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
+      pdf.save(`Invoice_${safeInvoiceName}.pdf`);
 
       // Parallelly stream the generated PDF as a backup blob to Firebase Cloud Storage
       if (selectedInvoice && onUpdateInvoice) {
         try {
           const pdfBlob = pdf.output('blob');
-          const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${selectedInvoice.invoiceNumber.replace('/', '_')}.pdf`);
+          const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${safeInvoiceName}.pdf`);
           await uploadBytes(fileRef, pdfBlob);
           const pdfUrl = await getDownloadURL(fileRef);
           await onUpdateInvoice(selectedInvoice.id, { pdfUrl });
@@ -572,9 +833,9 @@ export default function InvoicesModule({
           console.warn("Storage upload bypassed or cached locally for offline recovery: ", storageErr);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Error building download stream, standard systems printed.");
+      alert(`Error building download stream: ${e?.message || e}`);
     } finally {
       // Restore standard console logs
       console.error = originalConsoleError;
@@ -1178,8 +1439,8 @@ export default function InvoicesModule({
               };
 
               return (
-                <div className="mt-8 pt-8 border-t border-slate-250 border-slate-200 animate-fade-in" id="challan-attachment-section">
-                  <div className="text-left mb-3 flex items-center justify-between">
+                <div className="mt-8 pt-8 border-t border-slate-200 animate-fade-in print:break-before-page print:mt-0 print:pt-0" id="challan-attachment-section">
+                  <div className="text-left mb-3 flex items-center justify-between no-print">
                     <div>
                       <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan</span>
                       <span className="text-xs font-bold text-slate-700 font-mono">Attachment Name: {selectedInvoice.challanName || 'Challan Document'}</span>
@@ -1188,57 +1449,126 @@ export default function InvoicesModule({
                       {isPdf ? "Delivery Challan PDF Document" : "Delivery Challan Image"}
                     </div>
                   </div>
-                  <div className="border border-slate-200 rounded-3xl overflow-hidden p-6 bg-slate-50 flex flex-col items-center justify-center min-h-[220px]">
+                  <div className="border border-slate-200 rounded-3xl overflow-hidden p-6 bg-slate-50 flex flex-col items-center justify-center min-h-[220px] print:border-none print:p-0 print:bg-white">
                     {isPdf ? (
-                      <div className="w-full text-center space-y-6 py-6 font-sans">
-                        {/* SCREEN-ONLY PLACEHOLDER VIEW */}
-                        <div className="no-print space-y-6">
-                          <div className="mx-auto w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100 shadow-sm animate-pulse">
-                            <FileText className="w-8 h-8 text-red-500" />
+                      <div className="w-full space-y-4">
+                        {/* Live PDF view for screen */}
+                        <iframe 
+                          src={selectedInvoice.challanUrl} 
+                          className="w-full h-[650px] print:hidden border border-slate-200 rounded-2xl bg-white shadow-inner"
+                          title="Interactive Delivery Challan Preview"
+                        />
+                        
+                        {/* Pristine Print-Only Official Delivery Challan Layout */}
+                        <div className="hidden print:block w-full text-left bg-white font-sans mt-2 p-6 border border-slate-300 rounded-3xl">
+                          <div className="flex justify-between items-start border-b border-slate-300 pb-5">
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold font-mono">Official Invoice Sub-Attachment</span>
+                              <h3 className="text-xl font-extrabold text-slate-950 uppercase tracking-tight font-display mt-0.5">DELIVERY CHALLAN &amp; PACKING SLIP</h3>
+                              <p className="text-xs text-slate-500 font-mono mt-0.5">Reference ID: DC-{selectedInvoice.invoiceNumber}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full uppercase tracking-wider font-mono">
+                                Verified Clearance Attach
+                              </span>
+                              <p className="text-xs text-slate-400 font-mono mt-1.5">Date: {formatDisplayDate(selectedInvoice.date)}</p>
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <h4 className="text-sm font-bold text-slate-800">Delivery Challan PDF Safely Attached</h4>
-                            <p className="text-[11px] leading-relaxed text-slate-500 max-w-md mx-auto">
-                              To ensure high-performance loading and bypass modern browser frame security constraints, Chrome requires opening attached PDF files in a clean view-port.
+
+                          <div className="grid grid-cols-2 gap-8 my-6">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">Consignor (Issued From)</span>
+                              <h4 className="text-sm font-black text-slate-800 uppercase mt-1">{businessSettings?.companyName || "APEX ENTERPRISE"}</h4>
+                              <p className="text-xs text-slate-500 leading-normal mt-0.5">{businessSettings?.address || "Corporate Business Address Block"}</p>
+                              {businessSettings?.gstIn && <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">GSTIN: {businessSettings.gstIn}</p>}
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">Consignee (Delivered To)</span>
+                              <h4 className="text-sm font-black text-slate-800 uppercase mt-1">{selectedInvoice.clientName}</h4>
+                              <p className="text-xs text-slate-500 leading-normal mt-0.5">
+                                {clients.find(c => c.name === selectedInvoice.clientName)?.shippingAddress || 
+                                 clients.find(c => c.name === selectedInvoice.clientName)?.billingAddress || 
+                                 "Client Business Headquarters Address"}
+                              </p>
+                              {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn && (
+                                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">
+                                  GSTIN: {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="border border-slate-200 rounded-2xl overflow-hidden mt-6">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                                  <th className="py-2.5 px-4">Item S.No.</th>
+                                  <th className="py-2.5 px-4">Description of Deliverables</th>
+                                  <th className="py-2.5 px-4 text-center">Unit</th>
+                                  <th className="py-2.5 px-4 text-right">Quantity Dispatched</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                                {selectedInvoice.items?.map((item: any, i: number) => (
+                                  <tr key={i} className="hover:bg-slate-50/50">
+                                    <td className="py-2.5 px-4 text-slate-400 font-mono">{(i + 1).toString().padStart(2, '0')}</td>
+                                    <td className="py-2.5 px-4 font-semibold text-slate-800">{item.name || item.productName}</td>
+                                    <td className="py-2.5 px-4 text-center text-slate-500">{products.find((p: any) => p.id === item.productId)?.unit || 'PCS'}</td>
+                                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{item.qty || item.quantity || 1}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="bg-slate-50/80 border border-slate-200 p-4 rounded-xl mt-6">
+                            <p className="text-[10px] leading-relaxed text-slate-500 italic">
+                              This Delivery Challan serves as official physical proof of itemized receipt. It corresponds to verification of digital attachment <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'delivery_challan.pdf'}</strong> linked to parent invoice <strong className="font-semibold text-slate-700">{selectedInvoice.invoiceNumber}</strong>. Please sign and seal physically to certify correct state dispatches.
                             </p>
                           </div>
-                          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                            <button 
-                              type="button"
-                              onClick={openBase64Pdf}
-                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
-                            >
-                              <ExternalLink className="w-4 h-4 text-indigo-400" />
-                              <span>Preview PDF in New Window</span>
-                            </button>
-                            
-                            <a 
-                              href={selectedInvoice.challanUrl}
-                              download={selectedInvoice.challanName || "delivery_challan.pdf"}
-                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
-                            >
-                              <Download className="w-4 h-4 text-slate-400" />
-                              <span>Download Offline Copy</span>
-                            </a>
+
+                          <div className="grid grid-cols-2 gap-12 mt-12 pt-10 border-t border-dashed border-slate-300">
+                            <div className="text-center">
+                              <div className="h-10 border-b border-slate-200"></div>
+                              <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Receiver's Signature / Seal</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="h-10 border-b border-slate-200"></div>
+                              <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Authorized Signatory / Seal</p>
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* PRINT-ONLY EMBED FOR PERFECT HARDCOPY SYSTEM DISPATCHES */}
-                        <div className="hidden print:block w-full h-[1200px] border-none mt-4">
-                          <iframe 
-                            src={selectedInvoice.challanUrl} 
-                            style={{ width: '100%', height: '1200px', border: 'none' }}
-                            title="Embedded Delivery Challan PDF Hardcopy Preview"
-                          />
+
+                        <div className="no-print flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                          <button 
+                            type="button"
+                            onClick={openBase64Pdf}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
+                          >
+                            <ExternalLink className="w-4 h-4 text-indigo-400" />
+                            <span>Preview PDF in New Window</span>
+                          </button>
+                          
+                          <a 
+                            href={selectedInvoice.challanUrl}
+                            download={selectedInvoice.challanName || "delivery_challan.pdf"}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
+                          >
+                            <Download className="w-4 h-4 text-slate-400" />
+                            <span>Download Offline Copy</span>
+                          </a>
                         </div>
                       </div>
                     ) : (
-                      <img 
-                        src={selectedInvoice.challanUrl} 
-                        className="max-h-[750px] w-auto object-contain rounded-2xl shadow-sm animate-fade-in" 
-                        alt="Delivery Challan Link" 
-                        crossOrigin="anonymous"
-                      />
+                      <div className="w-full space-y-4">
+                        {/* Display image on screen and beautiful layout on print */}
+                        <img 
+                          src={selectedInvoice.challanUrl} 
+                          className="max-h-[750px] w-auto mx-auto object-contain rounded-2xl shadow-sm animate-fade-in print:max-h-none print:w-full print:rounded-none print:shadow-none" 
+                          alt="Delivery Challan Link" 
+                          crossOrigin="anonymous"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>

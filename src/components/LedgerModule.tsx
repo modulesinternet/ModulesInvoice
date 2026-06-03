@@ -27,7 +27,7 @@ export default function LedgerModule({
   initialSelectedClientId = '',
   businessSettings
 }: LedgerModuleProps) {
-  const [selectedClientId, setSelectedClientId] = useState(initialSelectedClientId || (clients[0]?.id || ''));
+  const [selectedClientId, setSelectedClientId] = useState(initialSelectedClientId || 'all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -50,6 +50,25 @@ export default function LedgerModule({
   const totalCredits = clientLedger.filter(l => l.type === 'credit').reduce((s,l) => s + l.amount, 0);
   const closingBalance = selectedClientObj ? selectedClientObj.outstandingBalance : (totalDebits - totalCredits);
 
+  // Group ledger entries by client for company-wise breakdown inside "All" view
+  const companyWiseBreakdown = clients.map(client => {
+    const clientEntries = ledger.filter(entry => entry.clientId === client.id)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const debits = clientEntries.filter(l => l.type === 'debit').reduce((s, l) => s + l.amount, 0);
+    const credits = clientEntries.filter(l => l.type === 'credit').reduce((s, l) => s + l.amount, 0);
+    return {
+      client,
+      entries: clientEntries,
+      totalDebits: debits,
+      totalCredits: credits,
+      closingBalance: client.outstandingBalance || (debits - credits)
+    };
+  });
+
+  const aggregateDebitsAll = ledger.filter(l => l.type === 'debit').reduce((s,l) => s + l.amount, 0);
+  const aggregateCreditsAll = ledger.filter(l => l.type === 'credit').reduce((s,l) => s + l.amount, 0);
+  const aggregateClosingAll = clients.reduce((s, c) => s + (c.outstandingBalance || 0), 0);
+
   return (
     <div className="space-y-6" id="client-ledger-module">
       {/* Upper toolbar */}
@@ -68,7 +87,7 @@ export default function LedgerModule({
             className="text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none"
             id="ledger-client-dropdown"
           >
-            <option value="">-- Choose Client Account --</option>
+            <option value="all">-- All Customers (Company-Wise) --</option>
             {clients.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -83,7 +102,131 @@ export default function LedgerModule({
         </div>
       </div>
 
-      {selectedClientObj ? (
+      {selectedClientId === 'all' ? (
+        <div className="space-y-8 animate-fade-in" id="ledger-printable-payload-all">
+          {/* Consolidated Overview section */}
+          <div className="bg-slate-900 border border-slate-850 p-6 md:p-8 rounded-3xl text-white space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Consolidated Accounts Registry</span>
+                <h3 className="text-lg font-black uppercase tracking-wide font-mono mt-0.5 text-white">All Subsidiary Customers Ledger</h3>
+              </div>
+              <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider">
+                Enterprise Reconciliation Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Outstanding Receivables</span>
+                <h3 className="text-2xl font-black font-mono text-rose-400">{formatCurrency(aggregateClosingAll)}</h3>
+                <p className="text-[10px] text-slate-500">Consolidated balance sheet exposure across clients</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Debited Invoices</span>
+                <h3 className="text-2xl font-black font-mono text-white">{formatCurrency(aggregateDebitsAll)}</h3>
+                <p className="text-[10px] text-slate-500">Accumulated billing outlays generated</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Collected Credits</span>
+                <h3 className="text-2xl font-black font-mono text-emerald-400">{formatCurrency(aggregateCreditsAll)}</h3>
+                <p className="text-[10px] text-slate-500">Reconciled wire and cashbank entries</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Company-Wise Ledger Loops */}
+          <div className="space-y-10">
+            {companyWiseBreakdown.map(({ client, entries, totalDebits: cDebits, totalCredits: cCredits, closingBalance: cClosing }) => (
+              <div key={client.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition page-break-after-avoid">
+                {/* Header card info */}
+                <div className="p-5 bg-slate-50/80 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5 text-left">
+                    <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded font-mono uppercase tracking-widest inline-block">
+                      {client.gstIn || 'Unregistered Partner'}
+                    </span>
+                    <h4 className="text-sm font-extrabold text-slate-800 tracking-tight uppercase font-sans">
+                      {client.name}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-mono">ID: {client.id.slice(0, 8).toUpperCase()} | Contact: {client.phone || 'N/A'}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="px-3 py-1.5 bg-white border border-slate-100 rounded-xl text-center">
+                      <span className="text-[8px] text-slate-400 uppercase font-bold block">Debited</span>
+                      <span className="text-xs font-mono font-bold text-slate-700">{formatCurrency(cDebits)}</span>
+                    </div>
+                    <div className="px-3 py-1.5 bg-white border border-slate-100 rounded-xl text-center">
+                      <span className="text-[8px] text-slate-400 uppercase font-bold block">Credits</span>
+                      <span className="text-xs font-mono font-bold text-emerald-600">{formatCurrency(cCredits)}</span>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-xl border text-center ${cClosing > 0 ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-emerald-50 border-emerald-150 text-emerald-700'}`}>
+                      <span className="text-[8px] uppercase font-bold block opacity-75">Outstanding</span>
+                      <span className="text-xs font-mono font-black">{formatCurrency(cClosing)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Individual ledger lines */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                        <th className="py-3 px-5">Date</th>
+                        <th className="py-3 px-5">Ref / ID</th>
+                        <th className="py-3 px-5">Description Particulars</th>
+                        <th className="py-3 px-5 text-right">Debit (+)</th>
+                        <th className="py-3 px-5 text-right">Credit (-)</th>
+                        <th className="py-3 px-5 text-right font-mono">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[11px]">
+                      {/* Base Forward Row */}
+                      <tr className="bg-slate-50/20">
+                        <td className="py-2.5 px-5 text-slate-400 font-mono">2026-04-01</td>
+                        <td className="py-2.5 px-5 font-mono text-slate-400">OPB-01</td>
+                        <td className="py-2.5 px-5 italic text-slate-450">Opening balance forward</td>
+                        <td className="py-2.5 px-5 text-right font-mono text-slate-500">
+                          {formatCurrency(cDebits - cCredits - cClosing > 0 ? (cDebits - cCredits - cClosing) : 0)}
+                        </td>
+                        <td className="py-2.5 px-5 text-right font-mono text-slate-400">-</td>
+                        <td className="py-2.5 px-5 text-right font-mono font-bold text-slate-400">FORWARD</td>
+                      </tr>
+
+                      {entries.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50/10">
+                          <td className="py-2.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
+                          <td className="py-2.5 px-5 font-mono font-bold text-slate-700 uppercase">{row.referenceId}</td>
+                          <td className="py-2.5 px-5 text-slate-605 text-slate-600 font-medium">{row.description}</td>
+                          <td className="py-2.5 px-5 text-right font-mono font-bold text-rose-600">
+                            {row.type === 'debit' ? formatCurrency(row.amount) : '-'}
+                          </td>
+                          <td className="py-2.5 px-5 text-right font-mono font-bold text-emerald-600">
+                            {row.type === 'credit' ? formatCurrency(row.amount) : '-'}
+                          </td>
+                          <td className="py-2.5 px-5 text-right font-mono font-medium">
+                            {cClosing > 0 ? (
+                              <span className="text-slate-500 font-semibold">{formatCurrency(row.amount)}</span>
+                            ) : (
+                              <span className="text-emerald-500 font-bold uppercase text-[9px]">Reconciled</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {entries.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center py-6 text-slate-400 italic font-sans text-xs">No entries recorded in current period.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : selectedClientObj ? (
         <div className="space-y-6" id="ledger-printable-payload">
           {/* Card Meta Stats Row */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="ledger-stats-row">
