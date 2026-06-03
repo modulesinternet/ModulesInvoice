@@ -59,8 +59,9 @@ import CashbookModule from './components/CashbookModule';
 import UsersModule from './components/UsersModule';
 import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
+import ProfileModule from './components/ProfileModule';
 
-type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings';
+type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile';
 
 export function computeLocalDashboardMetrics(
   clients: Client[],
@@ -331,7 +332,7 @@ export default function App() {
       try { return JSON.parse(saved); } catch (_) {}
     }
     const defaults = {
-      "modulesinternet@gmail.com": "admin123",
+      "modulesinternet@gmail.com": "Admin@123",
       "admin@demo.com": "admin123",
       "manager@demo.com": "manager123",
       "accountant@demo.com": "acc123",
@@ -473,11 +474,16 @@ export default function App() {
       setLogs(logsFinal);
       setNotifications(notificationsFinal);
 
-      // Auto-synchronize currentUser with latest profile to prevent stale names/roles loaded from localStorage on page refresh
+      // Auto-synchronize currentUser with latest profile to prevent stale names/roles/avatars loaded from localStorage on page refresh
       if (currentUser) {
         const latestProfile = usersFinal.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
         if (latestProfile) {
-          if (latestProfile.name !== currentUser.name || latestProfile.role !== currentUser.role || latestProfile.status !== currentUser.status) {
+          const hasChanges = latestProfile.name !== currentUser.name || 
+                             latestProfile.role !== currentUser.role || 
+                             latestProfile.status !== currentUser.status ||
+                             latestProfile.avatarUrl !== currentUser.avatarUrl ||
+                             latestProfile.mobile !== currentUser.mobile;
+          if (hasChanges) {
             const updatedUser = { ...currentUser, ...latestProfile };
             setCurrentUser(updatedUser);
             localStorage.setItem('current_user', JSON.stringify(updatedUser));
@@ -859,6 +865,7 @@ export default function App() {
 
   const currentRolePerms = appRoles.find(r => r.role === activeRole)?.modules;
   const hasReadPermission = (tab: TabType) => {
+    if (tab === 'profile') return true;
     if (activeRole === 'Admin') return true;
     if (!currentRolePerms) return true;
     const perm = currentRolePerms[tab as keyof RolePermissions['modules']];
@@ -881,7 +888,7 @@ export default function App() {
     {
       userId: "admin-modulesinternet",
       email: "modulesinternet@gmail.com",
-      name: "Admin",
+      name: "Karan Sharma",
       role: "Admin" as UserRole,
       status: "active" as const
     }
@@ -1098,7 +1105,7 @@ export default function App() {
                     required
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="e.g. admin@demo.com"
+                    placeholder="e.g. modulesinternet@gmail.com"
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl font-sans"
                   />
                 </div>
@@ -1152,7 +1159,7 @@ export default function App() {
                   required
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="e.g. admin@demo.com"
+                  placeholder="e.g. modulesinternet@gmail.com"
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
                 />
               </div>
@@ -1323,6 +1330,18 @@ export default function App() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
       
+      {/* PROFESSIONAL SYSTEM LOADERS */}
+      {loading && (
+        <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-[#5B21FF] to-pink-500 z-[9999] animate-pulse"></div>
+      )}
+
+      {loading && dashboardMetrics && (
+        <div className="fixed bottom-6 right-6 bg-slate-900/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/50 flex items-center gap-3 z-[999] animate-fade-in text-xs font-semibold font-sans">
+          <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+          <span>Synchronizing central cloud registers...</span>
+        </div>
+      )}
+
       {/* TOAST PANEL WRAPPER */}
       {toast && (
         <div 
@@ -1480,19 +1499,27 @@ export default function App() {
         {/* Footer info bar & Logout button */}
         {isSidebarOpen && currentUser && (
           <div className="p-4 mt-auto border-t border-[#E5E7EB] space-y-2.5">
-            <div className="p-3 bg-slate-55 bg-slate-50 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB]">
-              {businessSettings?.logoUrl ? (
-                <img src={businessSettings.logoUrl} className="w-9 h-9 rounded-full object-contain shadow-sm shrink-0 border border-slate-200 bg-white" alt="Active logo" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-white overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0">
-                  {currentUser.name.charAt(0).toUpperCase()}
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className="w-full text-left p-3 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB] transition-all group focus:outline-none cursor-pointer text-left font-sans block"
+              title="Click to Edit Your Security Profile"
+            >
+              <div className="flex items-center gap-2.5 w-full">
+                {currentUser.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" alt="Avatar upload" />
+                ) : businessSettings?.logoUrl ? (
+                  <img src={businessSettings.logoUrl} className="w-9 h-9 rounded-full object-contain shadow-sm shrink-0 border border-slate-200 bg-white" alt="Active logo" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-white overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 overflow-hidden text-left">
+                  <p className="text-xs font-bold truncate text-slate-850 group-hover:text-indigo-900">{currentUser.name}</p>
+                  <p className="text-[10px] text-slate-450 truncate mt-0.5 leading-none uppercase font-mono tracking-wider">Clearance Profile</p>
                 </div>
-              )}
-              <div className="flex-1 overflow-hidden text-left">
-                <p className="text-xs font-bold truncate text-slate-850">{currentUser.name}</p>
-                <p className="text-[10px] text-slate-450 truncate mt-0.5 leading-none uppercase font-mono tracking-wider">{currentUser.role}</p>
               </div>
-            </div>
+            </button>
 
             <button 
               onClick={() => {
@@ -1778,6 +1805,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Direct manual cloud recheck button */}
+            <button 
+              onClick={loadMasterData}
+              disabled={loading}
+              className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none disabled:opacity-50"
+              title="Force Real-time Sync with Cloud Firestore"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+
             {/* Notification alert count with interactive dropdown */}
             <div className="relative">
               <button 
@@ -1850,19 +1887,25 @@ export default function App() {
 
             {/* Logged in User Profile badge indicator */}
             {currentUser && (
-              <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 py-1 px-2.5 rounded-xl shadow-xs">
-                {businessSettings?.logoUrl ? (
+              <button 
+                onClick={() => setActiveTab('profile')}
+                className="flex items-center gap-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 py-1 px-2.5 rounded-xl shadow-xs transition duration-150 group cursor-pointer focus:outline-none"
+                title="View & Edit Your Security Profile"
+              >
+                {currentUser.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} className="w-6.5 h-6.5 rounded-lg object-cover shrink-0 border border-slate-200" alt="Avatar upload" />
+                ) : businessSettings?.logoUrl ? (
                   <img src={businessSettings.logoUrl} className="w-6.5 h-6.5 rounded-lg object-contain shrink-0 bg-white border border-slate-200" alt="Avatar logo" />
                 ) : (
-                  <div className="w-6.5 h-6.5 rounded-lg bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700 font-mono shrink-0">
+                  <div className="w-6.5 h-6.5 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 font-mono shrink-0 transition">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="hidden sm:flex flex-col text-left font-sans">
-                  <span className="text-[11px] font-bold text-slate-800 leading-none">{currentUser.name}</span>
-                  <span className="text-[8.5px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">{currentUser.role}</span>
+                  <span className="text-[11px] font-bold text-slate-800 group-hover:text-indigo-900 leading-none">{currentUser.name}</span>
+                  <span className="text-[8.5px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">Settings Clearance</span>
                 </div>
-              </div>
+              </button>
             )}
           </div>
         </header>
@@ -2032,6 +2075,18 @@ export default function App() {
                   settings={businessSettings}
                   onSaveSettings={handleSaveSettings}
                   onImportBackup={handleImportBackup}
+                />
+              )}
+
+              {activeTab === 'profile' && currentUser && (
+                <ProfileModule 
+                  currentUser={currentUser}
+                  onUpdateCurrentUser={(updated) => {
+                    setCurrentUser(updated);
+                    localStorage.setItem('current_user', JSON.stringify(updated));
+                    loadMasterData();
+                  }}
+                  showToast={showToast}
                 />
               )}
             </div>

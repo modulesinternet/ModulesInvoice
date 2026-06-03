@@ -1356,6 +1356,37 @@ export const api = {
     return request<{ success: boolean; messageId?: string; previewUrl?: string; description?: string }>('/api/send-otp-email', 'POST', { email, otpCode });
   },
 
+  updateProfile: (profile: Partial<UserProfile> & { password?: string }) => {
+    if (isLocalOnly) {
+      const savedUser = localStorage.getItem('current_user');
+      if (savedUser) {
+        try {
+          const u = JSON.parse(savedUser) as UserProfile;
+          const updated = { ...u, ...profile };
+          delete (updated as any).password;
+          localStorage.setItem('current_user', JSON.stringify(updated));
+          
+          const list = getLocalItem<UserProfile[]>('db_users', []);
+          const idx = list.findIndex(item => item.userId === u.userId);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...profile };
+            delete (list[idx] as any).password;
+            localStorage.setItem('db_users', JSON.stringify(list));
+          }
+          
+          if (profile.password) {
+            const pwMap = getLocalItem<Record<string, string>>('user_passwords_store', {});
+            pwMap[updated.email.trim().toLowerCase()] = profile.password;
+            localStorage.setItem('user_passwords_store', JSON.stringify(pwMap));
+          }
+          return Promise.resolve(updated);
+        } catch (_) {}
+      }
+      return Promise.reject(new Error("No current user logged in"));
+    }
+    return request<UserProfile>('/api/profile', 'PUT', profile);
+  },
+
   // 11. Team User Management
   getUsers: () => {
     if (isLocalOnly) {

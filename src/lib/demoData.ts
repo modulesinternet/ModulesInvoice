@@ -47,7 +47,7 @@ export const DEMO_USERS: UserProfile[] = [
   {
     userId: "admin-modulesinternet",
     email: "modulesinternet@gmail.com",
-    name: "Admin",
+    name: "Karan Sharma",
     role: "Admin",
     status: "active",
     createdAt: "2026-05-01T10:00:00Z",

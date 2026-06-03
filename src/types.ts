@@ -13,6 +13,8 @@ export interface UserProfile {
   status: "active" | "inactive";
   createdAt: string;
   lastLoginAt: string;
+  mobile?: string;
+  avatarUrl?: string;
 }
 
 export interface Client {

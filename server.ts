@@ -69,8 +69,7 @@ let db_logs = [ ...DEMO_LOGS ];
 let db_notifications = [ ...DEMO_NOTIFICATIONS ];
 let db_users = [ ...DEMO_USERS ];
 let db_passwords: { [email: string]: string } = {
-  "modulesinternet@gmail.com": "admin123",
-  "admin@demo.com": "admin123",
+  "modulesinternet@gmail.com": "Admin@123",
   "manager@demo.com": "manager123",
   "accountant@demo.com": "acc123",
   "staff@demo.com": "staff123"
@@ -258,6 +257,11 @@ const LOCAL_CACHE_PATH = path.join(process.cwd(), 'local-db-cache.json');
 
 // Self-contained file database persistent helpers
 function saveStateToLocalCache() {
+  if (db) {
+    // If Firebase DB is defined and active, we do NOT use or write to local disk,
+    // ensuring all data is persisted in the cloud database only.
+    return;
+  }
   const data = {
     db_settings,
     db_clients,
@@ -282,6 +286,10 @@ function saveStateToLocalCache() {
 }
 
 function loadStateFromLocalCache() {
+  if (db) {
+    // If Firebase DB is active, we bypass local JSON recovery, pulling fresh from cloud collections.
+    return;
+  }
   if (fs.existsSync(LOCAL_CACHE_PATH)) {
     try {
       const raw = fs.readFileSync(LOCAL_CACHE_PATH, 'utf8');
@@ -666,7 +674,7 @@ async function bootstrapFromFirestore() {
     // 13. Users
     db_users = await syncCollectionOnStartup('users', db_users, DEMO_USERS, 'userId');
 
-    // Ensure modulesinternet@gmail.com is in db_users and default demo users are both kept and restored
+    // Ensure modulesinternet@gmail.com is in db_users and default demo users are both kept and restored with password integrity
     const finalUsers: UserProfile[] = [];
     const hasAdmin = db_users.some(u => u.email.trim().toLowerCase() === 'modulesinternet@gmail.com');
     
@@ -674,7 +682,7 @@ async function bootstrapFromFirestore() {
       finalUsers.push({
         userId: "admin-modulesinternet",
         email: "modulesinternet@gmail.com",
-        name: "Admin",
+        name: "Karan Sharma",
         role: "Admin",
         status: "active",
         createdAt: "2026-05-01T10:00:00Z",
@@ -684,8 +692,14 @@ async function bootstrapFromFirestore() {
 
     db_users.forEach(u => {
       const emailLower = u.email.trim().toLowerCase();
+      if (emailLower === 'admin@demo.com') {
+        return; // Remove the demo user account
+      }
       if (emailLower === 'modulesinternet@gmail.com') {
         u.role = 'Admin';
+        if (u.name === 'Admin') {
+          u.name = 'Karan Sharma'; // Micro-migration of legacy Admin record to Karan Sharma
+        }
       }
       if (!finalUsers.some(f => f.email.trim().toLowerCase() === emailLower)) {
         finalUsers.push(u);
@@ -694,7 +708,11 @@ async function bootstrapFromFirestore() {
 
     if (isFirstSeed) {
       DEMO_USERS.forEach(du => {
-        if (!finalUsers.some(f => f.email.trim().toLowerCase() === du.email.trim().toLowerCase())) {
+        const emailLower = du.email.trim().toLowerCase();
+        if (emailLower === 'admin@demo.com') {
+          return; // Remove the demo user account
+        }
+        if (!finalUsers.some(f => f.email.trim().toLowerCase() === emailLower)) {
           finalUsers.push(du);
         }
       });
@@ -709,6 +727,9 @@ async function bootstrapFromFirestore() {
       if (liveAdmin) {
         await withTimeout(setDoc(doc(db, 'users', liveAdmin.userId), liveAdmin), 25000);
       }
+      try {
+        await withTimeout(deleteDoc(doc(db, 'users', 'u-admin-demo')), 10000);
+      } catch (e) {}
       
       // Sync or retrieve the passwords database
       const passwordsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'passwords')), 25000).catch(e => null);
@@ -1818,10 +1839,24 @@ app.post('/api/users', checkPermission('users', 'write'), async (req: Request, r
     name: data.name || "Anonymous Team",
     role: data.role || "Staff",
     status: data.status || "active",
+    mobile: data.mobile || "",
+    avatarUrl: data.avatarUrl || "",
     createdAt: new Date().toISOString(),
     lastLoginAt: ""
   };
   db_users.push(newUser);
+  
+  if (data.password) {
+    db_passwords[newUser.email.trim().toLowerCase()] = data.password;
+    if (db) {
+      try {
+        await setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords);
+      } catch (e) {
+        console.error("Failed to commit password to Firestore:", e);
+      }
+    }
+  }
+
   await syncStateToFirestore('users', newUser.userId);
   logUserActivity("demo-admin", "Karan Sharma", "USER_CREATE", `Onboarded teammate ${newUser.name} as ${newUser.role}`);
   res.status(201).json(newUser);
@@ -1836,19 +1871,89 @@ app.put('/api/users/:userId', checkPermission('users', 'write'), async (req: Req
       res.status(403).json({ error: "Primary Administrator profile parameters cannot be changed or disabled." });
       return;
     }
+    const oldEmail = db_users[index].email.trim().toLowerCase();
+    
     db_users[index] = {
       ...db_users[index],
       name: data.name || db_users[index].name,
       email: data.email || db_users[index].email,
       role: data.role || db_users[index].role,
-      status: data.status || db_users[index].status
+      status: data.status || db_users[index].status,
+      mobile: data.mobile !== undefined ? data.mobile : db_users[index].mobile,
+      avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : db_users[index].avatarUrl
     };
+
+    const newEmail = db_users[index].email.trim().toLowerCase();
+
+    if (data.password) {
+      db_passwords[newEmail] = data.password;
+      if (oldEmail !== newEmail) {
+        delete db_passwords[oldEmail];
+      }
+      if (db) {
+        try {
+          await setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords);
+        } catch (e) {
+          console.error("Failed to sync reset password to Firestore:", e);
+        }
+      }
+    }
+
     await syncStateToFirestore('users', userId);
     logUserActivity("demo-admin", "Karan Sharma", "USER_UPDATE", `Updated teammate Operator: ${db_users[index].name}`);
     res.json(db_users[index]);
   } else {
     res.status(404).json({ error: "Operator not found" });
   }
+});
+
+app.put('/api/profile', async (req: Request, res: Response) => {
+  const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
+  if (!userEmail) {
+    return res.status(401).json({ error: "Access Denied: Authentication parameters missing." });
+  }
+
+  const index = db_users.findIndex(u => u.email.trim().toLowerCase() === userEmail);
+  if (index === -1) {
+    return res.status(404).json({ error: "Operator profile details could not be found." });
+  }
+
+  const data = req.body;
+  const oldEmail = db_users[index].email.trim().toLowerCase();
+  
+  db_users[index] = {
+    ...db_users[index],
+    name: data.name || db_users[index].name,
+    email: data.email || db_users[index].email,
+    mobile: data.mobile !== undefined ? data.mobile : db_users[index].mobile,
+    avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : db_users[index].avatarUrl
+  };
+
+  const newEmail = db_users[index].email.trim().toLowerCase();
+
+  if (data.password) {
+    db_passwords[newEmail] = data.password;
+    if (oldEmail !== newEmail) {
+      delete db_passwords[oldEmail];
+    }
+  } else if (oldEmail !== newEmail) {
+    db_passwords[newEmail] = db_passwords[oldEmail] || "Admin@123";
+    delete db_passwords[oldEmail];
+  }
+
+  if (db) {
+    try {
+      await setDoc(doc(db, 'users', db_users[index].userId), db_users[index]);
+      await setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords);
+    } catch (e) {
+      console.error("Failed to commit profile updates to Cloud Firestore:", e);
+    }
+  } else {
+    saveStateToLocalCache();
+  }
+
+  logUserActivity(db_users[index].userId, db_users[index].name, "PROFILE_UPDATE", `Updated own security profile`);
+  res.json(db_users[index]);
 });
 
 app.delete('/api/users/:userId', checkPermission('users', 'delete'), async (req: Request, res: Response) => {
@@ -1944,7 +2049,15 @@ app.post('/api/passwords', async (req: Request, res: Response) => {
 });
 
 // 11.55 Unified Batch Synchronization Gateway for maximum network reliability and zero queue-blocking
-app.get('/api/batch-sync', (req: Request, res: Response) => {
+app.get('/api/batch-sync', async (req: Request, res: Response) => {
+  if (db) {
+    try {
+      await bootstrapFromFirestore();
+    } catch (err) {
+      console.error("Failed to hot-rehydrate from Firestore during batch-sync:", err);
+    }
+  }
+
   const roleHeader = (req.headers['x-user-role'] as string || '').trim();
   const role: UserRole = (roleHeader || 'Admin') as UserRole;
   const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();

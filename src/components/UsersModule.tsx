@@ -69,6 +69,8 @@ export default function UsersModule({
   const [email, setEmail] = useState('');
   const [roleInput, setRoleInput] = useState('Staff');
   const [editStatus, setEditStatus] = useState<'active' | 'inactive'>('active');
+  const [userPassword, setUserPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
 
   // RBAC Roles configuration state
   const [serverRoles, setServerRoles] = useState<RolePermissions[]>([]);
@@ -123,15 +125,17 @@ export default function UsersModule({
             name,
             email,
             role: roleInput as UserRole,
-            status: editStatus
-          });
+            status: editStatus,
+            password: userPassword.trim() ? userPassword.trim() : undefined
+          } as any);
         }
       } else {
-        const payload: Partial<UserProfile> = {
+        const payload: Partial<UserProfile> & { password?: string } = {
           name,
           email,
           role: roleInput as UserRole,
-          status: 'active'
+          status: 'active',
+          password: userPassword.trim() ? userPassword.trim() : undefined
         };
         await onCreateUser(payload);
       }
@@ -144,6 +148,8 @@ export default function UsersModule({
       setEmail('');
       setRoleInput('Staff');
       setEditStatus('active');
+      setUserPassword('');
+      setShowPass(false);
     } catch (err: any) {
       console.error(err);
       alert(err.message || "An error occurred while saving the user profile.");
@@ -218,6 +224,8 @@ export default function UsersModule({
                 setEmail('');
                 setRoleInput('Staff');
                 setEditStatus('active');
+                setUserPassword('');
+                setShowPass(false);
                 setIsModalOpen(true);
               }}
               className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center justify-center gap-2"
@@ -301,6 +309,8 @@ export default function UsersModule({
                             setEmail(usr.email);
                             setRoleInput(usr.role);
                             setEditStatus(usr.status || 'active');
+                            setUserPassword('');
+                            setShowPass(false);
                             setIsModalOpen(true);
                           }}
                           className="p-1 px-1.5 text-slate-450 hover:text-indigo-650 hover:bg-white rounded border border-transparent hover:border-slate-200 transition cursor-pointer"
@@ -672,6 +682,35 @@ export default function UsersModule({
                     <option value="active">Active</option>
                     <option value="inactive">Disabled</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Password Management */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">
+                    {editingUser ? "Reset Password" : "Set Password *"}
+                  </label>
+                  {editingUser && (
+                    <span className="text-[9px] italic text-slate-455 text-slate-500 font-sans">Leave blank if unchanged</span>
+                  )}
+                </div>
+                <div className="relative group">
+                  <input 
+                    type={showPass ? "text" : "password"}
+                    required={!editingUser}
+                    placeholder={editingUser ? "••••••••••••" : "Type user password"}
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    className="w-full text-xs p-2.5 pr-8 border border-slate-200 rounded-xl focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showPass ? <Eye className="w-4 h-4 text-slate-500" /> : <Lock className="w-4 h-4 text-slate-450" />}
+                  </button>
                 </div>
               </div>
 

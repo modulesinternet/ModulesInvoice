@@ -483,24 +483,29 @@ export default function InvoicesModule({
       // Render Page 2 (Attached Delivery Challan) if it exists
       const challanEl = document.getElementById('challan-attachment-section');
       if (selectedInvoice?.challanUrl && challanEl) {
-        pdf.addPage();
-        const canvas2 = await html2canvas(challanEl, {
-          scale: 2,
-          useCORS: true,
-          logging: false
-        });
-        const imgData2 = canvas2.toDataURL('image/png');
-        let renderedWidth2 = imgWidth;
-        let renderedHeight2 = (canvas2.height * imgWidth) / canvas2.width;
+        try {
+          const canvas2 = await html2canvas(challanEl, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            allowTaint: true
+          });
+          const imgData2 = canvas2.toDataURL('image/png');
+          let renderedWidth2 = imgWidth;
+          let renderedHeight2 = (canvas2.height * imgWidth) / canvas2.width;
 
-        if (renderedHeight2 > pageHeight - 12) {
-          const scale2 = (pageHeight - 12) / renderedHeight2;
-          renderedWidth2 = renderedWidth2 * scale2;
-          renderedHeight2 = pageHeight - 12;
+          if (renderedHeight2 > pageHeight - 12) {
+            const scale2 = (pageHeight - 12) / renderedHeight2;
+            renderedWidth2 = renderedWidth2 * scale2;
+            renderedHeight2 = pageHeight - 12;
+          }
+          pdf.addPage();
+          const xOffset2 = (imgWidth - renderedWidth2) / 2;
+          const yOffset2 = 6;
+          pdf.addImage(imgData2, 'PNG', xOffset2, yOffset2, renderedWidth2, renderedHeight2);
+        } catch (challanRenderErr) {
+          console.warn("Could not append challan page to invoice PDF due to canvas rendering constraints:", challanRenderErr);
         }
-        const xOffset2 = (imgWidth - renderedWidth2) / 2;
-        const yOffset2 = 6;
-        pdf.addImage(imgData2, 'PNG', xOffset2, yOffset2, renderedWidth2, renderedHeight2);
       }
 
       pdf.save(`Invoice_${selectedInvoice?.invoiceNumber.replace('/', '_')}.pdf`);
@@ -663,13 +668,13 @@ export default function InvoicesModule({
                 <div className="inline-block relative">
                   <label 
                     className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:border-slate-300 transition"
-                    title={selectedInvoice.challanUrl ? `Update Attached Delivery Challan` : "Attach Delivery Challan Image"}
+                    title={selectedInvoice.challanUrl ? `Update Attached Delivery Challan` : "Attach Delivery Challan Document"}
                   >
                     <Paperclip className={`w-4 h-4 ${selectedInvoice.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
                     <span>{selectedInvoice.challanUrl ? "Update Challan" : "Attach Challan"}</span>
                     <input 
                       type="file" 
-                      accept="image/*" 
+                      accept="image/*,application/pdf" 
                       className="hidden" 
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
@@ -1053,27 +1058,115 @@ export default function InvoicesModule({
             </div>
             </div>
 
-            {selectedInvoice.challanUrl && (
-              <div className="mt-8 pt-8 border-t border-slate-250 border-slate-200 animate-fade-in" id="challan-attachment-section">
-                <div className="text-left mb-3 flex items-center justify-between">
-                  <div>
-                    <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan</span>
-                    <span className="text-xs font-bold text-slate-700 font-mono">Attachment Name: {selectedInvoice.challanName || 'Challan Image'}</span>
+            {selectedInvoice.challanUrl && (() => {
+              const isPdf = selectedInvoice.challanType === 'application/pdf' || 
+                            selectedInvoice.challanUrl?.startsWith('data:application/pdf') || 
+                            selectedInvoice.challanName?.toLowerCase().endsWith('.pdf') || 
+                            selectedInvoice.challanUrl?.toLowerCase().includes('.pdf');
+              
+              const openBase64Pdf = () => {
+                try {
+                  const win = window.open();
+                  if (!win) {
+                    alert("Popup blocked! Please allow popups for this portal to open the PDF delivery challan in a new tab.");
+                    return;
+                  }
+                  const filename = selectedInvoice.challanName || "delivery_challan.pdf";
+                  win.document.write(`
+                    <html>
+                      <head>
+                        <title>${filename}</title>
+                        <style>
+                          body { margin: 0; background: #323639; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                          header { background: #202124; color: #f1f3f4; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border-bottom: 1px solid #3c4043; }
+                          h1 { margin: 0; font-size: 14px; font-weight: 500; letter-spacing: 0.5px; }
+                          .btn { background: #5B21FF; color: white; border: none; padding: 8px 18px; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer; text-decoration: none; transition: all 0.2s; box-shadow: 0 2px 4px rgba(91, 33, 255, 0.2); }
+                          .btn:hover { background: #4A1AD3; transform: translateY(-1px); }
+                          .container { flex: 1; width: 100%; height: 100%; background: #525659; }
+                        </style>
+                      </head>
+                      <body>
+                        <header>
+                          <h1>${filename} — Delivery Challan Link</h1>
+                          <a href="${selectedInvoice.challanUrl}" download="${filename}" class="btn">Download Challan</a>
+                        </header>
+                        <iframe class="container" src="${selectedInvoice.challanUrl}" width="100%" height="100%" style="border:none;"></iframe>
+                      </body>
+                    </html>
+                  `);
+                  win.document.close();
+                } catch (err) {
+                  console.warn("Failed standard viewer open:", err);
+                }
+              };
+
+              return (
+                <div className="mt-8 pt-8 border-t border-slate-250 border-slate-200 animate-fade-in" id="challan-attachment-section">
+                  <div className="text-left mb-3 flex items-center justify-between">
+                    <div>
+                      <span className="font-extrabold text-[11px] text-slate-400 uppercase tracking-widest block mb-1">Official Delivery Challan</span>
+                      <span className="text-xs font-bold text-slate-700 font-mono">Attachment Name: {selectedInvoice.challanName || 'Challan Document'}</span>
+                    </div>
+                    <div className="text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full select-none">
+                      {isPdf ? "Delivery Challan PDF Document" : "Delivery Challan Image"}
+                    </div>
                   </div>
-                  <div className="text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full select-none">
-                    Delivery Challan Document
+                  <div className="border border-slate-200 rounded-3xl overflow-hidden p-6 bg-slate-50 flex flex-col items-center justify-center min-h-[220px]">
+                    {isPdf ? (
+                      <div className="w-full text-center space-y-6 py-6 font-sans">
+                        {/* SCREEN-ONLY PLACEHOLDER VIEW */}
+                        <div className="no-print space-y-6">
+                          <div className="mx-auto w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100 shadow-sm animate-pulse">
+                            <FileText className="w-8 h-8 text-red-500" />
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-bold text-slate-800">Delivery Challan PDF Safely Attached</h4>
+                            <p className="text-[11px] leading-relaxed text-slate-500 max-w-md mx-auto">
+                              To ensure high-performance loading and bypass modern browser frame security constraints, Chrome requires opening attached PDF files in a clean view-port.
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                            <button 
+                              type="button"
+                              onClick={openBase64Pdf}
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
+                            >
+                              <ExternalLink className="w-4 h-4 text-indigo-400" />
+                              <span>Preview PDF in New Window</span>
+                            </button>
+                            
+                            <a 
+                              href={selectedInvoice.challanUrl}
+                              download={selectedInvoice.challanName || "delivery_challan.pdf"}
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
+                            >
+                              <Download className="w-4 h-4 text-slate-400" />
+                              <span>Download Offline Copy</span>
+                            </a>
+                          </div>
+                        </div>
+                        
+                        {/* PRINT-ONLY EMBED FOR PERFECT HARDCOPY SYSTEM DISPATCHES */}
+                        <div className="hidden print:block w-full h-[1200px] border-none mt-4">
+                          <iframe 
+                            src={selectedInvoice.challanUrl} 
+                            style={{ width: '100%', height: '1200px', border: 'none' }}
+                            title="Embedded Delivery Challan PDF Hardcopy Preview"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <img 
+                        src={selectedInvoice.challanUrl} 
+                        className="max-h-[750px] w-auto object-contain rounded-2xl shadow-sm animate-fade-in" 
+                        alt="Delivery Challan Link" 
+                        crossOrigin="anonymous"
+                      />
+                    )}
                   </div>
                 </div>
-                <div className="border border-slate-200 rounded-3xl overflow-hidden p-4 bg-slate-50 flex items-center justify-center">
-                  <img 
-                    src={selectedInvoice.challanUrl} 
-                    className="max-h-[750px] w-auto object-contain rounded-2xl shadow-sm animate-fade-in" 
-                    alt="Delivery Challan Link" 
-                    crossOrigin="anonymous"
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
           </div>
         </div>
@@ -1211,7 +1304,7 @@ export default function InvoicesModule({
                               <Paperclip className={`w-3.5 h-3.5 ${inv.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
                               <input 
                                 type="file" 
-                                accept="image/*" 
+                                accept="image/*,application/pdf" 
                                 className="hidden" 
                                 onChange={async (e) => {
                                   const file = e.target.files?.[0];
