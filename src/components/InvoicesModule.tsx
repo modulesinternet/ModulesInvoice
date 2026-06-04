@@ -50,6 +50,48 @@ async function toBase64(url: string): Promise<string> {
   }
 }
 
+async function mergePdfAttachments(invoicePdfArrayBuffer: ArrayBuffer, challanUrl: string): Promise<Uint8Array> {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const mainPdfDoc = await PDFDocument.load(invoicePdfArrayBuffer);
+    
+    const isChallanPdf = challanUrl.startsWith('data:application/pdf') || challanUrl.toLowerCase().includes('.pdf');
+    if (!isChallanPdf) {
+      return new Uint8Array(await mainPdfDoc.save());
+    }
+
+    let bytes: Uint8Array;
+    if (challanUrl.startsWith('data:')) {
+      const parts = challanUrl.split(',');
+      const base64Data = parts[1] || parts[0];
+      const binaryString = window.atob(base64Data);
+      bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+    } else {
+      const response = await fetch(challanUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      bytes = new Uint8Array(arrayBuffer);
+    }
+
+    const attachmentPdfDoc = await PDFDocument.load(bytes);
+    const copiedPages = await mainPdfDoc.copyPages(
+      attachmentPdfDoc,
+      attachmentPdfDoc.getPageIndices()
+    );
+    
+    copiedPages.forEach((page) => {
+      mainPdfDoc.addPage(page);
+    });
+
+    return await mainPdfDoc.save();
+  } catch (err) {
+    console.error("Failed to merge PDF using pdf-lib:", err);
+    return new Uint8Array(invoicePdfArrayBuffer);
+  }
+}
+
 function oklchToRgb(l: number, c: number, h: number): [number, number, number] {
   // Convert h from degrees to radians
   const hRad = (h * Math.PI) / 180;
@@ -517,7 +559,7 @@ export default function InvoicesModule({
   };
 
   // PDF Export Engine via html2canvas plus jsPDF with reliable pure vector fallback
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (action: 'download' | 'print' = 'download') => {
     if (!printableRef.current) return;
     
     // Temporarily intercept console logging to suppress verbose "oklch" parsing warnings from html2canvas
@@ -594,7 +636,7 @@ export default function InvoicesModule({
           scale: 2,
           useCORS: true,
           logging: false,
-          allowTaint: true,
+          allowTaint: false,
           onclone: (clonedDoc) => {
             replaceOklchInStyleTags(clonedDoc);
             const clonedPage1 = clonedDoc.getElementById('invoice-page-1');
@@ -770,122 +812,141 @@ export default function InvoicesModule({
         pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
       }
 
-      // Render Page 2 (Attached Delivery Challan) if it exists
+      // Render Page 2 (Attached Delivery Challan) ONLY if it is an image and exists.
+      // If it is a PDF file, we bypass adding a page in jsPDF, and merge it below using pdf-lib.
       if (selectedInvoice?.challanUrl) {
         const isPdf = selectedInvoice.challanType === 'application/pdf' || 
                       selectedInvoice.challanUrl?.startsWith('data:application/pdf') || 
                       selectedInvoice.challanName?.toLowerCase().endsWith('.pdf') || 
                       selectedInvoice.challanUrl?.toLowerCase().includes('.pdf');
-        try {
-          pdf.addPage();
-          const challanEl = document.getElementById('challan-attachment-section');
-          let addedWithCanvas = false;
-          
-          if (challanEl && !isPdf) {
-            try {
-              // Capture the full styled HTML/JSX delivery challan page
-              const challanCanvas = await html2canvas(challanEl, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                allowTaint: true,
-                onclone: (clonedDoc) => {
-                  replaceOklchInStyleTags(clonedDoc);
-                  const clonedChallan = clonedDoc.getElementById('challan-attachment-section');
-                  if (clonedChallan) {
-                    clonedChallan.style.boxShadow = 'none';
-                    clonedChallan.style.border = 'none';
-                    clonedChallan.style.borderRadius = '0';
-                    clonedChallan.style.margin = '0';
-                    clonedChallan.style.padding = '0';
+        
+        if (!isPdf) {
+          try {
+            pdf.addPage();
+            const challanEl = document.getElementById('challan-attachment-section');
+            let addedWithCanvas = false;
+            
+            if (challanEl) {
+              try {
+                // Capture the full styled HTML/JSX delivery challan page
+                const challanCanvas = await html2canvas(challanEl, {
+                  scale: 2,
+                  useCORS: true,
+                  logging: false,
+                  allowTaint: false,
+                  onclone: (clonedDoc) => {
+                    replaceOklchInStyleTags(clonedDoc);
+                    const clonedChallan = clonedDoc.getElementById('challan-attachment-section');
+                    if (clonedChallan) {
+                      clonedChallan.style.boxShadow = 'none';
+                      clonedChallan.style.border = 'none';
+                      clonedChallan.style.borderRadius = '0';
+                      clonedChallan.style.margin = '0';
+                      clonedChallan.style.padding = '0';
+                    }
                   }
-                }
-              });
-              
-              if (challanCanvas) {
-                const challanImgData = challanCanvas.toDataURL('image/png');
-                const imgWidth = 210; // A4 standard width in mm
-                const pageHeight = 297; // A4 standard height in mm
-                let renderedWidth = imgWidth;
-                let renderedHeight = (challanCanvas.height * imgWidth) / challanCanvas.width;
+                });
                 
-                if (renderedHeight > pageHeight - 12) {
-                  const scale = (pageHeight - 12) / renderedHeight;
-                  renderedWidth = renderedWidth * scale;
-                  renderedHeight = pageHeight - 12;
+                if (challanCanvas) {
+                  const challanImgData = challanCanvas.toDataURL('image/png');
+                  const imgWidth = 210; // A4 standard width in mm
+                  const pageHeight = 297; // A4 standard height in mm
+                  let renderedWidth = imgWidth;
+                  let renderedHeight = (challanCanvas.height * imgWidth) / challanCanvas.width;
+                  
+                  if (renderedHeight > pageHeight - 12) {
+                    const scale = (pageHeight - 12) / renderedHeight;
+                    renderedWidth = renderedWidth * scale;
+                    renderedHeight = pageHeight - 12;
+                  }
+                  
+                  const xOffset = (imgWidth - renderedWidth) / 2;
+                  const yOffset = 6;
+                  pdf.addImage(challanImgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+                  addedWithCanvas = true;
                 }
-                
-                const xOffset = (imgWidth - renderedWidth) / 2;
-                const yOffset = 6;
-                pdf.addImage(challanImgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
-                addedWithCanvas = true;
+              } catch (canvasErr) {
+                console.warn("Challan canvas capture failed:", canvasErr);
               }
-            } catch (canvasErr) {
-              console.warn("Challan canvas capture failed, using high-fidelity vector compilation fallback:", canvasErr);
             }
-          }
-          
-          if (!addedWithCanvas && !isPdf) {
-            try {
-              // Direct image addition fallback for raw attached proof screen
-              const imgFormat = selectedInvoice.challanUrl.includes('png') ? 'PNG' : 'JPEG';
-              pdf.addImage(selectedInvoice.challanUrl, imgFormat, 10, 10, 190, 277);
-              addedWithCanvas = true;
-            } catch (imgErr) {
-              console.warn("Direct image addition failed:", imgErr);
+            
+            if (!addedWithCanvas) {
+              try {
+                // Direct image addition fallback for raw attached proof screen
+                const imgFormat = selectedInvoice.challanUrl.includes('png') ? 'PNG' : 'JPEG';
+                pdf.addImage(selectedInvoice.challanUrl, imgFormat, 10, 10, 190, 277);
+                addedWithCanvas = true;
+              } catch (imgErr) {
+                console.warn("Direct image addition failed:", imgErr);
+              }
             }
+          } catch (challanRenderErr) {
+            console.warn("Could not append clear challan image to invoice PDF:", challanRenderErr);
           }
-
-          if (!addedWithCanvas) {
-            // Document Annexed page - clean and formal confirmation of attachment details
-            pdf.setFillColor(250, 250, 250);
-            pdf.rect(10, 10, 190, 277, 'F');
-            
-            pdf.setDrawColor(226, 232, 240);
-            pdf.setLineWidth(0.4);
-            pdf.rect(15, 15, 180, 267);
-            
-            pdf.setTextColor(15, 23, 42);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(16);
-            pdf.text("ANNEXED ATTACHMENT", 25, 35);
-            
-            pdf.setFontSize(9.5);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(100, 116, 139);
-            pdf.text(`Document Reference: ${selectedInvoice.challanName || 'digital_attachment'}`, 25, 43);
-            pdf.text(`Linked to Parent Invoice: ${selectedInvoice.invoiceNumber}`, 25, 49);
-            pdf.text(`Date of Reference: ${formatDisplayDate(selectedInvoice.date)}`, 25, 55);
-            
-            // Draw a neat gray reference preview box
-            pdf.setFillColor(255, 255, 255);
-            pdf.setDrawColor(226, 232, 240);
-            pdf.rect(25, 65, 160, 140, 'FD');
-            
-            pdf.setFont('helvetica', 'italic');
-            pdf.setFontSize(10);
-            pdf.setTextColor(71, 85, 105);
-            pdf.text("Original PDF Attachment Annexed Successfully.", 45, 110);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(9);
-            pdf.setTextColor(148, 163, 184);
-            pdf.text("Please open the active Cloud Client portal or verify the ledger record", 42, 118);
-            pdf.text("to view or extract the original uploaded PDF frame in native resolution.", 41, 124);
-          }
-        } catch (challanRenderErr) {
-          console.warn("Could not append clear challan page to invoice PDF:", challanRenderErr);
         }
       }
 
       const safeInvoiceName = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
-      pdf.save(`Invoice_${safeInvoiceName}.pdf`);
+      
+      const generatedArrayBuffer = pdf.output('arraybuffer');
+      let finalBytes = new Uint8Array(generatedArrayBuffer);
+      
+      if (selectedInvoice?.challanUrl) {
+        const isPdf = selectedInvoice.challanType === 'application/pdf' || 
+                      selectedInvoice.challanUrl?.startsWith('data:application/pdf') || 
+                      selectedInvoice.challanName?.toLowerCase().endsWith('.pdf') || 
+                      selectedInvoice.challanUrl?.toLowerCase().includes('.pdf');
+        if (isPdf) {
+          finalBytes = await mergePdfAttachments(generatedArrayBuffer, selectedInvoice.challanUrl);
+        }
+      }
+      
+      const finalBlob = new Blob([finalBytes], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(finalBlob);
+
+      if (action === 'print') {
+        const existingIframe = document.getElementById('pdf-print-iframe') as HTMLIFrameElement;
+        if (existingIframe) {
+          existingIframe.remove();
+        }
+        
+        const iframe = document.createElement('iframe');
+        iframe.id = 'pdf-print-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '100vw'; // move out of viewport
+        iframe.style.bottom = '100vh';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = '0px';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        
+        iframe.onload = () => {
+          setTimeout(() => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+            } catch (printErr) {
+              console.warn("Direct PDF print failed, loading with fallback standard window.print()", printErr);
+              window.print();
+            }
+          }, 400);
+        };
+        return;
+      }
+
+      // Download PDF
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Invoice_${safeInvoiceName}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
 
       // Parallelly stream the generated PDF as a backup blob to Firebase Cloud Storage
       if (selectedInvoice && onUpdateInvoice) {
         try {
-          const pdfBlob = pdf.output('blob');
           const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${safeInvoiceName}.pdf`);
-          await uploadBytes(fileRef, pdfBlob);
+          await uploadBytes(fileRef, finalBlob);
           const pdfUrl = await getDownloadURL(fileRef);
           await onUpdateInvoice(selectedInvoice.id, { pdfUrl });
         } catch (storageErr) {
@@ -1145,7 +1206,7 @@ export default function InvoicesModule({
                 <span>Save PDF</span>
               </button>
               <button 
-                onClick={() => window.print()}
+                onClick={() => handleDownloadPDF('print')}
                 className="gradient-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />
@@ -1164,11 +1225,11 @@ export default function InvoicesModule({
             <div 
               id="invoice-page-1"
               style={{ minHeight: '297mm' }}
-              className={`bg-white rounded-[4px] border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+              className={`bg-white rounded-[4px] border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
             >
               <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
-            <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderTheme || 'border-slate-200'} pb-8`}>
+            <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pb-8`}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   {((businessSettings?.showInvoiceLogo ?? true) !== false && (base64Logo || businessSettings?.logoUrl)) ? (
@@ -1219,7 +1280,6 @@ export default function InvoicesModule({
 
               <div className="text-right space-y-1.5">
                 <span className={`text-xl uppercase font-black tracking-widest block font-sans ${activeTheme?.accentText || 'text-[#5B21FF]'}`}>TAX INVOICE</span>
-                <div className={`border-b-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} w-36 ml-auto my-1.5`} />
                 <h1 className="text-2xl font-mono font-bold text-slate-800 mt-1">{selectedInvoice.invoiceNumber}</h1>
                 <div className="flex items-center justify-end gap-1.5 mt-1 relative">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
@@ -1240,7 +1300,7 @@ export default function InvoicesModule({
             {(() => {
               const invoiceClient = clients.find(c => c.id === selectedInvoice.clientId);
               return (
-                <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border ${activeTheme?.borderTheme || 'border-slate-200'} p-5 rounded-2xl`}>
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-5 rounded-2xl`}>
                   <div className="space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Client Bill-To Particulars</span>
                     <h3 className="font-bold text-slate-800 text-sm mt-1">{selectedInvoice.clientName}</h3>
@@ -1282,12 +1342,12 @@ export default function InvoicesModule({
 
             {/* Dynamic Line items table */}
             <div className="overflow-x-auto">
-              <table className={`w-full text-left border-collapse border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl overflow-hidden`}>
+              <table className={`w-full text-left border-collapse border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} rounded-xl overflow-hidden`}>
                 <thead>
                   {(() => {
                     const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
                     return (
-                      <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b ${activeTheme?.borderTheme || 'border-slate-200'}`}>
+                      <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'}`}>
                         <th className={`py-3 px-4 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>Standard Deliverables Line Item</th>
                         <th className={`py-3 px-3 text-center ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>Qty</th>
                         <th className={`py-3 px-3 text-right ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>Unit Rate (INR)</th>
@@ -1420,7 +1480,7 @@ export default function InvoicesModule({
               </div>
 
               {/* Right mathematical sums */}
-              <div className="w-80 bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
+              <div className={`w-80 bg-slate-50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans`} id="invoice-totals-card">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Net Ledger Value:</span>
                   <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
@@ -1437,7 +1497,7 @@ export default function InvoicesModule({
                     <span className="font-mono font-bold">-{formatCurrency(selectedInvoice.discount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-slate-900 border-t border-slate-200 pt-2.5 font-bold">
+                <div className={`flex justify-between text-slate-900 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pt-2.5 font-bold`}>
                   <span>Total Amount:</span>
                   <span className="font-mono font-extrabold">{formatCurrency(selectedInvoice.total)}</span>
                 </div>
@@ -1445,7 +1505,7 @@ export default function InvoicesModule({
                   <span>Amount Paid:</span>
                   <span className="font-mono font-bold text-emerald-600">{formatCurrency(selectedInvoice.paidAmount)}</span>
                 </div>
-                <div className="flex justify-between text-rose-700 border-t border-slate-200/60 pt-2.5 font-bold">
+                <div className={`flex justify-between text-rose-700 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pt-2.5 font-bold`}>
                   <span>Pending Outstanding:</span>
                   <span className="font-mono font-extrabold text-rose-600">{formatCurrency(selectedInvoice.dueAmount)}</span>
                 </div>
@@ -1453,9 +1513,9 @@ export default function InvoicesModule({
             </div>
 
             {/* Wide Bottom Notes section & Electronically Generated warning */}
-            <div className={`mt-8 pt-6 border-t ${activeTheme?.borderTheme || 'border-slate-200'} space-y-4`}>
+            <div className={`mt-8 pt-6 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} space-y-4`}>
               {((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice.notes) && (
-                <div className="text-xs text-slate-500 bg-slate-50/50 p-4 rounded-xl border border-slate-100 text-left">
+                <div className={`text-xs text-slate-500 bg-slate-50/50 p-4 rounded-xl border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} text-left`}>
                   <span className="font-bold text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Invoice Notes &amp; Terms</span>
                   <p className="italic leading-normal text-slate-600 font-sans">{selectedInvoice.notes}</p>
                 </div>
@@ -1478,7 +1538,7 @@ export default function InvoicesModule({
               return (
                 <div className="w-full flex flex-col">
                   {/* Delivery Challan Section Toolbar (Screen Only) */}
-                  <div className="no-print w-full md:w-[210mm] mx-auto flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl mt-12 mb-4 animate-fade-in gap-3">
+                  <div className={`no-print w-full md:w-[210mm] mx-auto flex flex-col sm:flex-row items-center justify-between bg-slate-50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-4 rounded-xl mt-12 mb-4 animate-fade-in gap-3`}>
                     <div className="text-left">
                       <span className="font-extrabold text-[10px] text-[#5B21FF] uppercase tracking-widest block font-mono">Official Reference Document</span>
                       <h4 className="text-sm font-bold text-slate-800">Attached Challan Document</h4>
@@ -1492,7 +1552,7 @@ export default function InvoicesModule({
                   <div 
                     id="challan-attachment-section"
                     style={{ minHeight: '297mm' }}
-                    className="bg-white rounded-[4px] border border-slate-200 shadow-2xl p-0 w-full md:w-[210mm] mx-auto flex flex-col justify-center items-center animate-fade-in print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full"
+                    className={`bg-white rounded-[4px] border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} shadow-2xl p-0 w-full md:w-[210mm] mx-auto flex flex-col justify-center items-center animate-fade-in print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full`}
                   >
                     {isPdf ? (
                       <div className="w-full h-full flex flex-col justify-between">
