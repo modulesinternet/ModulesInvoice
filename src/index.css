@@ -80,13 +80,16 @@
   #quotation-print-container,
   #quotation-print-container *,
   .class-print-show,
-  .class-print-show * {
+  .class-print-show *,
+  #challan-attachment-section,
+  #challan-attachment-section * {
     visibility: visible !important;
   }
 
   #print-invoice-layout,
   #ledger-printable-payload,
-  #quotation-print-container {
+  #quotation-print-container,
+  #challan-attachment-section {
     position: relative !important;
     width: 100% !important;
     max-width: 100% !important;
