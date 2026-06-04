@@ -68,6 +68,18 @@
     print-color-adjust: exact !important;
   }
 
+  /* Reset all print-blocking ancestors and wrappers to allow overflow multi-page pagination */
+  #root,
+  #root > div,
+  main,
+  #invoices-module,
+  div {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
   /* Use the absolute visibility technique for perfect printing without trailing pages */
   body * {
     visibility: hidden !important;
