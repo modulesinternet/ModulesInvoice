@@ -665,131 +665,242 @@ export default function InvoicesModule({
       }
 
       if (useVectorFallback || !imgData) {
-        // VECTOR COMPILATION FALLBACK: Crisp, clean, vector design that never fails
-        pdf.setTextColor(30, 41, 59);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(18);
-        pdf.text(businessSettings?.companyName || "APEX ENTERPRISE", 20, 25);
+        // VECTOR COMPILATION FALLBACK: Crisp, clean, luxury vector design matching the professional system themes
+        const themeColor = activeTheme?.themeColor || '#5B21FF';
+        const isEmerald = invoiceTemplate === 'emerald';
+        const isMinimal = invoiceTemplate === 'minimal';
+        const themeBg = isEmerald ? '#f0fdfa' : (isMinimal ? '#f8fafc' : '#f5f3ff');
         
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8.5);
-        pdf.setTextColor(100, 116, 139);
+        // Dynamic Outer Framed Border representing luxury finish
+        pdf.setDrawColor(themeColor);
+        pdf.setLineWidth(0.8);
+        pdf.rect(10, 10, 190, 277); // Formal printable-boundary container border
         
-        let headerY = drawSafeMultilineText(businessSettings?.address || "Corporate Business Address Block", 20, 31, 110, 4);
+        let textStartX = 20;
         
-        if (businessSettings?.gstIn) {
-          pdf.text(`GSTIN/UIN: ${businessSettings.gstIn}`, 20, headerY);
-          headerY += 5;
+        // Render Premium Brand Logo if found
+        const lUrl = base64Logo || businessSettings?.logoUrl;
+        if (lUrl && (businessSettings?.showInvoiceLogo ?? true) !== false) {
+          try {
+            const format = lUrl.includes('png') || lUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            pdf.addImage(lUrl, format, 20, 18, 18, 18);
+            textStartX = 42; // Offset text base to prevent overlapping
+          } catch (logoErr) {
+            console.warn("Could not draw logo in PDF fallback:", logoErr);
+          }
         }
-
+        
+        // Draw Core Business Identity
+        pdf.setTextColor(15, 23, 42); // slate-900
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(14);
-        pdf.setTextColor(91, 33, 255);
-        pdf.text(`TAX INVOICE`, 140, 25);
+        pdf.setFontSize(15);
+        pdf.text(businessSettings?.companyName || "APEX SYSTEM", textStartX, 24);
+        
+        if (businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8);
+          pdf.setTextColor(themeColor);
+          pdf.text(`GSTIN: ${businessSettings.gstIn}`, textStartX, 29);
+        }
         
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8.5);
-        pdf.setTextColor(71, 85, 105);
-        pdf.text(`Invoice No: ${selectedInvoice?.invoiceNumber}`, 140, 31);
-        pdf.text(`Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.date) : ''}`, 140, 36);
+        pdf.setTextColor(100, 116, 139); // slate-500
+        
+        let headerEndY = 35;
+        if (businessSettings?.address && (businessSettings?.showInvoiceAddress ?? true) !== false) {
+          headerEndY = drawSafeMultilineText(businessSettings.address, 20, 35, 105, 4.2);
+        } else {
+          headerEndY = 39;
+        }
+        
+        // Right-aligned Modern Meta Header "TAX INVOICE"
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(16);
+        pdf.setTextColor(themeColor); // Styled with active theme accent color!
+        pdf.text("TAX INVOICE", 140, 25);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(71, 85, 105); // slate-600
+        pdf.text(`Invoice No: ${selectedInvoice?.invoiceNumber || ''}`, 140, 31);
+        pdf.text(`Date of Issue: ${selectedInvoice ? formatDisplayDate(selectedInvoice.date) : ''}`, 140, 36);
         pdf.text(`Due Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : ''}`, 140, 41);
         
-        // Horizontal dividing line
-        pdf.setDrawColor(226, 232, 240);
+        // Divider Axis Line styled with theme color
+        pdf.setDrawColor(themeColor);
+        pdf.setLineWidth(0.4);
+        const dividerY = Math.max(48, headerEndY + 2);
+        pdf.line(20, dividerY, 190, dividerY);
+        
+        // Bill to Container Block
+        const billToY = dividerY + 5;
+        pdf.setFillColor(248, 250, 252); // bg-slate-50
+        pdf.rect(20, billToY, 170, 28, 'F');
+        pdf.setDrawColor(themeColor);
         pdf.setLineWidth(0.3);
-        pdf.line(20, 48, 190, 48);
+        pdf.rect(20, billToY, 170, 28, 'D'); // Double bounding matching theme colors
         
-        // Billed to Customer Block
-        pdf.setTextColor(148, 163, 184);
-        pdf.setFontSize(8);
+        pdf.setTextColor(148, 163, 184); // slate-400
         pdf.setFont('helvetica', 'bold');
-        pdf.text("BILLED TO:", 20, 56);
+        pdf.setFontSize(7.5);
+        pdf.text("CLIENT BILL-TO PARTICULARS", 25, billToY + 5);
         
-        pdf.setTextColor(15, 23, 42);
-        pdf.setFontSize(10);
-        pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 20, 62);
+        pdf.setTextColor(15, 23, 42); // slate-900
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10.5);
+        pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 25, billToY + 11);
         
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8.5);
-        pdf.setTextColor(71, 85, 105);
+        pdf.setTextColor(71, 85, 105); // slate-600
         
-        let clientY = 67;
         const clientObj = clients.find(c => c.name === selectedInvoice?.clientName);
         if (clientObj) {
-          clientY = drawSafeMultilineText(clientObj.billingAddress || "Client Business Headquarters Address", 20, clientY, 110, 4.5);
+          const rawAddressArr = String(clientObj.billingAddress || '').split('\n');
+          const addressLine1 = rawAddressArr[0] || 'Client Business Address Block';
+          const addressLine2 = rawAddressArr.slice(1).join(', ') || '';
           
-          pdf.text(`Mobile: ${clientObj.phone || 'N/A'} | Email: ${clientObj.email || 'N/A'}`, 20, clientY);
-          clientY += 5;
-          if (clientObj.gstIn) {
-            pdf.text(`Client GSTIN: ${clientObj.gstIn}`, 20, clientY);
-            clientY += 5;
+          pdf.text(addressLine1, 25, billToY + 16);
+          if (addressLine2) {
+            const shortenedLine2 = addressLine2.length > 90 ? addressLine2.substring(0, 87) + '...' : addressLine2;
+            pdf.text(shortenedLine2, 25, billToY + 20.5);
           }
+          pdf.text(`Phone: ${clientObj.phone || 'N/A'}  |  Email: ${clientObj.email || 'N/A'}`, 25, billToY + 25);
         } else {
-          pdf.text("Client Account Partner Details Block", 20, clientY);
-          clientY += 5;
+          pdf.text("Client Ledger Record Information Not Found.", 25, billToY + 16);
         }
         
-        // Items Table Headers
-        let tableHeaderY = Math.max(90, clientY + 4);
-        pdf.setFillColor(248, 250, 252);
+        // Dynamic Table Columns Configuration
+        const tableHeaderY = billToY + 34;
+        pdf.setFillColor(themeBg);
         pdf.rect(20, tableHeaderY, 170, 8, 'F');
+        
+        pdf.setDrawColor(themeColor);
+        pdf.setLineWidth(0.4);
+        pdf.line(20, tableHeaderY, 190, tableHeaderY);
+        pdf.line(20, tableHeaderY + 8, 190, tableHeaderY + 8);
+        
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8);
-        pdf.setTextColor(71, 85, 105);
-        pdf.text("Particulars / Service Rendered", 23, tableHeaderY + 5.5);
+        pdf.setTextColor(71, 85, 105); // slate-600
+        pdf.text("Standard Deliverables Line Item", 23, tableHeaderY + 5.5);
         pdf.text("Qty", 125, tableHeaderY + 5.5);
         pdf.text("Rate Unit", 145, tableHeaderY + 5.5);
         pdf.text("Amount Total", 170, tableHeaderY + 5.5);
         
-        // Render rows dynamically
+        // Loop and render dynamic rows clearly
         let currentY = tableHeaderY + 14;
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8.5);
         
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
-            if (currentY > 260) {
+            if (currentY > 230) { // Safety transition threshold for multi-page invoices
               pdf.addPage();
+              // Outer framed border on page 2 too!
+              pdf.setDrawColor(themeColor);
+              pdf.setLineWidth(0.8);
+              pdf.rect(10, 10, 190, 277);
+              
               currentY = 25;
             }
+            pdf.setTextColor(15, 23, 42); // slate-900
             const nameText = item.name || item.productName || "Product/Service Detail";
-            pdf.text(nameText, 23, currentY);
-            pdf.text(String(item.quantity || item.qty || 1), 127, currentY);
-            pdf.text(formatPDFCurrency(item.price || item.rate || 0), 147, currentY);
-            pdf.text(formatPDFCurrency((item.quantity || item.qty || 1) * (item.price || item.rate || 0)), 172, currentY);
-            currentY += 8;
+            const wrappedLines = pdf.splitTextToSize(nameText, 95);
+            wrappedLines.forEach((lineText: string, li: number) => {
+              pdf.text(lineText, 23, currentY + (li * 4));
+            });
+            
+            pdf.text(String(item.quantity || item.qty || 1), 125, currentY);
+            pdf.text(formatPDFCurrency(item.price || item.rate || 0), 145, currentY);
+            pdf.text(formatPDFCurrency((item.quantity || item.qty || 1) * (item.price || item.rate || 0)), 170, currentY);
+            
+            // Tiny row delimiter
+            pdf.setDrawColor(241, 245, 249);
+            pdf.setLineWidth(0.25);
+            pdf.line(20, currentY + 5, 190, currentY + 5);
+            
+            currentY += 9;
           });
         }
         
-        // Line before totals
-        pdf.setDrawColor(226, 232, 240);
-        pdf.line(20, currentY, 190, currentY);
-        currentY += 8;
+        // Footer layout containing totals block + verification block + signatures
+        const footerSpaceY = Math.max(172, currentY + 5);
         
-        // Totals
+        // Totals container box on the right
+        pdf.setFillColor(248, 250, 252); // soft slate background
+        pdf.rect(115, footerSpaceY, 75, 36, 'F');
+        pdf.setDrawColor(themeColor);
+        pdf.setLineWidth(0.3);
+        pdf.rect(115, footerSpaceY, 75, 36, 'D'); // Double styled
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 116, 139); // slate-500
+        pdf.text("Net Ledger Value:", 118, footerSpaceY + 6);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(formatPDFCurrency(selectedInvoice?.subtotal || 0), 162, footerSpaceY + 6);
+        
+        let rowYOffset = 12;
+        if (selectedInvoice && selectedInvoice.discount > 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(100, 116, 139);
+          pdf.text("Discount Total:", 118, footerSpaceY + 12);
+          pdf.setTextColor(220, 38, 38); // red-600
+          pdf.text(`-${formatPDFCurrency(selectedInvoice.discount)}`, 162, footerSpaceY + 12);
+          rowYOffset = 18;
+        }
+        
+        // Border inside card
+        pdf.setDrawColor(themeColor);
+        pdf.setLineWidth(0.2);
+        pdf.line(115, footerSpaceY + rowYOffset - 3, 190, footerSpaceY + rowYOffset - 3);
+        
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9);
         pdf.setTextColor(15, 23, 42);
-        pdf.text("Subtotal:", 130, currentY);
-        pdf.text(formatPDFCurrency(selectedInvoice?.subtotal || 0), 170, currentY);
-        currentY += 6;
+        pdf.text("Grand Total:", 118, footerSpaceY + rowYOffset + 3);
+        pdf.text(formatPDFCurrency(selectedInvoice?.total || 0), 162, footerSpaceY + rowYOffset + 3);
         
-        if (selectedInvoice && selectedInvoice.discount > 0) {
-          pdf.text("Discount:", 130, currentY);
-          pdf.text(`-${formatPDFCurrency(selectedInvoice.discount)}`, 170, currentY);
-          currentY += 6;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(225, 29, 72); // rose-600
+        pdf.text("Pending Due:", 118, footerSpaceY + rowYOffset + 9);
+        pdf.text(formatPDFCurrency(selectedInvoice?.dueAmount || 0), 162, footerSpaceY + rowYOffset + 9);
+        
+        // QR Code & Legal Signature Block on bottom left
+        let elementX = 20;
+        
+        if (selectedInvoice && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) {
+          try {
+            pdf.addImage(qrCodeDataUrl, 'PNG', elementX, footerSpaceY, 22, 22);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(themeColor);
+            pdf.text("Scan to Verify & Pay", elementX, footerSpaceY + 25);
+            elementX += 34; // Shift right
+          } catch (qrErr) {
+            console.warn("Could not draw UPI QR code:", qrErr);
+          }
         }
         
-        pdf.text("Total Value:", 130, currentY);
-        pdf.text(formatPDFCurrency(selectedInvoice?.total || 0), 170, currentY);
-        currentY += 6;
+        const sUrlSig = base64Signature || businessSettings?.signatureUrl;
+        if (sUrlSig && (businessSettings?.showInvoiceSignature ?? true) !== false) {
+          try {
+            const format = sUrlSig.includes('png') || sUrlSig.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            pdf.addImage(sUrlSig, format, elementX, footerSpaceY + 2, 28, 14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(100, 116, 139); // slate-500
+            pdf.text("Authorized Signoff", elementX, footerSpaceY + 21);
+          } catch (sigErr) {
+            console.warn("Could not draw authorized signature:", sigErr);
+          }
+        }
         
-        pdf.text("Outstanding Due:", 130, currentY);
-        pdf.setTextColor(225, 29, 72);
-        pdf.text(formatPDFCurrency(selectedInvoice?.dueAmount || 0), 170, currentY);
-        
-        // Terms Footer
-        pdf.setTextColor(148, 163, 184);
+        // Single beautiful terms footer
+        pdf.setTextColor(148, 163, 184); // slate-400
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(7.5);
         pdf.text("This is an electronically consolidated vector invoice file certified as direct clear copies.", 20, 275);
