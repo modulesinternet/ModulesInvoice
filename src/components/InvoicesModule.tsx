@@ -783,41 +783,51 @@ export default function InvoicesModule({
         pdf.setTextColor(15, 23, 42); // slate-900 (Large bold in screenshot)
         pdf.text(selectedInvoice?.invoiceNumber || '', 140, 30);
 
-        // Render Status & Read Badges
+        // Render Status badge beautifully (dynamic color)
         const statusStr = selectedInvoice?.status || 'UNPAID';
+        const isPaid = statusStr === 'PAID';
+        const isPartial = statusStr === 'PARTIAL_PAID' || statusStr === 'PARTIAL';
+        
+        let fillR = 254, fillG = 242, fillB = 242; // Red-50
+        let drawR = 254, drawG = 226, drawB = 226; // Red-200
+        let textR = 220, textG = 38, textB = 38;    // Red-600
+        
+        if (isPaid) {
+          fillR = 240; fillG = 253; fillB = 250;     // Teal-50
+          drawR = 204; drawG = 251; drawB = 241;     // Teal-200
+          textR = 13; textG = 148; textB = 136;      // Teal-600
+        } else if (isPartial) {
+          fillR = 255; fillG = 251; fillB = 235;     // Amber-50
+          drawR = 254; drawG = 243; drawB = 199;     // Amber-200
+          textR = 180; textG = 83; textB = 9;        // Amber-700
+        }
+        
         const statusText = statusStr.replace('_', ' ').toUpperCase();
-        pdf.setFillColor(254, 242, 242); // bg-red-50
-        pdf.setDrawColor(254, 226, 226); // border-red-200
+        pdf.setFillColor(fillR, fillG, fillB);
+        pdf.setDrawColor(drawR, drawG, drawB);
         pdf.setLineWidth(0.2);
-        pdf.roundedRect(140, 33, 17, 4.2, 1, 1, 'FD');
-        pdf.setTextColor(220, 38, 38); // text-red-600
+        const badgeWidth = pdf.getTextWidth(statusText) + 5;
+        pdf.roundedRect(140, 33, badgeWidth, 4.3, 1, 1, 'FD');
+        pdf.setTextColor(textR, textG, textB);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(6.5);
         pdf.text(statusText, 142.5, 36.1);
 
-        const readCount = selectedInvoice?.readCount || 0;
-        const readText = `READ-${readCount}/1`;
-        pdf.setFillColor(240, 253, 250); // bg-teal-50
-        pdf.setDrawColor(204, 251, 241); // border-teal-200
-        pdf.roundedRect(160, 33, 17, 4.2, 1, 1, 'FD');
-        pdf.setTextColor(13, 148, 136); // text-teal-600
-        pdf.text(readText, 161.8, 36.1);
-
-        // Date of Issue & Due Date
+        // Date of Issue & Due Date aligned beautifully on axis 162
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
         pdf.setTextColor(100, 116, 139); // slate-500
         pdf.text("Invoiced Date:", 140, 42.5);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(71, 85, 105); // slate-600
-        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.date) : '', 161, 42.5);
+        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.date) : '', 162, 42.5);
 
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(100, 116, 139);
         pdf.text("Due By:", 140, 46.5);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(225, 29, 72); // rose-600
-        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : '', 152, 46.5);
+        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : '', 162, 46.5);
         
         // Divider Axis Line styled cleanly in a thin elegant trace
         pdf.setDrawColor(226, 232, 240); // elegant Slate-200 boundary line
@@ -896,9 +906,9 @@ export default function InvoicesModule({
         pdf.setFontSize(8);
         pdf.setTextColor(100, 116, 139); // slate-500
         pdf.text("STANDARD DELIVERABLES LINE ITEM", 23, tableHeaderY + 5.5);
-        pdf.text("QTY", 125, tableHeaderY + 5.5);
-        pdf.text("UNIT RATE (INR)", 144, tableHeaderY + 5.5);
-        pdf.text("AMOUNT (GROSS)", 167, tableHeaderY + 5.5);
+        pdf.text("QTY", 128, tableHeaderY + 5.5, { align: 'center' });
+        pdf.text("UNIT RATE (INR)", 160, tableHeaderY + 5.5, { align: 'right' });
+        pdf.text("AMOUNT (GROSS)", 187, tableHeaderY + 5.5, { align: 'right' });
         
         // Loop and render dynamic rows clearly
         let currentY = tableHeaderY + 14;
@@ -921,10 +931,10 @@ export default function InvoicesModule({
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(8);
             pdf.setTextColor(71, 85, 105); // slate-600
-
-            pdf.text(String(item.qty || item.quantity || 1), 125, currentY);
-            pdf.text(formatPDFCurrency(item.price || item.rate || 0), 144, currentY);
-            pdf.text(formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0)), 167, currentY);
+ 
+            pdf.text(String(item.qty || item.quantity || 1), 128, currentY, { align: 'center' });
+            pdf.text(formatPDFCurrency(item.price || item.rate || 0), 160, currentY, { align: 'right' });
+            pdf.text(formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0)), 187, currentY, { align: 'right' });
             
             // Tiny row delimiter
             pdf.setDrawColor(241, 245, 249);
@@ -951,7 +961,7 @@ export default function InvoicesModule({
         pdf.text("Net Ledger Value:", 118, footerSpaceY + 6);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(15, 23, 42);
-        pdf.text(formatPDFCurrency(selectedInvoice?.subtotal || 0), 162, footerSpaceY + 6);
+        pdf.text(formatPDFCurrency(selectedInvoice?.subtotal || 0), 186, footerSpaceY + 6, { align: 'right' });
         
         let rowYOffset = 12;
         if (selectedInvoice && selectedInvoice.discount > 0) {
@@ -960,7 +970,7 @@ export default function InvoicesModule({
           pdf.text("Discount applied:", 118, footerSpaceY + 12);
           pdf.setFont('helvetica', 'bold');
           pdf.setTextColor(220, 38, 38); // red-600
-          pdf.text(`-${formatPDFCurrency(selectedInvoice.discount)}`, 162, footerSpaceY + 12);
+          pdf.text(`-${formatPDFCurrency(selectedInvoice.discount)}`, 186, footerSpaceY + 12, { align: 'right' });
           rowYOffset = 18;
         }
         
@@ -973,7 +983,7 @@ export default function InvoicesModule({
         pdf.setFontSize(8.5);
         pdf.setTextColor(15, 23, 42);
         pdf.text("Total Amount:", 118, footerSpaceY + rowYOffset + 3);
-        pdf.text(formatPDFCurrency(selectedInvoice?.total || 0), 162, footerSpaceY + rowYOffset + 3);
+        pdf.text(formatPDFCurrency(selectedInvoice?.total || 0), 186, footerSpaceY + rowYOffset + 3, { align: 'right' });
         
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
@@ -981,13 +991,13 @@ export default function InvoicesModule({
         pdf.text("Amount Paid:", 118, footerSpaceY + rowYOffset + 8);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(16, 185, 129); // emerald-600
-        pdf.text(formatPDFCurrency(selectedInvoice?.paidAmount || 0), 162, footerSpaceY + rowYOffset + 8);
+        pdf.text(formatPDFCurrency(selectedInvoice?.paidAmount || 0), 186, footerSpaceY + rowYOffset + 8, { align: 'right' });
         
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8.5);
         pdf.setTextColor(225, 29, 72); // rose-600
         pdf.text("Pending Outstanding:", 118, footerSpaceY + rowYOffset + 14);
-        pdf.text(formatPDFCurrency(selectedInvoice?.dueAmount || 0), 162, footerSpaceY + rowYOffset + 14);
+        pdf.text(formatPDFCurrency(selectedInvoice?.dueAmount || 0), 186, footerSpaceY + rowYOffset + 14, { align: 'right' });
         
         // QR Code & Legal Signature Block on bottom left
         let elementX = 20;
@@ -1538,9 +1548,6 @@ export default function InvoicesModule({
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
                     {selectedInvoice.status.replace('_', ' ')}
                   </span>
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border no-print ${(selectedInvoice.readCount || 0) > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'} uppercase font-sans`}>
-                    Read: {selectedInvoice.readCount || 0}/1
-                  </span>
                 </div>
                 <div className="text-xs text-slate-500 font-mono pt-3 space-y-0.5">
                   <p>Invoiced Date: <b>{formatDisplayDate(selectedInvoice.date)}</b></p>
@@ -1913,7 +1920,7 @@ export default function InvoicesModule({
                         <div className="flex items-center gap-1 mt-1 text-[9px] font-sans font-semibold tracking-wide uppercase select-none">
                           <span className={`w-1.5 h-1.5 rounded-full ${inv.readCount && inv.readCount >= 1 ? 'bg-emerald-500' : 'bg-slate-350 bg-slate-400 animate-pulse'}`} />
                           <span className={inv.readCount && inv.readCount >= 1 ? 'text-emerald-700 font-bold' : 'text-slate-400'}>
-                            {inv.readCount && inv.readCount >= 1 ? 'READ 1/1' : 'UNREAD 0/1'}
+                            {inv.readCount && inv.readCount >= 1 ? 'READ' : 'UNREAD'}
                           </span>
                         </div>
                       </td>
