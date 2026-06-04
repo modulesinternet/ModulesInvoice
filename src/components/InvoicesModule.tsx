@@ -671,12 +671,10 @@ export default function InvoicesModule({
         const isMinimal = invoiceTemplate === 'minimal';
         const themeBg = isEmerald ? '#f0fdfa' : (isMinimal ? '#f8fafc' : '#f5f3ff');
         
-        // Dynamic Outer Framed Border representing luxury finish
-        pdf.setDrawColor(themeColor);
-        pdf.setLineWidth(0.8);
-        pdf.rect(10, 10, 190, 277); // Formal printable-boundary container border
+        // Note: Removed the heavy, unprofessional outer border around the whole paper page to give a high-end corporate feeling.
         
         let textStartX = 20;
+        let addressWidth = 105;
         
         // Render Premium Brand Logo if found
         const lUrl = base64Logo || businessSettings?.logoUrl;
@@ -685,6 +683,7 @@ export default function InvoicesModule({
             const format = lUrl.includes('png') || lUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             pdf.addImage(lUrl, format, 20, 18, 18, 18);
             textStartX = 42; // Offset text base to prevent overlapping
+            addressWidth = 83; // Narrow wrap width so it does not collide with right columns
           } catch (logoErr) {
             console.warn("Could not draw logo in PDF fallback:", logoErr);
           }
@@ -707,11 +706,34 @@ export default function InvoicesModule({
         pdf.setFontSize(8.5);
         pdf.setTextColor(100, 116, 139); // slate-500
         
-        let headerEndY = 35;
+        let headerEndY = 34;
         if (businessSettings?.address && (businessSettings?.showInvoiceAddress ?? true) !== false) {
-          headerEndY = drawSafeMultilineText(businessSettings.address, 20, 35, 105, 4.2);
+          headerEndY = drawSafeMultilineText(businessSettings.address, textStartX, 34, addressWidth, 4.2);
         } else {
-          headerEndY = 39;
+          headerEndY = 38;
+        }
+
+        // Draw Business Contact info underneath address
+        let contactY = headerEndY;
+        if (contactY < 39 && lUrl && (businessSettings?.showInvoiceLogo ?? true) !== false) {
+          contactY = 39; // offset so it sits after the logo's height nicely
+        }
+
+        let contactText = '';
+        if ((businessSettings?.showInvoiceEmail ?? true) !== false && businessSettings?.email) {
+          contactText += `Email: ${businessSettings.email}`;
+        }
+        if ((businessSettings?.showInvoicePhone ?? true) !== false && businessSettings?.phone) {
+          if (contactText) contactText += '  |  ';
+          contactText += `Tel: ${businessSettings.phone}`;
+        }
+
+        if (contactText) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          pdf.setTextColor(115, 115, 115); // neutral-500
+          pdf.text(contactText, textStartX, contactY);
+          contactY += 4.5;
         }
         
         // Right-aligned Modern Meta Header "TAX INVOICE"
@@ -727,19 +749,20 @@ export default function InvoicesModule({
         pdf.text(`Date of Issue: ${selectedInvoice ? formatDisplayDate(selectedInvoice.date) : ''}`, 140, 36);
         pdf.text(`Due Date: ${selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : ''}`, 140, 41);
         
-        // Divider Axis Line styled with theme color
-        pdf.setDrawColor(themeColor);
-        pdf.setLineWidth(0.4);
-        const dividerY = Math.max(48, headerEndY + 2);
+        // Divider Axis Line styled cleanly in a thin elegant trace
+        pdf.setDrawColor(226, 232, 240); // elegant Slate-200 boundary line
+        pdf.setLineWidth(0.35);
+        const dividerY = Math.max(48, contactY + 3);
         pdf.line(20, dividerY, 190, dividerY);
         
         // Bill to Container Block
         const billToY = dividerY + 5;
-        pdf.setFillColor(248, 250, 252); // bg-slate-50
+        pdf.setFillColor(248, 250, 252); // bg-slate-50/50 fill representation
         pdf.rect(20, billToY, 170, 28, 'F');
-        pdf.setDrawColor(themeColor);
-        pdf.setLineWidth(0.3);
+        pdf.setDrawColor(226, 232, 240); // Soft, clean neutral-slate outline
+        pdf.setLineWidth(0.25);
         pdf.rect(20, billToY, 170, 28, 'D'); // Double bounding matching theme colors
+
         
         pdf.setTextColor(148, 163, 184); // slate-400
         pdf.setFont('helvetica', 'bold');
@@ -798,11 +821,6 @@ export default function InvoicesModule({
           selectedInvoice.items.forEach((item: any) => {
             if (currentY > 230) { // Safety transition threshold for multi-page invoices
               pdf.addPage();
-              // Outer framed border on page 2 too!
-              pdf.setDrawColor(themeColor);
-              pdf.setLineWidth(0.8);
-              pdf.rect(10, 10, 190, 277);
-              
               currentY = 25;
             }
             pdf.setTextColor(15, 23, 42); // slate-900
@@ -828,11 +846,11 @@ export default function InvoicesModule({
         // Footer layout containing totals block + verification block + signatures
         const footerSpaceY = Math.max(172, currentY + 5);
         
-        // Totals container box on the right
+        // Totals container box on the right with a professional soft neutral border
         pdf.setFillColor(248, 250, 252); // soft slate background
         pdf.rect(115, footerSpaceY, 75, 36, 'F');
-        pdf.setDrawColor(themeColor);
-        pdf.setLineWidth(0.3);
+        pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 divider and borders
+        pdf.setLineWidth(0.25);
         pdf.rect(115, footerSpaceY, 75, 36, 'D'); // Double styled
         
         pdf.setFont('helvetica', 'bold');
@@ -853,9 +871,10 @@ export default function InvoicesModule({
         }
         
         // Border inside card
-        pdf.setDrawColor(themeColor);
+        pdf.setDrawColor(226, 232, 240);
         pdf.setLineWidth(0.2);
         pdf.line(115, footerSpaceY + rowYOffset - 3, 190, footerSpaceY + rowYOffset - 3);
+
         
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9);
@@ -1336,11 +1355,11 @@ export default function InvoicesModule({
             <div 
               id="invoice-page-1"
               style={{ minHeight: '297mm' }}
-              className={`bg-white rounded-[4px] border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+              className={`bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
             >
               <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
-            <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pb-8`}>
+            <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/20'} pb-8`}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   {((businessSettings?.showInvoiceLogo ?? true) !== false && (base64Logo || businessSettings?.logoUrl)) ? (
@@ -1411,7 +1430,7 @@ export default function InvoicesModule({
             {(() => {
               const invoiceClient = clients.find(c => c.id === selectedInvoice.clientId);
               return (
-                <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-5 rounded-2xl`}>
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/30 border border-slate-200/80 p-5 rounded-xl`}>
                   <div className="space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Client Bill-To Particulars</span>
                     <h3 className="font-bold text-slate-800 text-sm mt-1">{selectedInvoice.clientName}</h3>
@@ -1453,12 +1472,12 @@ export default function InvoicesModule({
 
             {/* Dynamic Line items table */}
             <div className="overflow-x-auto">
-              <table className={`w-full text-left border-collapse border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} rounded-xl overflow-hidden`}>
+              <table className={`w-full text-left border-collapse border border-slate-200/80 rounded-xl overflow-hidden`}>
                 <thead>
                   {(() => {
                     const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
                     return (
-                      <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'}`}>
+                      <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80`}>
                         <th className={`py-3 px-4 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>Standard Deliverables Line Item</th>
                         <th className={`py-3 px-3 text-center ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>Qty</th>
                         <th className={`py-3 px-3 text-right ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>Unit Rate (INR)</th>
@@ -1591,7 +1610,7 @@ export default function InvoicesModule({
               </div>
 
               {/* Right mathematical sums */}
-              <div className={`w-80 bg-slate-50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-4 rounded-2xl space-y-3 text-xs text-slate-600 font-sans`} id="invoice-totals-card">
+              <div className={`w-80 bg-slate-50/50 border border-slate-200 p-4 rounded-xl space-y-3 text-xs text-slate-600 font-sans`} id="invoice-totals-card">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Net Ledger Value:</span>
                   <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
@@ -1608,7 +1627,7 @@ export default function InvoicesModule({
                     <span className="font-mono font-bold">-{formatCurrency(selectedInvoice.discount)}</span>
                   </div>
                 )}
-                <div className={`flex justify-between text-slate-900 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pt-2.5 font-bold`}>
+                <div className={`flex justify-between text-slate-900 border-t border-slate-200/80 pt-2.5 font-bold`}>
                   <span>Total Amount:</span>
                   <span className="font-mono font-extrabold">{formatCurrency(selectedInvoice.total)}</span>
                 </div>
@@ -1616,7 +1635,7 @@ export default function InvoicesModule({
                   <span>Amount Paid:</span>
                   <span className="font-mono font-bold text-emerald-600">{formatCurrency(selectedInvoice.paidAmount)}</span>
                 </div>
-                <div className={`flex justify-between text-rose-700 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} pt-2.5 font-bold`}>
+                <div className={`flex justify-between text-rose-700 border-t border-slate-200/80 pt-2.5 font-bold`}>
                   <span>Pending Outstanding:</span>
                   <span className="font-mono font-extrabold text-rose-600">{formatCurrency(selectedInvoice.dueAmount)}</span>
                 </div>
@@ -1624,9 +1643,9 @@ export default function InvoicesModule({
             </div>
 
             {/* Wide Bottom Notes section & Electronically Generated warning */}
-            <div className={`mt-8 pt-6 border-t-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} space-y-4`}>
+            <div className={`mt-8 pt-6 border-t border-slate-200/60 space-y-4`}>
               {((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice.notes) && (
-                <div className={`text-xs text-slate-500 bg-slate-50/50 p-4 rounded-xl border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} text-left`}>
+                <div className={`text-xs text-slate-500 bg-slate-50/30 p-4 rounded-xl border border-slate-200/80 text-left`}>
                   <span className="font-bold text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Invoice Notes &amp; Terms</span>
                   <p className="italic leading-normal text-slate-600 font-sans">{selectedInvoice.notes}</p>
                 </div>
@@ -1649,7 +1668,7 @@ export default function InvoicesModule({
               return (
                 <div className="w-full flex flex-col">
                   {/* Delivery Challan Section Toolbar (Screen Only) */}
-                  <div className={`no-print w-full md:w-[210mm] mx-auto flex flex-col sm:flex-row items-center justify-between bg-slate-50 border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} p-4 rounded-xl mt-12 mb-4 animate-fade-in gap-3`}>
+                  <div className={`no-print w-full md:w-[210mm] mx-auto flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200/80 p-4 rounded-xl mt-12 mb-4 animate-fade-in gap-3`}>
                     <div className="text-left">
                       <span className="font-extrabold text-[10px] text-[#5B21FF] uppercase tracking-widest block font-mono">Official Reference Document</span>
                       <h4 className="text-sm font-bold text-slate-800">Attached Challan Document</h4>
@@ -1663,7 +1682,7 @@ export default function InvoicesModule({
                   <div 
                     id="challan-attachment-section"
                     style={{ minHeight: '297mm' }}
-                    className={`bg-white rounded-[4px] border-2 ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/30'} shadow-2xl p-0 w-full md:w-[210mm] mx-auto flex flex-col justify-center items-center animate-fade-in print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+                    className={`bg-white rounded-lg border border-slate-200 shadow-2xl p-0 w-full md:w-[210mm] mx-auto flex flex-col justify-center items-center animate-fade-in print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full`}
                   >
                     {isPdf ? (
                       <div className="w-full h-full flex flex-col justify-between">
