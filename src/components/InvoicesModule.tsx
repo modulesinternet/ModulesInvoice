@@ -77,9 +77,24 @@ export default function InvoicesModule({
   canWrite = true,
   canDelete = true
 }: InvoicesModuleProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [selectedInvoiceRaw, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('last_invoice_search_term') || '');
+  const [statusFilter, setStatusFilter] = useState(() => localStorage.getItem('last_invoice_status_filter') || 'All');
+  const [selectedInvoiceRaw, setSelectedInvoice] = useState<Invoice | null>(() => {
+    const savedId = localStorage.getItem('last_selected_invoice_id');
+    if (savedId) {
+      const found = invoices.find(inv => inv.id === savedId);
+      if (found) return found;
+    }
+    return null;
+  });
+
+  React.useEffect(() => {
+    if (selectedInvoiceRaw) {
+      localStorage.setItem('last_selected_invoice_id', selectedInvoiceRaw.id);
+    } else {
+      localStorage.removeItem('last_selected_invoice_id');
+    }
+  }, [selectedInvoiceRaw]);
 
   const selectedInvoice = selectedInvoiceRaw 
     ? (invoices.find(inv => inv.id === selectedInvoiceRaw.id) || selectedInvoiceRaw) 
@@ -699,7 +714,7 @@ export default function InvoicesModule({
           }
           
           if (!addedWithCanvas) {
-            // Pristine vector layout for fallback delivery challan packing slip
+            // Pristine vector layout for fallback delivery challan attachment
             pdf.setFillColor(248, 250, 252);
             pdf.rect(10, 10, 190, 277, 'F');
             
@@ -710,77 +725,44 @@ export default function InvoicesModule({
             pdf.setTextColor(30, 41, 59);
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(16);
-            pdf.text("DELIVERY CHALLAN & PACKING SLIP", 25, 32);
+            pdf.text("ATTACHED DELIVERY CHALLAN", 25, 32);
             
             pdf.setFontSize(9);
             pdf.setFont('helvetica', 'normal');
             pdf.setTextColor(100, 116, 139);
-            pdf.text("OFFICIAL ACCESS ATTACHMENT DETAIL", 25, 38);
+            pdf.text(`Linked to Parent Tax Invoice: ${selectedInvoice.invoiceNumber}`, 25, 38);
             
             pdf.setDrawColor(91, 33, 255);
             pdf.setLineWidth(1.5);
             pdf.line(25, 43, 185, 43);
             
-            pdf.setFontSize(9.5);
+            pdf.setFontSize(10);
             pdf.setTextColor(15, 23, 42);
             pdf.setFont('helvetica', 'bold');
-            pdf.text("CONSIGNEE & DELIVERY DESTINATION:", 25, 55);
+            pdf.text("DOCUMENT CORRELATION METADATA:", 25, 55);
             
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(9);
-            pdf.text(selectedInvoice.clientName || 'Associated Partner Client', 25, 62);
-            
-            let challanClientY = 68;
-            const clientObj = clients.find(c => c.name === selectedInvoice?.clientName);
-            if (clientObj) {
-              challanClientY = drawSafeMultilineText(
-                clientObj.shippingAddress || clientObj.billingAddress || "Client Business Headquarters", 
-                25, 
-                challanClientY, 
-                80, 
-                4.5
-              );
-            } else {
-              pdf.text("Client Business Headquarters Address Block", 25, challanClientY);
-              challanClientY += 5;
-            }
-            
-            pdf.setFont('helvetica', 'bold');
-            pdf.text("CORRELATION DETAILS:", 115, 55);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text(`Associated Invoice: ${selectedInvoice.invoiceNumber}`, 115, 62);
-            pdf.text(`Document Type: Delivery Challan`, 115, 68);
-            pdf.text(`Date of Sync: ${formatDisplayDate(selectedInvoice.date)}`, 115, 74);
-            
-            let challanDividerY = Math.max(82, challanClientY + 4);
-            pdf.setDrawColor(226, 232, 240);
-            pdf.setLineWidth(0.3);
-            pdf.line(25, challanDividerY, 185, challanDividerY);
-            
-            // Draw items list
-            pdf.setFont('helvetica', 'bold');
-            pdf.text("DISPATCHED PARTICULAR DELIVERABLES PACKING LIST:", 25, challanDividerY + 10);
-            
+            pdf.text(`Associated Invoice: ${selectedInvoice.invoiceNumber}`, 25, 62);
+            pdf.text(`Reference Date: ${formatDisplayDate(selectedInvoice.date)}`, 25, 68);
+            pdf.text(`File Name: ${selectedInvoice.challanName || 'Attached Document'}`, 25, 74);
+            pdf.text(`Attachment Type: ${selectedInvoice.challanType || 'Digital Document attachment'}`, 25, 80);
+
+            // Draw a beautiful message box
             pdf.setFillColor(241, 245, 249);
-            pdf.rect(25, challanDividerY + 16, 160, 7, 'F');
-            pdf.setFontSize(8.5);
-            pdf.text("SNo", 28, challanDividerY + 21);
-            pdf.text("Standard Item Name Description", 45, challanDividerY + 21);
-            pdf.text("Quantity", 155, challanDividerY + 21);
-            
-            let yList = challanDividerY + 29;
-            pdf.setFont('helvetica', 'normal');
-            if (selectedInvoice.items) {
-              selectedInvoice.items.forEach((item: any, idx: number) => {
-                pdf.text(String(idx + 1).padStart(2, '0'), 28, yList);
-                pdf.text(item.name || item.productName || "Product", 45, yList);
-                pdf.text(String(item.qty || item.quantity || 1), 158, yList);
-                yList += 8;
-              });
-            }
-            
+            pdf.rect(25, 90, 160, 40, 'F');
             pdf.setDrawColor(226, 232, 240);
-            pdf.line(25, yList + 4, 185, yList + 4);
+            pdf.rect(25, 90, 160, 40);
+
+            pdf.setTextColor(71, 85, 105);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9.5);
+            pdf.text("Digital Attachment Verification Ledger Notice", 30, 100);
+
+            pdf.setFont('helvetica', 'oblique');
+            pdf.setFontSize(8.5);
+            const noticeText = "This page confirms that a delivery challan document is digitally uploaded and securely annexed. For original verification, click on 'Download Original File' in the interactive dashboard portal.";
+            drawSafeMultilineText(noticeText, 30, 106, 150, 4.5);
             
             // Bottom stamp area
             pdf.setFont('helvetica', 'italic');
@@ -1425,134 +1407,101 @@ export default function InvoicesModule({
                   <div className="no-print w-full md:w-[210mm] mx-auto flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 p-4 rounded-xl mt-12 mb-4 animate-fade-in gap-3">
                     <div className="text-left">
                       <span className="font-extrabold text-[10px] text-[#5B21FF] uppercase tracking-widest block font-mono">Official Reference Document</span>
-                      <h4 className="text-sm font-bold text-slate-800">Delivery Challan &amp; Packing Slip Preview</h4>
+                      <h4 className="text-sm font-bold text-slate-800">Delivery Challan Preview</h4>
                     </div>
                     <div className="text-[10px] uppercase font-semibold text-slate-500 bg-slate-200 px-2.5 py-1 rounded-full select-none font-mono font-bold">
                       {isPdf ? "Verified PDF Attachment" : "Verified Image Attachment"}
                     </div>
                   </div>
 
-                  {/* THE PURE, SINGLE-PAGE DELIVERABLE A4 DOCUMENT */}
+                  {/* THE PURE, SINGLE-PAGE CHALAN ATTACHMENT DOCUMENT */}
                   <div 
                     id="challan-attachment-section"
                     style={{ minHeight: '297mm' }}
-                    className={`bg-white rounded-[4px] border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between animate-fade-in text-left font-sans print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+                    className="bg-white rounded-[4px] border border-slate-200 shadow-2xl p-6 md:p-12 w-full md:w-[210mm] mx-auto flex flex-col justify-start animate-fade-in text-left font-sans print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full"
                   >
-                    <div className="flex flex-col space-y-6">
-                      {/* Document Header */}
-                      <div className="flex justify-between items-start border-b border-slate-300 pb-5">
-                        <div className="text-left">
-                          <span className="text-[10px] uppercase tracking-widest text-[#5B21FF] font-bold font-mono">Official Invoice Sub-Attachment</span>
-                          <h3 className="text-xl font-extrabold text-slate-950 uppercase tracking-tight font-display mt-0.5">DELIVERY CHALLAN &amp; PACKING SLIP</h3>
-                          <p className="text-xs text-slate-500 font-mono mt-0.5">Reference ID: DC-{selectedInvoice.invoiceNumber}</p>
-                        </div>
-                        <div className="text-right flex flex-col items-end">
-                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full uppercase tracking-wider font-mono">
-                            {isPdf ? "Verified Clearance Attach" : "Verified Image Attach"}
-                          </span>
-                          <p className="text-xs text-slate-400 font-mono mt-1.5">Date: {formatDisplayDate(selectedInvoice.date)}</p>
-                        </div>
+                    {/* Document Header (Professional and clean) */}
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-4 mb-6">
+                      <div className="text-left">
+                        <span className="text-[10px] uppercase tracking-widest text-[#5B21FF] font-extrabold font-mono">Official Attached Document</span>
+                        <h3 className="text-lg font-extrabold text-slate-900 uppercase tracking-tight font-display mt-0.5">DELIVERY CHALLAN</h3>
+                        <p className="text-xs text-slate-500 font-mono">Linked to Invoice: {selectedInvoice.invoiceNumber}</p>
                       </div>
-
-                      {/* Consignor/Consignee Info */}
-                      <div className="grid grid-cols-2 gap-8 my-4 text-left">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider block">Consignor (Issued From)</span>
-                          <h4 className="text-sm font-black text-slate-900 uppercase mt-1">{businessSettings?.companyName || "APEX ENTERPRISE"}</h4>
-                          <p className="text-xs text-slate-500 leading-normal mt-0.5">{businessSettings?.address || "Corporate Business Address Block"}</p>
-                          {businessSettings?.gstIn && <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">GSTIN: {businessSettings.gstIn}</p>}
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider block">Consignee (Delivered To)</span>
-                          <h4 className="text-sm font-black text-slate-900 uppercase mt-1">{selectedInvoice.clientName}</h4>
-                          <p className="text-xs text-slate-500 leading-normal mt-0.5">
-                            {clients.find(c => c.name === selectedInvoice.clientName)?.shippingAddress || 
-                             clients.find(c => c.name === selectedInvoice.clientName)?.billingAddress || 
-                             "Client Business Headquarters Address"}
-                          </p>
-                          {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn && (
-                            <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mt-1">
-                              GSTIN: {clients.find(c => c.name === selectedInvoice.clientName)?.gstIn}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Table of Deliverables */}
-                      <div className="border border-slate-200 rounded-2xl overflow-hidden mt-2">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-slate-50 text-[10px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
-                              <th className="py-2.5 px-4 text-left">Item S.No.</th>
-                              <th className="py-2.5 px-4 text-left">Description of Deliverables</th>
-                              <th className="py-2.5 px-4 text-center">Unit</th>
-                              <th className="py-2.5 px-4 text-right">Quantity Dispatched</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                            {selectedInvoice.items?.map((item: any, i: number) => (
-                              <tr key={i} className="hover:bg-slate-50/50">
-                                <td className="py-2.5 px-4 text-slate-400 font-mono">{(i + 1).toString().padStart(2, '0')}</td>
-                                <td className="py-2.5 px-4 font-semibold text-slate-800">{item.name || item.productName}</td>
-                                <td className="py-2.5 px-4 text-center text-slate-500">{products.find((p: any) => p.id === item.productId)?.unit || 'PCS'}</td>
-                                <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{item.qty || item.quantity || 1}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* If it's an image, we also embed it directly in the document page nicely */}
-                      {!isPdf && (
-                        <div className="border border-slate-100 bg-white rounded-2xl overflow-hidden bg-slate-50/50 p-4 mt-2">
-                          <span className="font-extrabold text-[9px] text-slate-400 uppercase tracking-widest block mb-2 text-left">Attached Image Resource Reference</span>
-                          <img 
-                            src={selectedInvoice.challanUrl} 
-                            className="max-h-[300px] w-auto mx-auto object-contain rounded-xl shadow-xs animate-fade-in print:max-h-none print:w-full print:rounded-none print:shadow-none print:mt-1" 
-                            alt="Attached Dispatch Proof" 
-                            crossOrigin="anonymous"
-                          />
-                        </div>
-                      )}
-
-                      {/* Footer Notes description */}
-                      <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mt-4">
-                        <p className="text-[10px] leading-relaxed text-slate-500 italic">
-                          This Delivery Challan serves as official physical proof of itemized receipt. It corresponds to verification of digital attachment <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'delivery_challan.pdf'}</strong> linked to parent invoice <strong className="font-semibold text-slate-700">{selectedInvoice.invoiceNumber}</strong>. Please sign and seal physically to certify correct state dispatches.
-                        </p>
+                      <div className="text-right">
+                        <span className="text-[10px] font-mono font-bold bg-indigo-50 border border-indigo-150 text-indigo-700 px-3 py-1 rounded-full uppercase tracking-wider">
+                          {isPdf ? "PDF Document" : "Image Attachment"}
+                        </span>
+                        <p className="text-[11px] text-slate-400 font-mono mt-1">Date: {formatDisplayDate(selectedInvoice.date)}</p>
                       </div>
                     </div>
 
-                    {/* Dual signature area inside the bottom margins */}
-                    <div className="grid grid-cols-2 gap-12 mt-12 pt-8 border-t border-dashed border-slate-300 font-sans">
-                      <div className="text-center">
-                        <div className="h-10 border-b border-slate-200"></div>
-                        <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Receiver's Signature / Seal</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="h-10 border-b border-slate-200"></div>
-                        <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 mt-2 font-mono">Authorized Signatory / Seal</p>
-                      </div>
+                    {/* Document Main Content Frame */}
+                    <div className="flex-1 flex flex-col justify-start">
+                      {isPdf ? (
+                        /* For PDF: Render a beautiful vector visual placeholder for print/pdf + the interactive frame on screen */
+                        <div className="space-y-6">
+                          <div className="border border-slate-200 bg-slate-50 p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-3 shadow-inner">
+                            <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center shadow-sm">
+                              <FileText className="w-7 h-7" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="text-xs font-bold text-slate-800 break-all max-w-lg">{selectedInvoice.challanName || 'delivery_challan.pdf'}</h4>
+                              <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                                This PDF delivery challan is digitally verified and annexed to tax invoice {selectedInvoice.invoiceNumber}.
+                              </p>
+                            </div>
+                            <div className="pt-1">
+                              <button 
+                                type="button"
+                                onClick={openBase64Pdf}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-755 text-white rounded-lg text-[10px] font-bold transition shadow-xs cursor-pointer select-none no-print"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Preview in New Window</span>
+                              </button>
+                            </div>
+                          </div>
+                      
+                          {/* Screen-only browser interactive embed (hidden during window.print) */}
+                          <div className="no-print">
+                            <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest block mb-2 font-mono">Interactive Reader Link</span>
+                            <iframe 
+                              src={selectedInvoice.challanUrl} 
+                              className="w-full h-[600px] border border-slate-200 rounded-xl bg-white shadow-inner"
+                              title="Attached Delivery Challan File Viewer"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        /* For Image: Render the image centered, crisp and full resolution */
+                        <div className="flex flex-col space-y-4">
+                          <div className="text-xs font-semibold text-slate-500">
+                            Attached Document Name: <span className="font-mono text-slate-700">{selectedInvoice.challanName || 'delivery_challan_image.png'}</span>
+                          </div>
+                          <div className="w-full bg-slate-50/50 rounded-xl border border-slate-200 p-4 flex items-center justify-center overflow-auto">
+                            <img 
+                              src={selectedInvoice.challanUrl} 
+                              className="max-w-full max-h-[170mm] object-contain rounded-xl shadow-md" 
+                              alt="Attached Delivery Challan Document" 
+                              crossOrigin="anonymous"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Interactive Original Sandbox Module (Screen-Only - Underneath the pure A4 sheet) */}
-                  {isPdf && (
-                    <div className="no-print mt-8 w-full md:w-[210mm] mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-left">
-                      <div className="border-b border-slate-200 pb-3">
-                        <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest block mb-0.5 font-mono">Attachment Interactive Sandbox</span>
-                        <p className="text-xs text-slate-600 font-sans">
-                          Below is the live scrollable copy of the uploaded background file <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'document.pdf'}</strong> for immediate validation:
-                        </p>
-                      </div>
-                      
-                      <iframe 
-                        src={selectedInvoice.challanUrl} 
-                        className="w-full h-[600px] border border-slate-200 rounded-xl bg-white shadow-inner"
-                        title="Interactive Original PDF Delivery Challan Upload"
-                      />
-                      
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  {/* Attachment Standalone Operations Sandbox Pane (Screen-Only) */}
+                  <div className="no-print mt-8 w-full md:w-[210mm] mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-left">
+                    <div className="border-b border-slate-200 pb-3">
+                      <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest block mb-0.5 font-mono">Verification Sandbox</span>
+                      <p className="text-xs text-slate-600 font-sans">
+                        Verify, open or extract the original uploaded delivery challan file <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'document.pdf'}</strong> linked to parent tax registration record.
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row items-center justify-start gap-3">
+                      {isPdf && (
                         <button 
                           type="button"
                           onClick={openBase64Pdf}
@@ -1561,40 +1510,17 @@ export default function InvoicesModule({
                           <ExternalLink className="w-4 h-4 text-indigo-400" />
                           <span>Preview PDF in New Window</span>
                         </button>
-                        
-                        <a 
-                          href={selectedInvoice.challanUrl}
-                          download={selectedInvoice.challanName || "delivery_challan.pdf"}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
-                        >
-                          <Download className="w-4 h-4 text-slate-400" />
-                          <span>Download Original File</span>
-                        </a>
-                      </div>
+                      )}
+                      <a 
+                        href={selectedInvoice.challanUrl}
+                        download={selectedInvoice.challanName || (isPdf ? "delivery_challan.pdf" : "delivery_challan_image.png")}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer select-none"
+                      >
+                        <Download className="w-4 h-4 text-slate-400" />
+                        <span>Download Original File</span>
+                      </a>
                     </div>
-                  )}
-
-                  {!isPdf && (
-                    <div className="no-print mt-8 w-full md:w-[210mm] mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-left">
-                      <div className="border-b border-slate-200 pb-3">
-                        <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest block mb-0.5 font-mono">Attachment Options</span>
-                        <p className="text-xs text-slate-600 font-sans">
-                          You can download the original copy of the high-resolution uploaded image <strong className="font-semibold text-slate-700">{selectedInvoice.challanName || 'image_proof.png'}</strong>:
-                        </p>
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <a 
-                          href={selectedInvoice.challanUrl}
-                          download={selectedInvoice.challanName || "delivery_challan_image.png"}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer select-none"
-                        >
-                          <Download className="w-4 h-4 text-indigo-400" />
-                          <span>Download High-Res Attachment Image</span>
-                        </a>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               );
             })()}
@@ -1614,7 +1540,11 @@ export default function InvoicesModule({
                 type="text"
                 placeholder="Search serial code or client name..."
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { 
+                  setSearchTerm(e.target.value); 
+                  localStorage.setItem('last_invoice_search_term', e.target.value);
+                  setCurrentPage(1); 
+                }}
                 className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                 id="search-invoices-input"
               />
@@ -1625,7 +1555,11 @@ export default function InvoicesModule({
               {['All', 'paid', 'partially_paid', 'unpaid', 'overdue'].map((st) => (
                 <button
                   key={st}
-                  onClick={() => { setStatusFilter(st); setCurrentPage(1); }}
+                  onClick={() => { 
+                    setStatusFilter(st); 
+                    localStorage.setItem('last_invoice_status_filter', st);
+                    setCurrentPage(1); 
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${statusFilter === st ? 'bg-[#5B21FF] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 >
                   {st.replace('_', ' ')}
