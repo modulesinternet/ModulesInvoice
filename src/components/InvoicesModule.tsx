@@ -744,74 +744,121 @@ export default function InvoicesModule({
       // Render Page 2 (Attached Delivery Challan) if it exists
       if (selectedInvoice?.challanUrl) {
         try {
-          const isChallanPdf = selectedInvoice.challanType === 'application/pdf' || 
-                              selectedInvoice.challanName?.toLowerCase().endsWith('.pdf');
-                              
-          pdf.addPage();
-          
-          // Let's print a beautiful cover header for the attached Delivery Challan
-          pdf.setFillColor(248, 250, 252); // soft slate reflection bg
-          pdf.rect(10, 10, 190, 277, 'F');
-          
-          pdf.setDrawColor(226, 232, 240);
-          pdf.setLineWidth(0.5);
-          pdf.rect(15, 15, 180, 267);
-          
-          pdf.setTextColor(30, 41, 59);
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(16);
-          pdf.text("SUB-DOCUMENT DISPATCH", 25, 35);
-          
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
-          pdf.setTextColor(100, 116, 139);
-          pdf.text("APEX ENTERPRISE RESOURCE PLANNING SYSTEMS", 25, 42);
-          
-          pdf.setDrawColor(91, 33, 255);
-          pdf.setLineWidth(1.5);
-          pdf.line(25, 47, 185, 47);
-          
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(12);
-          pdf.setTextColor(15, 23, 42);
-          pdf.text("ATTACHED OFFICE DELIVERY CHALLAN", 25, 60);
-          
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(9);
-          pdf.setTextColor(71, 85, 105);
-          pdf.text(`Associated Invoice: ${selectedInvoice.invoiceNumber}`, 25, 70);
-          pdf.text(`Attachment Name: ${selectedInvoice.challanName || 'delivery_challan.pdf'}`, 25, 76);
-          pdf.text(`Status: Verified Clearance Attachment`, 25, 82);
-          pdf.text(`Integration Protocol Code: IN-DC-SEC-${selectedInvoice.id.slice(0, 6).toUpperCase()}`, 25, 88);
-          
-          if (!isChallanPdf) {
-            // Draw image!
+          const challanEl = document.getElementById('challan-attachment-section');
+          if (challanEl) {
+            pdf.addPage();
+            
+            let challanCanvas;
+            let useChallanVector = false;
             try {
-              const base64Img = await toBase64(selectedInvoice.challanUrl);
-              pdf.addImage(base64Img, 'PNG', 25, 100, 160, 160, undefined, 'FAST');
-            } catch (err) {
-              pdf.setTextColor(225, 29, 72);
-              pdf.setFont('helvetica', 'bold');
-              pdf.text("Image loading prevented by server CORS policy. See Online Portal.", 25, 110);
+              // Capture the full styled HTML/JSX delivery challan page
+              challanCanvas = await html2canvas(challanEl, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                allowTaint: true
+              });
+            } catch (canvasErr) {
+              console.warn("Challan canvas capture failed, using high-fidelity vector compilation fallback:", canvasErr);
+              useChallanVector = true;
             }
-          } else {
-            // Render beautiful details for PDF
-            pdf.setTextColor(71, 85, 105);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text("Digital PDF Document is securely compiled and attached to this invoice record.", 25, 110);
-            pdf.text("To view or download the full original multi-page high-resolution delivery file,", 25, 116);
-            pdf.text("scan the QR verified code or click the direct workspace resource URL below:", 25, 122);
             
-            // Draw a nice QR or link box
-            pdf.setFillColor(241, 245, 249);
-            pdf.rect(25, 135, 160, 30, 'F');
-            pdf.setTextColor(91, 33, 255);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8.5);
-            
-            const directUrl = selectedInvoice.challanUrl;
-            const splitUrl = pdf.splitTextToSize(directUrl, 150);
-            pdf.text(splitUrl, 30, 145);
+            if (!useChallanVector && challanCanvas) {
+              const challanImgData = challanCanvas.toDataURL('image/png');
+              const imgWidth = 210; // A4 standard width in mm
+              const pageHeight = 297; // A4 standard height in mm
+              let renderedWidth = imgWidth;
+              let renderedHeight = (challanCanvas.height * imgWidth) / challanCanvas.width;
+              
+              if (renderedHeight > pageHeight - 12) {
+                const scale = (pageHeight - 12) / renderedHeight;
+                renderedWidth = renderedWidth * scale;
+                renderedHeight = pageHeight - 12;
+              }
+              
+              const xOffset = (imgWidth - renderedWidth) / 2;
+              const yOffset = 6;
+              pdf.addImage(challanImgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+            } else {
+              // Pristine vector layout for fallback delivery challan packing slip
+              pdf.setFillColor(248, 250, 252);
+              pdf.rect(10, 10, 190, 277, 'F');
+              
+              pdf.setDrawColor(226, 232, 240);
+              pdf.setLineWidth(0.5);
+              pdf.rect(15, 15, 180, 267);
+              
+              pdf.setTextColor(30, 41, 59);
+              pdf.setFont('helvetica', 'bold');
+              pdf.setFontSize(16);
+              pdf.text("DELIVERY CHALLAN & PACKING SLIP", 25, 32);
+              
+              pdf.setFontSize(9);
+              pdf.setFont('helvetica', 'normal');
+              pdf.setTextColor(100, 116, 139);
+              pdf.text("OFFICIAL ACCESS ATTACHMENT DETAIL", 25, 38);
+              
+              pdf.setDrawColor(91, 33, 255);
+              pdf.setLineWidth(1.5);
+              pdf.line(25, 43, 185, 43);
+              
+              pdf.setFontSize(9.5);
+              pdf.setTextColor(15, 23, 42);
+              pdf.setFont('helvetica', 'bold');
+              pdf.text("CONSIGNEE & DELIVERY DESTINATION:", 25, 55);
+              
+              pdf.setFont('helvetica', 'normal');
+              pdf.setFontSize(9);
+              pdf.text(selectedInvoice.clientName || 'Associated Partner Client', 25, 62);
+              
+              const clientObj = clients.find(c => c.name === selectedInvoice?.clientName);
+              if (clientObj) {
+                pdf.text(clientObj.shippingAddress || clientObj.billingAddress || "Client Business Headquarters", 25, 68);
+              } else {
+                pdf.text("Client Business Headquarters Address Block", 25, 68);
+              }
+              
+              pdf.setFont('helvetica', 'bold');
+              pdf.text("CORRELATION DETAILS:", 115, 55);
+              pdf.setFont('helvetica', 'normal');
+              pdf.text(`Associated Invoice: ${selectedInvoice.invoiceNumber}`, 115, 62);
+              pdf.text(`Document Type: Delivery Challan`, 115, 68);
+              pdf.text(`Date of Sync: ${formatDisplayDate(selectedInvoice.date)}`, 115, 74);
+              
+              pdf.setDrawColor(226, 232, 240);
+              pdf.setLineWidth(0.3);
+              pdf.line(25, 82, 185, 82);
+              
+              // Draw items list
+              pdf.setFont('helvetica', 'bold');
+              pdf.text("DISPATCHED PARTICULAR DELIVERABLES PACKING LIST:", 25, 92);
+              
+              pdf.setFillColor(241, 245, 249);
+              pdf.rect(25, 98, 160, 7, 'F');
+              pdf.setFontSize(8.5);
+              pdf.text("SNo", 28, 103);
+              pdf.text("Standard Item Name Description", 45, 103);
+              pdf.text("Quantity", 155, 103);
+              
+              let yList = 112;
+              pdf.setFont('helvetica', 'normal');
+              if (selectedInvoice.items) {
+                selectedInvoice.items.forEach((item: any, idx: number) => {
+                  pdf.text(String(idx + 1).padStart(2, '0'), 28, yList);
+                  pdf.text(item.name || item.productName || "Product", 45, yList);
+                  pdf.text(String(item.qty || item.quantity || 1), 158, yList);
+                  yList += 8;
+                });
+              }
+              
+              pdf.setDrawColor(226, 232, 240);
+              pdf.line(25, yList + 4, 185, yList + 4);
+              
+              // Bottom stamp area
+              pdf.setFont('helvetica', 'italic');
+              pdf.setFontSize(8);
+              pdf.text("This document constitutes active, official copy certification records on file.", 25, 265);
+            }
           }
         } catch (challanRenderErr) {
           console.warn("Could not append clear challan page to invoice PDF:", challanRenderErr);
@@ -1098,7 +1145,8 @@ export default function InvoicesModule({
             {/* PAGE 1: TAX INVOICE CARD */}
             <div 
               id="invoice-page-1"
-              className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl p-8 pb-12 space-y-8 print:p-0 print:border-none print:shadow-none print:rounded-none`}
+              style={{ minHeight: '297mm' }}
+              className={`bg-white rounded-[4px] border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
             >
               <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
@@ -1447,7 +1495,8 @@ export default function InvoicesModule({
               return (
                 <div 
                   id="challan-attachment-section"
-                  className={`bg-white rounded-3xl border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-xl p-8 pb-12 space-y-8 animate-fade-in mt-12 print:mt-0 print:p-0 print:border-none print:shadow-none print:rounded-none`}
+                  style={{ minHeight: '297mm' }}
+                  className={`bg-white rounded-[4px] border ${activeTheme?.borderTheme || 'border-slate-200'} shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between animate-fade-in mt-12 print:min-h-0 print:mt-0 print:p-0 print:border-none print:shadow-none print:w-full`}
                 >
                   <div className="text-left mb-2 flex items-center justify-between no-print border-b border-slate-100 pb-4">
                     <div>

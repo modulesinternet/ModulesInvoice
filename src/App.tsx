@@ -193,6 +193,15 @@ export function computeLocalDashboardMetrics(
   };
 }
 
+function getCachedItem<T>(key: string, fallback: T): T {
+  try {
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab');
@@ -209,20 +218,20 @@ export default function App() {
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [cashbook, setCashbook] = useState<CashbookEntry[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [clients, setClients] = useState<Client[]>(() => getCachedItem('db_clients', []));
+  const [products, setProducts] = useState<Product[]>(() => getCachedItem('db_products', []));
+  const [invoices, setInvoices] = useState<Invoice[]>(() => getCachedItem('db_invoices', []));
+  const [quotations, setQuotations] = useState<Quotation[]>(() => getCachedItem('db_quotations', []));
+  const [payments, setPayments] = useState<Payment[]>(() => getCachedItem('db_payments', []));
+  const [ledger, setLedger] = useState<LedgerEntry[]>(() => getCachedItem('db_ledger', []));
+  const [cashbook, setCashbook] = useState<CashbookEntry[]>(() => getCachedItem('db_cashbook', []));
+  const [users, setUsers] = useState<UserProfile[]>(() => getCachedItem('db_users', []));
+  const [logs, setLogs] = useState<ActivityLog[]>(() => getCachedItem('db_logs', []));
+  const [notifications, setNotifications] = useState<Notification[]>(() => getCachedItem('db_notifications', []));
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
-  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
+  const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
   
   // GLOBAL ERP SEARCH ENGINE (POINT 16)
   const [globalSearch, setGlobalSearch] = useState('');
@@ -393,7 +402,19 @@ export default function App() {
   };
 
   // Master fetch pipeline connecting React state variables with backend routes
-  const loadMasterData = async () => {
+  const loadMasterData = async (force = true) => {
+    const lastSyncStr = localStorage.getItem('last_batch_sync_time');
+    const now = Date.now();
+    const thirtyMinutesMs = 30 * 60 * 1000;
+    
+    // Only perform the full API request on page load if forced, or more than 30 mins has passed, or we have no data
+    const hasData = invoices.length > 0 || localStorage.getItem('db_invoices') !== null;
+    if (!force && lastSyncStr && (now - parseInt(lastSyncStr, 10)) < thirtyMinutesMs && hasData) {
+      console.log("Skipping full page-load API fetch. Data is fresh (< 30 min). Realtime listeners active.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -412,7 +433,7 @@ export default function App() {
           }
         };
         const [
-          dash, clients, products, invoices, quotations, payments, ledger, cashbook, users, logs, notifications, settings, roles, categories, passwords
+          dash, clientsVal, productsVal, invoicesVal, quotationsVal, paymentsVal, ledgerVal, cashbookVal, usersVal, logsVal, notificationsVal, settingsVal, rolesVal, categoriesVal, passwordsVal
         ] = await Promise.all([
           safeFetch(api.getDashboard(), null),
           safeFetch(api.getClients(), []),
@@ -432,20 +453,20 @@ export default function App() {
         ]);
         batch = {
           dashboard: dash,
-          clients,
-          products,
-          invoices,
-          quotations,
-          payments,
-          ledger,
-          cashbook,
-          users,
-          logs,
-          notifications,
-          settings,
-          roles,
-          categories,
-          passwords
+          clients: clientsVal,
+          products: productsVal,
+          invoices: invoicesVal,
+          quotations: quotationsVal,
+          payments: paymentsVal,
+          ledger: ledgerVal,
+          cashbook: cashbookVal,
+          users: usersVal,
+          logs: logsVal,
+          notifications: notificationsVal,
+          settings: settingsVal,
+          roles: rolesVal,
+          categories: categoriesVal,
+          passwords: passwordsVal
         };
       }
 
@@ -475,6 +496,24 @@ export default function App() {
       setUsers(usersFinal);
       setLogs(logsFinal);
       setNotifications(notificationsFinal);
+
+      // Save to localStorage cache as well
+      localStorage.setItem('db_clients', JSON.stringify(clientsFinal));
+      localStorage.setItem('db_products', JSON.stringify(productsFinal));
+      localStorage.setItem('db_invoices', JSON.stringify(invoicesFinal));
+      localStorage.setItem('db_quotations', JSON.stringify(quotationsFinal));
+      localStorage.setItem('db_payments', JSON.stringify(paymentsFinal));
+      localStorage.setItem('db_ledger', JSON.stringify(ledgerFinal));
+      localStorage.setItem('db_cashbook', JSON.stringify(cashbookFinal));
+      localStorage.setItem('db_users', JSON.stringify(usersFinal));
+      localStorage.setItem('db_logs', JSON.stringify(logsFinal));
+      localStorage.setItem('db_notifications', JSON.stringify(notificationsFinal));
+      if (settingsData) {
+        localStorage.setItem('db_settings', JSON.stringify(settingsData));
+      }
+      localStorage.setItem('db_roles', JSON.stringify(rolesFinal));
+      localStorage.setItem('db_categories', JSON.stringify(categoriesFinal));
+      localStorage.setItem('last_batch_sync_time', Date.now().toString());
 
       // Auto-synchronize currentUser with latest profile to prevent stale names/roles/avatars loaded from localStorage on page refresh
       if (currentUser) {
@@ -516,7 +555,6 @@ export default function App() {
       setDashboardMetrics(locallyComputed);
     } catch (e: any) {
       console.error("Fetch pipeline error: ", e);
-      // If permission is denied because they shifted tab, keep loading other states graceful
       if (e.message?.includes("Access Denied")) {
         showToast(e.message, "error");
       } else {
@@ -528,23 +566,221 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadMasterData();
+    loadMasterData(false); // Page load: use cache if fresh (<30min)
   }, []);
 
-  // CRITICAL RESOLUTION: We bypass background client-side Firestore onSnapshot listeners because we operate in a full-stack context 
-  // where all CRUD actions route to the central Node API backend. Having background listeners firing asynchronously with 
-  // client-side or IndexedDB cached documents (especially previous demo data) would constantly clash with, and overwrite,
-  // the clean verified states loaded by the loadMasterData pipeline during settings saves, invoice generation, and deletions.
-  // Instead, the app uses a clean, reliable, single-source-of-truth post-mutation "fetch-on-action" architecture.
+  // Background scheduled synchronization every 30 minutes
   useEffect(() => {
     if (!currentUser) return;
+    const interval = setInterval(() => {
+      console.log("Automatic 30-minute background synchronization triggered...");
+      loadMasterData(true);
+    }, 1800000); // 30 minutes
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
-    // Direct background snapshot listeners are disabled/commented out to guarantee operational parity and zero stale cache conflicts.
-    // Full synchronizations are processed via the high-accuracy api.getBatchSync() REST gateway called in loadMasterData().
-    console.log("Central REST fetch pipeline active. Client-side snapshot subscriptions bypassed for master data stability.");
-    
+  // Real-time dynamic Firestore onSnapshot listener subscription model for instantly reflecting database state
+  useEffect(() => {
+    if (!currentUser) return;
+    console.log("Registering active real-time Firestore listeners for instant responsive feedback...");
+
+    const unsubClients = onSnapshot(collection(firestoreDb, 'clients'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+      setClients(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_clients', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'clients');
+    });
+
+    const unsubProducts = onSnapshot(collection(firestoreDb, 'products'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+      setProducts(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_products', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'products');
+    });
+
+    const unsubInvoices = onSnapshot(collection(firestoreDb, 'invoices'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+      setInvoices(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_invoices', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'invoices');
+    });
+
+    const unsubQuotations = onSnapshot(collection(firestoreDb, 'quotations'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
+      setQuotations(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_quotations', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'quotations');
+    });
+
+    const unsubPayments = onSnapshot(collection(firestoreDb, 'payments'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
+      setPayments(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_payments', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'payments');
+    });
+
+    const unsubLedger = onSnapshot(collection(firestoreDb, 'ledger'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
+      setLedger(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_ledger', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'ledger');
+    });
+
+    const unsubCashbook = onSnapshot(collection(firestoreDb, 'cashbook'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
+      const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
+      setCashbook(prev => {
+        const nextStr = JSON.stringify(filtered);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_cashbook', nextStr);
+        return filtered;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'cashbook');
+    });
+
+    const unsubLogs = onSnapshot(collection(firestoreDb, 'activityLogs'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
+      setLogs(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_logs', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'activityLogs');
+    });
+
+    const unsubNotifications = onSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+      setNotifications(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_notifications', nextStr);
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'notifications');
+    });
+
+    const unsubUsers = onSnapshot(collection(firestoreDb, 'users'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({ userId: d.id, ...d.data() } as UserProfile));
+      setUsers(prev => {
+        const nextStr = JSON.stringify(list);
+        if (JSON.stringify(prev) === nextStr) return prev;
+        localStorage.setItem('db_users', nextStr);
+        
+        // Auto-sanitize session
+        const latestProfile = list.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
+        if (latestProfile) {
+          const hasChanges = latestProfile.name !== currentUser.name || 
+                             latestProfile.role !== currentUser.role || 
+                             latestProfile.status !== currentUser.status ||
+                             latestProfile.avatarUrl !== currentUser.avatarUrl ||
+                             latestProfile.mobile !== currentUser.mobile;
+          if (hasChanges) {
+            const updatedUser = { ...currentUser, ...latestProfile };
+            setCurrentUser(updatedUser);
+            localStorage.setItem('current_user', JSON.stringify(updatedUser));
+          }
+        }
+        return list;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'users');
+    });
+
+    const unsubSettings = onSnapshot(doc(firestoreDb, 'businessSettings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        const settingsData = docSnap.data() as BusinessSettings;
+        setBusinessSettings(prev => {
+          const nextStr = JSON.stringify(settingsData);
+          if (JSON.stringify(prev) === nextStr) return prev;
+          localStorage.setItem('db_settings', nextStr);
+          return settingsData;
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'businessSettings/global');
+    });
+
+    const unsubCategories = onSnapshot(doc(firestoreDb, 'businessSettings', 'categories'), (docSnap) => {
+      if (docSnap.exists()) {
+        const listData = (docSnap.data() as { list?: string[] }).list;
+        if (Array.isArray(listData)) {
+          setCategories(prev => {
+            const nextStr = JSON.stringify(listData);
+            if (JSON.stringify(prev) === nextStr) return prev;
+            localStorage.setItem('db_categories', nextStr);
+            return listData;
+          });
+        }
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'businessSettings/categories');
+    });
+
+    const unsubRoles = onSnapshot(doc(firestoreDb, 'businessSettings', 'roles'), (docSnap) => {
+      if (docSnap.exists()) {
+        const listData = (docSnap.data() as { list?: RolePermissions[] }).list;
+        if (Array.isArray(listData) && listData.length > 0) {
+          setAppRoles(prev => {
+            const nextStr = JSON.stringify(listData);
+            if (JSON.stringify(prev) === nextStr) return prev;
+            localStorage.setItem('db_roles', nextStr);
+            return listData;
+          });
+        }
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'businessSettings/roles');
+    });
+
     return () => {
-      // No-op cleanup
+      console.log("Deregistering active real-time Firestore listeners...");
+      unsubClients();
+      unsubProducts();
+      unsubInvoices();
+      unsubQuotations();
+      unsubPayments();
+      unsubLedger();
+      unsubCashbook();
+      unsubLogs();
+      unsubNotifications();
+      unsubUsers();
+      unsubSettings();
+      unsubCategories();
+      unsubRoles();
     };
   }, [currentUser]);
 
@@ -1175,7 +1411,7 @@ export default function App() {
                 type="submit"
                 className="w-full py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-705 bg-indigo-650 hover:bg-indigo-700 rounded-xl shadow-xs transition active:scale-[0.99] cursor-pointer text-center"
               >
-                Unlock Access Securely
+                Login
               </button>
             </form>
           )}

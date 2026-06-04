@@ -97,9 +97,20 @@
     background: white !important;
   }
 
+  #invoice-page-1 {
+    page-break-after: always !important;
+    break-after: page !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
   #challan-attachment-section {
     page-break-before: always !important;
     break-before: page !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
   }
 
   #invoice-footer-row {
