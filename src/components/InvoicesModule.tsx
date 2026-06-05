@@ -846,11 +846,11 @@ export default function InvoicesModule({
         // Divider Axis Line styled cleanly in a thin elegant trace
         pdf.setDrawColor(226, 232, 240); // elegant Slate-200 boundary line
         pdf.setLineWidth(0.35);
-        const dividerY = Math.max(52, contactY + 3);
+        const dividerY = Math.max(58, contactY + 4);
         pdf.line(20, dividerY, 190, dividerY);
         
         // Bill to Container Block (rounded-xl styled box)
-        const billToY = dividerY + 4;
+        const billToY = dividerY + 6;
         pdf.setFillColor(248, 250, 252); // bg-slate-50/50 fill representation
         pdf.setDrawColor(226, 232, 240); // Soft, clean slate outline
         pdf.setLineWidth(0.25);
@@ -911,8 +911,8 @@ export default function InvoicesModule({
           }
         }
         
-        // Dynamic Table Columns Configuration
-        const tableHeaderY = billToY + 42;
+        // Dynamic Table Columns Configuration - Spacious margin added here!
+        const tableHeaderY = billToY + 38 + 10;
         pdf.setFillColor(241, 245, 249); // bg-slate-100
         pdf.roundedRect(20, tableHeaderY, 170, 8, 1.5, 1.5, 'F');
         
@@ -924,47 +924,58 @@ export default function InvoicesModule({
         pdf.text("UNIT RATE (INR)", 160, tableHeaderY + 5.5, { align: 'right' });
         pdf.text("AMOUNT (GROSS)", 187, tableHeaderY + 5.5, { align: 'right' });
         
-        // Loop and render dynamic rows clearly
-        let currentY = tableHeaderY + 13;
+        // Loop and render dynamic rows beautifully with spacious padding
+        let currentY = tableHeaderY + 8; // Starts exactly after table header banner
+        const cellPaddingTop = 4.0;
+        const cellPaddingBottom = 4.0;
+        const lineH = 4.2;
         
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
             const nameText = item.name || item.productName || "Product/Service Detail";
             const wrappedLines = pdf.splitTextToSize(nameText, 95);
-            const rowHeight = Math.max(10, wrappedLines.length * 4.4 + 4);
             
-            if (currentY + rowHeight > 240) { // Safety transition threshold for multi-page invoices
+            // Total row height calculation including paddings
+            const rowHeight = cellPaddingTop + (wrappedLines.length * lineH) + cellPaddingBottom;
+            
+            if (currentY + rowHeight > 245) { // Safety transition threshold for multi-page invoices
               pdf.addPage();
-              currentY = 25;
+              currentY = 20;
             }
             
+            // Draw Item Name (multiline)
             pdf.setTextColor(15, 23, 42); // slate-900
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(8.5);
             wrappedLines.forEach((lineText: string, li: number) => {
-              pdf.text(lineText, 24, currentY + (li * 4.4));
+              const textY = currentY + cellPaddingTop + (li * lineH) + 3.0; // offset matches row baseline
+              pdf.text(lineText, 24, textY);
             });
             
+            // Draw numerical values, vertically centered relative to first text line
+            const firstLineBaselineY = currentY + cellPaddingTop + 3.0;
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(8);
             pdf.setTextColor(71, 85, 105); // slate-600
             
-            pdf.text(String(item.qty || item.quantity || 1), 128, currentY, { align: 'center' });
-            pdf.text(formatPDFCurrency(item.price || item.rate || 0), 160, currentY, { align: 'right' });
-            pdf.text(formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0)), 187, currentY, { align: 'right' });
+            const qtyVal = String(item.qty || item.quantity || 1);
+            const rateVal = formatPDFCurrency(item.price || item.rate || 0);
+            const grossVal = formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0));
             
-            // Subtle row delimiter
+            pdf.text(qtyVal, 128, firstLineBaselineY, { align: 'center' });
+            pdf.text(rateVal, 160, firstLineBaselineY, { align: 'right' });
+            pdf.text(grossVal, 187, firstLineBaselineY, { align: 'right' });
+            
+            // Subtle cell row delimiter drawn cleanly at bottom of this row spacing
             pdf.setDrawColor(241, 245, 249);
-            pdf.setLineWidth(0.2);
-            pdf.line(20, currentY + rowHeight - 2, 190, currentY + rowHeight - 2);
+            pdf.setLineWidth(0.25);
+            pdf.line(20, currentY + rowHeight, 190, currentY + rowHeight);
             
             currentY += rowHeight;
           });
         }
         
         // Footer layout containing totals block + verification block + signatures
-        const footerSpaceY = Math.max(175, currentY + 4);
-        
         const showTaxRow = businessSettings.gstOption !== 'zero_tax';
         const showDiscountRow = selectedInvoice && selectedInvoice.discount > 0;
         
@@ -1027,8 +1038,17 @@ export default function InvoicesModule({
           color: [225, 29, 72] // rose-600
         });
         
-        // Determine box height based on actual number of rows
-        const totalsBoxHeight = totalsRows.length * 5.2 + 5;
+        // Determine box height based on actual number of rows with wider layout
+        const totalsBoxHeight = totalsRows.length * 5.8 + 6;
+        
+        // Calculate stable footerSpaceY
+        let footerSpaceY = currentY + 12;
+        if (footerSpaceY > 230) {
+          pdf.addPage();
+          footerSpaceY = 20; // Fresh page layout flow
+        } else {
+          footerSpaceY = Math.max(178, footerSpaceY); // Minimum anchor Y to balance signatures
+        }
         
         // Render Totals Box
         pdf.setFillColor(248, 250, 252); // soft slate background (#f8fafc)
@@ -1038,13 +1058,13 @@ export default function InvoicesModule({
         pdf.roundedRect(115, footerSpaceY, 75, totalsBoxHeight, 1.5, 1.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
-        let totalsCurrentY = footerSpaceY + 5.5;
+        let totalsCurrentY = footerSpaceY + 5.8;
         totalsRows.forEach((row, rIdx) => {
           if (rIdx === dividerIndex) {
             // Draw standard horizontal line before total amount row
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.2);
-            pdf.line(115, totalsCurrentY - 2.2, 190, totalsCurrentY - 2.2);
+            pdf.line(115, totalsCurrentY - 2.5, 190, totalsCurrentY - 2.5);
           }
           
           pdf.setFont('helvetica', 'normal');
@@ -1057,7 +1077,7 @@ export default function InvoicesModule({
           pdf.setTextColor(row.color[0], row.color[1], row.color[2]);
           pdf.text(row.valText, 186, totalsCurrentY, { align: 'right' });
           
-          totalsCurrentY += 5.2;
+          totalsCurrentY += 5.8;
         });
         
         // QR Code & Legal Signature Block on bottom left
@@ -1090,11 +1110,11 @@ export default function InvoicesModule({
             // Center the 22x22 QR Code inside the 28-wide frame (leaving 3mm on left)
             pdf.addImage(qrCodeDataUrl, 'PNG', elementX + 3, footerSpaceY + 5, 22, 22);
             
-            // Draw the "Click to Verify ↗" text centered at bottom of frame
+            // Draw the "Click to Verify" text centered at bottom of frame (no weird unicode characters)
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(7);
             pdf.setTextColor(themeColor);
-            pdf.text("Click to Verify ↗", elementX + 14, footerSpaceY + 31, { align: 'center' });
+            pdf.text("Click to Verify", elementX + 14, footerSpaceY + 30.5, { align: 'center' });
             
             elementX += 34; // Shift right
           } catch (qrErr) {
@@ -1103,7 +1123,7 @@ export default function InvoicesModule({
         }
         
         // Notes container box
-        const notesY = footerSpaceY + totalsBoxHeight + 3;
+        const notesY = footerSpaceY + Math.max(totalsBoxHeight, 34) + 6;
         if (((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice?.notes)) {
           pdf.setFillColor(248, 250, 252);
           pdf.roundedRect(20, notesY, 170, 13, 1.5, 1.5, 'F');
