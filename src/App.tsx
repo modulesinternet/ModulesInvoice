@@ -838,8 +838,7 @@ export default function App() {
     });
 
     addLifecycleListener(() => {
-      console.log("App resumed foreground execution. Synchronizing active records...");
-      loadMasterData();
+      console.log("App resumed foreground execution. Active listeners are running.");
     }).then(handle => {
       lifecycleHandle = handle;
     });

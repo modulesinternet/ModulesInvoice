@@ -701,6 +701,57 @@ export default function InvoicesModule({
         }).format(val || 0);
       };
 
+      // Helper: Draw text with scalable, crisp vector Rupee symbol preceding the amount text
+      const drawTextWithRupee = (
+        pdfObj: any,
+        rawText: string,
+        rightX: number,
+        y: number,
+        color: [number, number, number],
+        fontSize: number = 8,
+        isBold: boolean = false
+      ) => {
+        // Strip out any Rs. / Rupee parts if they got in, keeping only clean numbers
+        const cleanNumber = String(rawText || '').replace(/^(Rs\.\s*|₹\s*)/gi, '').trim();
+        
+        pdfObj.setFont('helvetica', isBold ? 'bold' : 'normal');
+        pdfObj.setFontSize(fontSize);
+        pdfObj.setTextColor(color[0], color[1], color[2]);
+        pdfObj.text(cleanNumber, rightX, y, { align: 'right' });
+        
+        const textWidth = pdfObj.getTextWidth(cleanNumber);
+        
+        // Scale vertical dimension and sizing based on active fontSize
+        const scale = fontSize / 8;
+        const symbolWidth = 1.6 * scale; // exactly match design scale
+        const spaceBetween = 0.8 * scale;
+        const startX = rightX - textWidth - symbolWidth - spaceBetween;
+        
+        // Draw the vector Rupee sign next to the text
+        pdfObj.setDrawColor(color[0], color[1], color[2]);
+        pdfObj.setLineWidth(fontSize * 0.026); // proportionate thin stroke
+        
+        const topBarY = y - (2.1 * scale);
+        const midBarY = y - (1.35 * scale);
+        const bottomY = y - (0.45 * scale);
+        
+        // 1. Vertical main stem
+        pdfObj.line(startX + (0.35 * scale), y - (2.15 * scale), startX + (0.35 * scale), y - (0.8 * scale));
+        
+        // 2. Top bar
+        pdfObj.line(startX, topBarY, startX + (1.6 * scale), topBarY);
+        
+        // 3. Middle bar
+        pdfObj.line(startX, midBarY, startX + (1.3 * scale), midBarY);
+        
+        // 4. Rounded loop curves (R top-middle hook)
+        pdfObj.line(startX + (1.6 * scale), topBarY, startX + (1.6 * scale), y - (1.7 * scale));
+        pdfObj.line(startX + (1.6 * scale), y - (1.7 * scale), startX + (0.35 * scale), midBarY);
+        
+        // 5. Slanted leg
+        pdfObj.line(startX + (0.75 * scale), midBarY, startX + (1.5 * scale), bottomY);
+      };
+
       const bodyEl = document.getElementById('invoice-page-1') || document.getElementById('invoice-main-body');
       if (!bodyEl) throw new Error("Invoice main body block not found");
 
@@ -792,9 +843,9 @@ export default function InvoicesModule({
         pdf.text("TAX INVOICE", 190, 23, { align: 'right' });
         
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(16);
-        pdf.setTextColor(15, 23, 42); // slate-900 (Large bold in screenshot)
-        pdf.text(selectedInvoice?.invoiceNumber || '', 190, 29.5, { align: 'right' });
+        pdf.setFontSize(11);
+        pdf.setTextColor(15, 23, 42); // slate-900
+        pdf.text(selectedInvoice?.invoiceNumber || '', 190, 29.0, { align: 'right' });
         
         // Render Status badge beautifully (dynamic color) aligned to right margin (X = 190)
         const statusStr = selectedInvoice?.status || 'UNPAID';
@@ -963,8 +1014,8 @@ export default function InvoicesModule({
             const grossVal = formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0));
             
             pdf.text(qtyVal, 128, firstLineBaselineY, { align: 'center' });
-            pdf.text(rateVal, 160, firstLineBaselineY, { align: 'right' });
-            pdf.text(grossVal, 187, firstLineBaselineY, { align: 'right' });
+            drawTextWithRupee(pdf, rateVal, 160, firstLineBaselineY, [71, 85, 105], 8, false);
+            drawTextWithRupee(pdf, grossVal, 187, firstLineBaselineY, [15, 23, 42], 8, true);
             
             // Subtle cell row delimiter drawn cleanly at bottom of this row spacing
             pdf.setDrawColor(241, 245, 249);
@@ -986,6 +1037,8 @@ export default function InvoicesModule({
           label: "Net Ledger Value:",
           valText: formatPDFCurrency(selectedInvoice?.subtotal || 0),
           isBold: true,
+          labelColor: [100, 116, 139], // slate-500
+          isBoldLabel: false,
           color: [15, 23, 42] // slate-900
         });
         
@@ -995,6 +1048,8 @@ export default function InvoicesModule({
             label: "CGST/SGST/IGST Taxes:",
             valText: "+" + formatPDFCurrency(selectedInvoice?.taxAmount || 0),
             isBold: true,
+            labelColor: [100, 116, 139], // slate-500
+            isBoldLabel: false,
             color: [15, 23, 42] // slate-900
           });
         }
@@ -1005,12 +1060,13 @@ export default function InvoicesModule({
             label: "Discount applied:",
             valText: "-" + formatPDFCurrency(selectedInvoice?.discount || 0),
             isBold: true,
-            color: [220, 38, 38] // red-600
+            labelColor: [16, 185, 129], // emerald-600
+            isBoldLabel: false,
+            color: [16, 185, 129] // emerald-600
           });
         }
         
-        // Divider row index can be calculated
-        const dividerIndex = totalsRows.length; // draw divider line before rendering the next row
+        const dividerIndexVal = totalsRows.length; // divider line BEFORE total amount row
         
         // 4. Total Amount
         totalsRows.push({
@@ -1018,6 +1074,8 @@ export default function InvoicesModule({
           valText: formatPDFCurrency(selectedInvoice?.total || 0),
           isBold: true,
           fontSize: 8.5,
+          labelColor: [15, 23, 42], // slate-900
+          isBoldLabel: true,
           color: [15, 23, 42] // slate-900
         });
         
@@ -1026,8 +1084,12 @@ export default function InvoicesModule({
           label: "Amount Paid:",
           valText: formatPDFCurrency(selectedInvoice?.paidAmount || 0),
           isBold: true,
+          labelColor: [13, 148, 136], // teal-600
+          isBoldLabel: false,
           color: [16, 185, 129] // emerald-600
         });
+        
+        const secondDividerIndex = totalsRows.length; // divider line BEFORE Pending Outstanding row
         
         // 6. Pending Outstanding
         totalsRows.push({
@@ -1035,6 +1097,8 @@ export default function InvoicesModule({
           valText: formatPDFCurrency(selectedInvoice?.dueAmount || 0),
           isBold: true,
           fontSize: 8.5,
+          labelColor: [225, 29, 72], // rose-600
+          isBoldLabel: true,
           color: [225, 29, 72] // rose-600
         });
         
@@ -1060,22 +1124,28 @@ export default function InvoicesModule({
         // Draw each row inside the box
         let totalsCurrentY = footerSpaceY + 5.8;
         totalsRows.forEach((row, rIdx) => {
-          if (rIdx === dividerIndex) {
-            // Draw standard horizontal line before total amount row
+          if (rIdx === dividerIndexVal || rIdx === secondDividerIndex) {
+            // Draw standard horizontal line before row
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.2);
             pdf.line(115, totalsCurrentY - 2.5, 190, totalsCurrentY - 2.5);
           }
           
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(8);
-          pdf.setTextColor(100, 116, 139); // slate-500 for labels
+          pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
+          pdf.setFontSize(row.fontSize || 8);
+          pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
           pdf.text(row.label, 118, totalsCurrentY);
           
-          pdf.setFont('helvetica', row.isBold ? 'bold' : 'normal');
-          pdf.setFontSize(row.fontSize || 8);
-          pdf.setTextColor(row.color[0], row.color[1], row.color[2]);
-          pdf.text(row.valText, 186, totalsCurrentY, { align: 'right' });
+          // Draw value with vector Rupee sign preceding it
+          drawTextWithRupee(
+            pdf,
+            row.valText,
+            186,
+            totalsCurrentY,
+            row.color as [number, number, number],
+            row.fontSize || 8,
+            row.isBold
+          );
           
           totalsCurrentY += 5.8;
         });
@@ -1092,7 +1162,8 @@ export default function InvoicesModule({
             pdf.setTextColor(100, 116, 139); // slate-500
             pdf.text("AUTHORIZED SIGNOFF", elementX, footerSpaceY + 4);
             
-            pdf.addImage(sUrlSig, format, elementX, footerSpaceY + 6, 26, 18);
+            // Draw as 24x24 square, not squashed 26x18, so the signature stamp remains circular as screen!
+            pdf.addImage(sUrlSig, format, elementX, footerSpaceY + 6, 24, 24);
             elementX += 34; // Shift right
           } catch (sigErr) {
             console.warn("Could not draw authorized signature:", sigErr);
@@ -1635,7 +1706,7 @@ export default function InvoicesModule({
 
               <div className="text-right space-y-1.5">
                 <span className={`text-xl uppercase font-black tracking-widest block font-sans ${activeTheme?.accentText || 'text-[#5B21FF]'}`}>TAX INVOICE</span>
-                <h1 className="text-2xl font-mono font-bold text-slate-800 mt-1">{selectedInvoice.invoiceNumber}</h1>
+                <h1 className="text-sm font-mono font-bold text-slate-700 mt-0.5">{selectedInvoice.invoiceNumber}</h1>
                 <div className="flex items-center justify-end gap-1.5 mt-1 relative">
                   <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
                     {selectedInvoice.status.replace('_', ' ')}
