@@ -799,55 +799,8 @@ export default function InvoicesModule({
         pdfObj.line(startX + (0.75 * scale), midBarY, startX + (1.5 * scale), bottomY);
       };
 
-      const bodyEl = document.getElementById('invoice-page-1') || document.getElementById('invoice-main-body');
-      if (!bodyEl) throw new Error("Invoice main body block not found");
-
-      let canvas = null as any;
-      let imgData = '';
-      let useVectorFallback = false;
-
-      try {
-        canvas = await html2canvas(bodyEl, {
-          scale: 3, // High-performance 3x resolution for beautiful print quality
-          useCORS: true,
-          logging: false,
-          allowTaint: false,
-          backgroundColor: '#ffffff',
-          width: 794,
-          windowWidth: 794,
-          onclone: (clonedDoc) => {
-            replaceOklchInStyleTags(clonedDoc);
-            const clonedBody = clonedDoc.getElementById('invoice-page-1');
-            if (clonedBody) {
-              clonedBody.style.width = '794px';
-              clonedBody.style.height = '1123px';
-              clonedBody.style.minHeight = '1123px';
-              clonedBody.style.maxHeight = '1123px';
-              clonedBody.style.boxShadow = 'none';
-              clonedBody.style.border = 'none';
-              clonedBody.style.borderRadius = '0';
-              clonedBody.style.margin = '0';
-              clonedBody.style.padding = '38px';
-              clonedBody.style.boxSizing = 'border-box';
-              clonedBody.style.display = 'flex';
-              clonedBody.style.flexDirection = 'column';
-              clonedBody.style.justifyContent = 'space-between';
-              clonedBody.style.backgroundColor = '#ffffff';
-            }
-          }
-        });
-        if (canvas) {
-          imgData = canvas.toDataURL('image/png');
-        } else {
-          useVectorFallback = true;
-        }
-      } catch (err) {
-        console.warn("Capture of invoice main body with html2canvas failed, will use vector fallback:", err);
-        useVectorFallback = true;
-      }
-
-      if (useVectorFallback || !imgData) {
-        // VECTOR COMPILATION FALLBACK: Crisp, clean, luxury vector design matching the professional system themes
+      // ALWAYS USE PURE VECTOR LAYOUT FOR EXTRAORDINARY CRISPNESS AND EXACT ALIGNMENT MATCHING PREVIEW
+      // VECTOR COMPILATION: Crisp, clean, luxury vector design matching the professional system themes
         const themeColor = activeTheme?.themeColor || '#5B21FF';
         const isEmerald = invoiceTemplate === 'emerald';
         const isMinimal = invoiceTemplate === 'minimal';
@@ -1051,6 +1004,7 @@ export default function InvoicesModule({
         }
         
         // Dynamic Table Columns Configuration - Spacious margin added here!
+        const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
         const tableHeaderY = billToY + 38 + 10;
         pdf.setFillColor(241, 245, 249); // bg-slate-100
         pdf.roundedRect(10, tableHeaderY, 190, 8, 1.5, 1.5, 'F');
@@ -1058,10 +1012,19 @@ export default function InvoicesModule({
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(10); // increased from 8
         pdf.setTextColor(100, 116, 139); // slate-500
-        pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
-        pdf.text("QTY", 130, tableHeaderY + 5.5, { align: 'center' });
-        pdf.text("UNIT RATE (INR)", 165, tableHeaderY + 5.5, { align: 'right' });
-        pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
+        
+        if (hasTaxSplit) {
+          pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
+          pdf.text("QTY", 115, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("UNIT RATE (INR)", 144, tableHeaderY + 5.5, { align: 'right' });
+          pdf.text("TAX SPLIT", 168, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
+        } else {
+          pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
+          pdf.text("QTY", 130, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("UNIT RATE (INR)", 165, tableHeaderY + 5.5, { align: 'right' });
+          pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
+        }
         
         // Loop and render dynamic rows beautifully with spacious padding
         let currentY = tableHeaderY + 8; // Starts exactly after table header banner
@@ -1072,7 +1035,8 @@ export default function InvoicesModule({
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
             const nameText = item.name || item.productName || "Product/Service Detail";
-            const wrappedLines = pdf.splitTextToSize(nameText, 105);
+            const wrapWidth = hasTaxSplit ? 90 : 105;
+            const wrappedLines = pdf.splitTextToSize(nameText, wrapWidth);
             
             // Total row height calculation including paddings
             const rowHeight = cellPaddingTop + (wrappedLines.length * lineH) + cellPaddingBottom;
@@ -1101,9 +1065,29 @@ export default function InvoicesModule({
             const rateVal = formatPDFCurrency(item.price || item.rate || 0);
             const grossVal = formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0));
             
-            pdf.text(qtyVal, 130, firstLineBaselineY, { align: 'center' });
-            drawTextWithRupee(pdf, rateVal, 165, firstLineBaselineY, [71, 85, 105], 9.5, false);
-            drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.5, true);
+            if (hasTaxSplit) {
+              pdf.text(qtyVal, 115, firstLineBaselineY, { align: 'center' });
+              drawTextWithRupee(pdf, rateVal, 144, firstLineBaselineY, [71, 85, 105], 9.5, false);
+              
+              const gst = item.gstPercent ?? item.gstRate ?? 0;
+              let taxSplitStr = '';
+              if (selectedInvoice.taxType === 'CGST_SGST') {
+                taxSplitStr = `CGST ${(gst / 2)}% + SGST ${(gst / 2)}%`;
+              } else {
+                taxSplitStr = `IGST ${gst}%`;
+              }
+              
+              pdf.setFont('helvetica', 'normal');
+              pdf.setFontSize(8.5); // slightly smaller font for tax split details to fit perfectly
+              pdf.setTextColor(100, 116, 139); // slate-500
+              pdf.text(taxSplitStr, 168, firstLineBaselineY, { align: 'center' });
+              
+              drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.4, true);
+            } else {
+              pdf.text(qtyVal, 130, firstLineBaselineY, { align: 'center' });
+              drawTextWithRupee(pdf, rateVal, 165, firstLineBaselineY, [71, 85, 105], 9.5, false);
+              drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.5, true);
+            }
             
             // Subtle cell row delimiter drawn cleanly at bottom of this row spacing
             pdf.setDrawColor(241, 245, 249);
@@ -1342,11 +1326,6 @@ export default function InvoicesModule({
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8); // increased from 7.5
         pdf.text("THIS IS AN ELECTRONICALLY GENERATED DOCUMENT, MANUAL SIGNATURE NOT REQUIRED.", 105, 282, { align: 'center' });
-      } else {
-        const imgWidth = 210; // A4 standard width in mm
-        const pageHeight = 297; // A4 standard height in mm
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pageHeight);
-      }
 
       // Render Page 2 (Attached Delivery Challan) ONLY if it is an image and exists.
       // If it is a PDF file, we bypass adding a page in jsPDF, and merge it below using pdf-lib.
