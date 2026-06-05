@@ -78,6 +78,53 @@ async function toBase64(url: string): Promise<string> {
   }
 }
 
+async function toBase64Rounded(url: string, roundedRatio: number = 0.12): Promise<string> {
+  if (!url) return '';
+  try {
+    const rawBase64 = await toBase64(url);
+    if (!rawBase64) return '';
+    return await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth || img.width || 300;
+          const h = img.naturalHeight || img.height || 300;
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.beginPath();
+            const r = Math.min(w, h) * roundedRatio;
+            ctx.moveTo(r, 0);
+            ctx.lineTo(w - r, 0);
+            ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r);
+            ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h);
+            ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/png'));
+          } else {
+            resolve(rawBase64);
+          }
+        } catch (e) {
+          resolve(rawBase64);
+        }
+      };
+      img.onerror = () => resolve(rawBase64);
+      img.src = rawBase64;
+    });
+  } catch (err) {
+    console.warn("toBase64Rounded failed, falling back to clean original", err);
+    return toBase64(url);
+  }
+}
+
 async function mergePdfAttachments(invoicePdfArrayBuffer: ArrayBuffer, challanUrl: string): Promise<Uint8Array> {
   try {
     const { PDFDocument } = await import('pdf-lib');
@@ -263,7 +310,7 @@ export default function InvoicesModule({
     async function convertImages() {
       if (businessSettings?.logoUrl) {
         try {
-          const b64 = await toBase64(businessSettings.logoUrl);
+          const b64 = await toBase64Rounded(businessSettings.logoUrl);
           setBase64Logo(b64);
         } catch (e) {
           console.warn("Failed logo convert", e);
@@ -655,42 +702,9 @@ export default function InvoicesModule({
       const bodyEl = document.getElementById('invoice-page-1') || document.getElementById('invoice-main-body');
       if (!bodyEl) throw new Error("Invoice main body block not found");
 
-      let useVectorFallback = false;
-      let canvas;
-
-      try {
-        // Render Page 1 (Invoice body) via html2canvas
-        canvas = await html2canvas(bodyEl, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          allowTaint: false,
-          onclone: (clonedDoc) => {
-            replaceOklchInStyleTags(clonedDoc);
-            const clonedPage1 = clonedDoc.getElementById('invoice-page-1');
-            if (clonedPage1) {
-              clonedPage1.style.boxShadow = 'none';
-              clonedPage1.style.border = 'none';
-              clonedPage1.style.borderRadius = '0';
-              clonedPage1.style.margin = '0';
-              clonedPage1.style.padding = '20mm'; // Maintain exact standard 20mm printable margins
-            }
-          }
-        });
-      } catch (canvasErr) {
-        console.warn("Canvas capture failed (likely CORS or browser constraints). Generating pristine vector PDF fallback.", canvasErr);
-        useVectorFallback = true;
-      }
-
-      let imgData = '';
-      if (!useVectorFallback && canvas) {
-        try {
-          imgData = canvas.toDataURL('image/png');
-        } catch (taintErr) {
-          console.warn("Unable to export canvas as image due to CORS constraints (tainted canvas). Direct clear vector fallback initiated.", taintErr);
-          useVectorFallback = true;
-        }
-      }
+      const useVectorFallback = true;
+      const canvas = null as any;
+      const imgData = '';
 
       if (useVectorFallback || !imgData) {
         // VECTOR COMPILATION FALLBACK: Crisp, clean, luxury vector design matching the professional system themes
