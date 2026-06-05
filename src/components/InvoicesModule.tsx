@@ -1209,32 +1209,33 @@ export default function InvoicesModule({
         }
         
         // Render Totals Box
+        const boxSize = totalsBoxHeight;
         pdf.setFillColor(248, 250, 252); // soft slate background (#f8fafc)
-        pdf.roundedRect(120, footerSpaceY, 80, totalsBoxHeight, 1.5, 1.5, 'F');
+        pdf.roundedRect(125, footerSpaceY + 6, 75, boxSize, 2.5, 2.5, 'F');
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 divider and borders
         pdf.setLineWidth(0.25);
-        pdf.roundedRect(120, footerSpaceY, 80, totalsBoxHeight, 1.5, 1.5, 'D'); // Rounded outline box
+        pdf.roundedRect(125, footerSpaceY + 6, 75, boxSize, 2.5, 2.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
-        let totalsCurrentY = footerSpaceY + 5.8;
+        let totalsCurrentY = footerSpaceY + 6 + 5.5;
         totalsRows.forEach((row, rIdx) => {
           if (rIdx === dividerIndexVal || rIdx === secondDividerIndex) {
             // Draw standard horizontal line before row
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.2);
-            pdf.line(120, totalsCurrentY - 2.5, 200, totalsCurrentY - 2.5);
+            pdf.line(125, totalsCurrentY - 2.8, 200, totalsCurrentY - 2.8);
           }
           
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
           pdf.setFontSize(row.fontSize || 9.5);
           pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
-          pdf.text(row.label, 123, totalsCurrentY);
+          pdf.text(row.label, 128, totalsCurrentY);
           
           // Draw value with vector Rupee sign preceding it
           drawTextWithRupee(
             pdf,
             row.valText,
-            196,
+            197,
             totalsCurrentY,
             row.color as [number, number, number],
             row.fontSize || 9.5,
@@ -1244,51 +1245,73 @@ export default function InvoicesModule({
           totalsCurrentY += 5.8;
         });
         
-        // QR Code & Legal Signature Block on bottom left
-        let elementX = 10;
+        // Left Column Blocks layout (dynamic alignment based on visibility!)
+        let currentLeftX = 10;
         
         const sUrlSig = base64Signature || businessSettings?.signatureUrl;
-        if (sUrlSig && (businessSettings?.showInvoiceSignature ?? true) !== false) {
+        const hasSignature = sUrlSig && (businessSettings?.showInvoiceSignature ?? true) !== false;
+        
+        if (hasSignature) {
           try {
             const format = sUrlSig.includes('png') || sUrlSig.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(9); // increased from 8
-            pdf.setTextColor(100, 116, 139); // slate-500
-            pdf.text("AUTHORIZED SIGNOFF", elementX, footerSpaceY + 4);
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(148, 163, 184); // slate-400
+            pdf.text("AUTHORIZED SIGNOFF", currentLeftX, footerSpaceY + 4);
             
-            // Draw as 24x24 square, not squashed 26x18, so the signature stamp remains circular as screen!
-            pdf.addImage(sUrlSig, format, elementX, footerSpaceY + 6, 24, 24);
-            elementX += 34; // Shift right
+            // Draw box around signature
+            pdf.setFillColor(255, 255, 255);
+            pdf.setDrawColor(226, 232, 240);
+            pdf.setLineWidth(0.25);
+            pdf.roundedRect(currentLeftX, footerSpaceY + 6, boxSize, boxSize, 2.5, 2.5, 'FD');
+            
+            // Draw centered circular/squared signature stamp image
+            const sigSize = Math.max(16, Math.min(26, boxSize * 0.72));
+            const imgX = currentLeftX + (boxSize - sigSize) / 2;
+            const imgY = (footerSpaceY + 6) + (boxSize - sigSize) / 2;
+            pdf.addImage(sUrlSig, format, imgX, imgY, sigSize, sigSize);
+            
+            currentLeftX += boxSize + 6;
           } catch (sigErr) {
             console.warn("Could not draw authorized signature:", sigErr);
           }
         }
         
-        if (selectedInvoice && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) {
+        const hasQrCode = selectedInvoice && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl;
+        
+        if (hasQrCode) {
           try {
-            // Draw a beautiful rounded frame for the QR code just like on screen!
-            pdf.setFillColor(248, 250, 252); // bg-slate-50/50 (#f8fafc)
-            pdf.setDrawColor(226, 232, 240); // border-slate-200 (#e2e8f0)
-            pdf.setLineWidth(0.25);
-            pdf.roundedRect(elementX, footerSpaceY + 2, 28, 32, 2.5, 2.5, 'FD');
-            
-            // Center the 22x22 QR Code inside the 28-wide frame (leaving 3mm on left)
-            pdf.addImage(qrCodeDataUrl, 'PNG', elementX + 3, footerSpaceY + 5, 22, 22);
-            
-            // Draw the "Click to Verify" text centered at bottom of frame (no weird unicode characters)
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8); // increased from 7
-            pdf.setTextColor(themeColor);
-            pdf.text("Click to Verify", elementX + 14, footerSpaceY + 30.5, { align: 'center' });
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(148, 163, 184); // slate-400
+            pdf.text("VERIFICATION", currentLeftX, footerSpaceY + 4);
             
-            elementX += 34; // Shift right
+            // Draw box with a subtle light background
+            pdf.setFillColor(248, 250, 252); // bg-slate-50/50 (#f8fafc)
+            pdf.setDrawColor(226, 232, 240);
+            pdf.setLineWidth(0.25);
+            pdf.roundedRect(currentLeftX, footerSpaceY + 6, boxSize, boxSize, 2.5, 2.5, 'FD');
+            
+            // Draw centered QR code inside verification frame
+            const qrSize = Math.max(14, Math.min(22, boxSize * 0.55));
+            const imgQrX = currentLeftX + (boxSize - qrSize) / 2;
+            const imgQrY = (footerSpaceY + 6) + (boxSize - qrSize) / 2 - 2;
+            pdf.addImage(qrCodeDataUrl, 'PNG', imgQrX, imgQrY, qrSize, qrSize);
+            
+            // Drawcentered Click to Verify at the bottom
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(themeColor);
+            pdf.text("Click to Verify", currentLeftX + boxSize / 2, (footerSpaceY + 6) + boxSize - 3.5, { align: 'center' });
+            
+            currentLeftX += boxSize + 6;
           } catch (qrErr) {
             console.warn("Could not draw UPI QR code:", qrErr);
           }
         }
         
         // Draw standard full-width horizontal divider line above Notes & Terms section
-        const midDividerY = footerSpaceY + Math.max(totalsBoxHeight, 34) + 5;
+        const midDividerY = footerSpaceY + 6 + boxSize + 5;
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 boundary line
         pdf.setLineWidth(0.25);
         pdf.line(10, midDividerY, 200, midDividerY);
