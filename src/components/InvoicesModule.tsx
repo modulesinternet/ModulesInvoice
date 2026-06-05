@@ -505,6 +505,33 @@ export default function InvoicesModule({
     }).format(val);
   };
 
+  const renderFormattedCurrency = (val: number, isBoldSign: boolean = false, displaySign: 'none' | 'minus' | 'plus' = 'none') => {
+    const absoluteVal = Math.abs(val);
+    const formattedNum = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(absoluteVal);
+    return (
+      <span className="inline-flex items-center font-mono">
+        {displaySign === 'minus' && <span className="mr-[2px] font-bold text-current font-sans">-</span>}
+        {displaySign === 'plus' && <span className="mr-[2px] font-bold text-current font-sans">+</span>}
+        <svg 
+          className="w-[10px] h-[12px] mr-[3px] text-current flex-shrink-0" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth={isBoldSign ? "2.8" : "2.2"} 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+          style={{ transform: 'translateY(0.5px)' }}
+        >
+          <path d="M6 3h12" />
+          <path d="M6 8h12" />
+          <path d="M6 3a7 7 0 0 1 0 14h4" />
+          <path d="M10 17l8 5" />
+        </svg>
+        <span>{formattedNum}</span>
+      </span>
+    );
+  };
+
   const selectedClientDetails = clients.find(c => c.id === clientId);
 
   // Home State mapping. We are based in Maharashtra (starts with "27")
@@ -786,19 +813,21 @@ export default function InvoicesModule({
           logging: false,
           allowTaint: false,
           backgroundColor: '#ffffff',
+          width: 794,
+          windowWidth: 794,
           onclone: (clonedDoc) => {
             replaceOklchInStyleTags(clonedDoc);
-            const clonedBody = clonedDoc.getElementById('invoice-page-1') || clonedDoc.getElementById('invoice-main-body');
+            const clonedBody = clonedDoc.getElementById('invoice-page-1');
             if (clonedBody) {
-              clonedBody.style.width = '210mm';
-              clonedBody.style.height = '297mm';
-              clonedBody.style.minHeight = '297mm';
-              clonedBody.style.maxHeight = '297mm';
+              clonedBody.style.width = '794px';
+              clonedBody.style.height = '1123px';
+              clonedBody.style.minHeight = '1123px';
+              clonedBody.style.maxHeight = '1123px';
               clonedBody.style.boxShadow = 'none';
               clonedBody.style.border = 'none';
               clonedBody.style.borderRadius = '0';
               clonedBody.style.margin = '0';
-              clonedBody.style.padding = '10mm';
+              clonedBody.style.padding = '38px';
               clonedBody.style.boxSizing = 'border-box';
               clonedBody.style.display = 'flex';
               clonedBody.style.flexDirection = 'column';
@@ -1318,15 +1347,19 @@ export default function InvoicesModule({
                   useCORS: true,
                   logging: false,
                   allowTaint: false,
+                  width: 794,
+                  windowWidth: 794,
                   onclone: (clonedDoc) => {
                     replaceOklchInStyleTags(clonedDoc);
                     const clonedChallan = clonedDoc.getElementById('challan-attachment-section');
                     if (clonedChallan) {
+                      clonedChallan.style.setProperty('width', '794px', 'important');
+                      clonedChallan.style.setProperty('height', '1123px', 'important');
                       clonedChallan.style.boxShadow = 'none';
                       clonedChallan.style.border = 'none';
                       clonedChallan.style.borderRadius = '0';
                       clonedChallan.style.margin = '0';
-                      clonedChallan.style.padding = '20mm';
+                      clonedChallan.style.padding = '38px', 'important';
                     }
                   }
                 });
@@ -1823,19 +1856,19 @@ export default function InvoicesModule({
 
             {/* Dynamic Line items table */}
             <div className="overflow-x-auto">
-              <table className={`w-full text-left border-collapse border border-slate-200/80 rounded-xl overflow-hidden`}>
+              <table style={{ tableLayout: 'fixed', width: '100%' }} className="w-full text-left border-collapse border border-slate-200/80 rounded-xl overflow-hidden">
                 <thead>
                   {(() => {
                     const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
                     return (
                       <tr className={`${activeTheme?.tableHeadBg || 'bg-slate-100'} text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80`}>
-                        <th className={`py-3 px-4 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>Standard Deliverables Line Item</th>
-                        <th className={`py-3 px-3 text-center ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>Qty</th>
-                        <th className={`py-3 px-3 text-right ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>Unit Rate (INR)</th>
+                        <th style={{ width: hasTaxSplit ? '42%' : '52%' }} className="py-3 px-4">Standard Deliverables Line Item</th>
+                        <th style={{ width: hasTaxSplit ? '8%' : '10%' }} className="py-3 px-3 text-center">Qty</th>
+                        <th style={{ width: hasTaxSplit ? '15%' : '18%' }} className="py-3 px-3 text-right">Unit Rate (INR)</th>
                         {hasTaxSplit && (
-                          <th className="py-3 px-3 text-center w-[15%]">Tax Split</th>
+                          <th style={{ width: '15%' }} className="py-3 px-3 text-center">Tax Split</th>
                         )}
-                        <th className={`py-3 px-4 text-right ${hasTaxSplit ? 'w-[20%]' : 'w-[17%]'}`}>Amount (Gross)</th>
+                        <th style={{ width: hasTaxSplit ? '20%' : '20%' }} className="py-3 px-4 text-right">Amount (Gross)</th>
                       </tr>
                     );
                   })()}
@@ -1845,16 +1878,18 @@ export default function InvoicesModule({
                     const hasTaxSplit = businessSettings?.gstOption !== 'zero_tax' && (businessSettings?.showInvoiceTaxSplit ?? true) !== false;
                     return (
                       <tr key={index} className="hover:bg-slate-50/50">
-                        <td className={`py-4 px-4 font-semibold text-slate-800 ${hasTaxSplit ? 'w-[40%]' : 'w-[50%]'}`}>
+                        <td style={{ width: hasTaxSplit ? '42%' : '52%', overflowWrap: 'break-word', wordBreak: 'break-word' }} className="py-4 px-4 font-semibold text-slate-800">
                           <div>{item.name}</div>
                           {((businessSettings?.showInvoiceHsn ?? true) !== false && item.hsnSac) && (
                             <div className="text-[10px] text-slate-400 font-mono mt-0.5">HSN: {item.hsnSac}</div>
                           )}
                         </td>
-                        <td className={`py-4 px-3 text-center font-mono font-bold text-slate-600 ${hasTaxSplit ? 'w-[10%]' : 'w-[15%]'}`}>{item.qty}</td>
-                        <td className={`py-4 px-3 text-right font-mono text-slate-600 ${hasTaxSplit ? 'w-[15%]' : 'w-[18%]'}`}>{formatCurrency(item.price)}</td>
+                        <td style={{ width: hasTaxSplit ? '8%' : '10%' }} className="py-4 px-3 text-center font-mono font-bold text-slate-600">{item.qty}</td>
+                        <td style={{ width: hasTaxSplit ? '15%' : '18%' }} className="py-4 px-3 text-right font-mono text-slate-600">
+                          {renderFormattedCurrency(item.price)}
+                        </td>
                         {hasTaxSplit && (
-                          <td className="py-4 px-3 text-center w-[15%]">
+                          <td style={{ width: '15%' }} className="py-4 px-3 text-center">
                             {selectedInvoice.taxType === 'CGST_SGST' ? (
                               <span className="text-[10px] text-slate-500">
                                 CGST {(item.gstPercent/2)}% + SGST {(item.gstPercent/2)}%
@@ -1866,7 +1901,9 @@ export default function InvoicesModule({
                             )}
                           </td>
                         )}
-                        <td className={`py-4 px-4 text-right font-semibold font-mono text-slate-900 ${hasTaxSplit ? 'w-[20%]' : 'w-[17%]'}`}>{formatCurrency(item.totalAmount)}</td>
+                        <td style={{ width: hasTaxSplit ? '20%' : '20%' }} className="py-4 px-4 text-right font-semibold font-mono text-slate-900">
+                          {renderFormattedCurrency(item.totalAmount, true)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1875,120 +1912,121 @@ export default function InvoicesModule({
             </div>
 
             {/* Totals math section, signatures, plus QR code */}
-            <div className="flex flex-row justify-between items-start gap-8 border-t border-slate-200 pt-6 w-full" id="invoice-footer-row">
+            <div className="flex flex-row justify-between items-center border-t border-slate-200 pt-6 w-full gap-8" id="invoice-footer-row" style={{ minHeight: '130px' }}>
               {/* Left QR Code and Notes */}
-              <div className="flex flex-wrap gap-6 items-center">
-                {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                  <div 
-                    onClick={() => {
-                      const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                      window.open(qrText, '_blank');
-                    }}
-                    className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center hover:bg-slate-100 cursor-pointer transition select-none group`}
-                    title="Click to view/verify public invoice page in new tab"
-                  >
-                    <img 
-                      src={qrCodeDataUrl} 
-                      className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
-                      alt="Payment QR Code" 
-                      id="upi-instant-qr"
-                      crossOrigin="anonymous"
-                    />
-                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
-                      Click to Verify ↗
-                    </span>
-                  </div>
-                )}
+              <div className="flex flex-row items-center gap-6">
                 {((businessSettings?.showInvoiceSignature ?? true) !== false && (base64Signature || businessSettings?.signatureUrl)) && (
-                  <div className="flex flex-row items-center gap-6">
-                    <div>
-                      <span className="text-[10.5px] font-extrabold text-slate-400 uppercase font-sans tracking-widest block">Authorized Signoff</span>
-                      <div className="py-2">
-                         <img 
-                          src={base64Signature || businessSettings.signatureUrl} 
-                          style={{ height: businessSettings.moharSize ? `${businessSettings.moharSize * 1.8}px` : '95px' }} 
-                          className="w-auto max-w-[240px]" 
-                          alt="Stamp signature" 
-                          crossOrigin="anonymous"
-                        />
-                      </div>
+                  <div className="flex flex-col items-start">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase font-sans tracking-wider block mb-1">Authorized Signoff</span>
+                    <div 
+                      className="flex items-center justify-center border border-slate-200 rounded-xl bg-slate-50/10 p-2"
+                      style={{ width: '110px', height: '110px' }}
+                    >
+                      <img 
+                        src={base64Signature || businessSettings.signatureUrl} 
+                        className="object-contain"
+                        style={{ maxHeight: '95px', maxWidth: '95px' }}
+                        alt="Stamp signature" 
+                        crossOrigin="anonymous"
+                      />
                     </div>
-                    {(businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                      <div 
-                        onClick={() => {
-                          const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                          window.open(qrText, '_blank');
-                        }}
-                        className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center ml-2 hover:bg-slate-100 cursor-pointer transition select-none group`}
-                        title="Click to view/verify public invoice page in new tab"
-                      >
-                        <img 
-                          src={qrCodeDataUrl} 
-                          className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
-                          alt="Payment QR Code" 
-                          id="upi-instant-qr-beside-mohar"
-                          crossOrigin="anonymous"
-                        />
-                        <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
-                          Click to Verify ↗
-                        </span>
-                      </div>
-                    )}
                   </div>
                 )}
-                {/* Fallback to show QR Code beside mohar place even if signature is disabled or blank */}
-                {((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl) && (businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
-                  <div 
-                    onClick={() => {
-                      const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
-                      window.open(qrText, '_blank');
-                    }}
-                    className={`p-2 border ${activeTheme?.borderTheme || 'border-slate-200'} rounded-xl bg-slate-50/50 flex flex-col items-center hover:bg-slate-100 cursor-pointer transition select-none group`}
-                    title="Click to view/verify public invoice page in new tab"
-                  >
-                    <img 
-                      src={qrCodeDataUrl} 
-                      className="w-24 h-24 object-contain rounded-lg animate-fade-in group-hover:scale-105 transition" 
-                      alt="Payment QR Code" 
-                      id="upi-instant-qr-beside-mohar-fallback"
-                      crossOrigin="anonymous"
-                    />
-                    <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
-                      Click to Verify ↗
-                    </span>
+                
+                {/* QR code beside signature or standalone */}
+                {(((businessSettings?.showInvoiceSignature ?? true) === false || !businessSettings?.signatureUrl || businessSettings?.qrBesideMohar) && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
+                  <div className="flex flex-col items-start">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase font-sans tracking-wider block mb-1">Verification</span>
+                    <div 
+                      onClick={() => {
+                        const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                        window.open(qrText, '_blank');
+                      }}
+                      className="p-2 border border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center hover:bg-slate-100 cursor-pointer transition select-none group"
+                      style={{ width: '110px', height: '110px' }}
+                      title="Click to view/verify public invoice page in new tab"
+                    >
+                      <img 
+                        src={qrCodeDataUrl} 
+                        className="w-16 h-16 object-contain rounded-lg group-hover:scale-105 transition" 
+                        alt="Payment QR Code" 
+                        crossOrigin="anonymous"
+                      />
+                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
+                        Click to Verify ↗
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Standalone QR code if not beside mohar and signature is active */}
+                {(!businessSettings?.qrBesideMohar && (businessSettings?.showInvoiceSignature ?? true) !== false && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl) && (
+                  <div className="flex flex-col items-start">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase font-sans tracking-wider block mb-1">Verification</span>
+                    <div 
+                      onClick={() => {
+                        const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                        window.open(qrText, '_blank');
+                      }}
+                      className="p-2 border border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center hover:bg-slate-100 cursor-pointer transition select-none group"
+                      style={{ width: '110px', height: '110px' }}
+                      title="Click to view/verify public invoice page in new tab"
+                    >
+                      <img 
+                        src={qrCodeDataUrl} 
+                        className="w-16 h-16 object-contain rounded-lg group-hover:scale-105 transition" 
+                        alt="Payment QR Code" 
+                        crossOrigin="anonymous"
+                      />
+                      <span className={`text-[9px] ${activeTheme?.accentText || 'text-[#5B21FF]'} font-bold tracking-wide text-center mt-1 block group-hover:underline`}>
+                        Click to Verify ↗
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Right mathematical sums */}
-              <div className={`w-80 bg-slate-50/50 border border-slate-200 p-4 rounded-xl space-y-3 text-xs text-slate-600 font-sans`} id="invoice-totals-card">
-                <div className="flex justify-between">
+              <div className="w-[300px] bg-slate-50/50 border border-slate-200 p-4 rounded-xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-500 font-medium">Net Ledger Value:</span>
-                  <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedInvoice.subtotal)}</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {renderFormattedCurrency(selectedInvoice.subtotal, true)}
+                  </span>
                 </div>
                 {businessSettings.gstOption !== 'zero_tax' && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500 font-medium">CGST/SGST/IGST Taxes:</span>
-                    <span className="font-mono font-bold text-slate-800">+{formatCurrency(selectedInvoice.taxAmount)}</span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {renderFormattedCurrency(selectedInvoice.taxAmount, true, 'plus')}
+                    </span>
                   </div>
                 )}
                 {selectedInvoice.discount > 0 && (
-                  <div className="flex justify-between text-emerald-600 font-medium">
+                  <div className="flex justify-between items-center text-emerald-600 font-medium">
                     <span>Discount applied:</span>
-                    <span className="font-mono font-bold">-{formatCurrency(selectedInvoice.discount)}</span>
+                    <span className="font-mono font-bold">
+                      {renderFormattedCurrency(selectedInvoice.discount, true, 'minus')}
+                    </span>
                   </div>
                 )}
-                <div className={`flex justify-between text-slate-900 border-t border-slate-200/80 pt-2.5 font-bold`}>
+                <div className="flex justify-between items-center text-slate-900 border-t border-slate-200 pt-2.5 font-bold">
                   <span>Total Amount:</span>
-                  <span className="font-mono font-extrabold">{formatCurrency(selectedInvoice.total)}</span>
+                  <span className="font-mono font-black text-slate-950">
+                    {renderFormattedCurrency(selectedInvoice.total, true)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-emerald-700 pt-1 font-semibold">
+                <div className="flex justify-between items-center text-emerald-700 pt-1 font-semibold font-sans">
                   <span>Amount Paid:</span>
-                  <span className="font-mono font-bold text-emerald-600">{formatCurrency(selectedInvoice.paidAmount)}</span>
+                  <span className="font-mono font-bold text-emerald-600">
+                    {renderFormattedCurrency(selectedInvoice.paidAmount, true)}
+                  </span>
                 </div>
-                <div className={`flex justify-between text-rose-700 border-t border-slate-200/80 pt-2.5 font-bold`}>
+                <div className="flex justify-between items-center text-rose-700 border-t border-slate-200 pt-2.5 font-bold">
                   <span>Pending Outstanding:</span>
-                  <span className="font-mono font-extrabold text-rose-600">{formatCurrency(selectedInvoice.dueAmount)}</span>
+                  <span className="font-mono font-black text-rose-600">
+                    {renderFormattedCurrency(selectedInvoice.dueAmount, true)}
+                  </span>
                 </div>
               </div>
             </div>
