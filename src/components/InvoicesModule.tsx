@@ -775,9 +775,47 @@ export default function InvoicesModule({
       const bodyEl = document.getElementById('invoice-page-1') || document.getElementById('invoice-main-body');
       if (!bodyEl) throw new Error("Invoice main body block not found");
 
-      const useVectorFallback = true;
-      const canvas = null as any;
-      const imgData = '';
+      let canvas = null as any;
+      let imgData = '';
+      let useVectorFallback = false;
+
+      try {
+        canvas = await html2canvas(bodyEl, {
+          scale: 3, // High-performance 3x resolution for beautiful print quality
+          useCORS: true,
+          logging: false,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          onclone: (clonedDoc) => {
+            replaceOklchInStyleTags(clonedDoc);
+            const clonedBody = clonedDoc.getElementById('invoice-page-1') || clonedDoc.getElementById('invoice-main-body');
+            if (clonedBody) {
+              clonedBody.style.width = '210mm';
+              clonedBody.style.height = '297mm';
+              clonedBody.style.minHeight = '297mm';
+              clonedBody.style.maxHeight = '297mm';
+              clonedBody.style.boxShadow = 'none';
+              clonedBody.style.border = 'none';
+              clonedBody.style.borderRadius = '0';
+              clonedBody.style.margin = '0';
+              clonedBody.style.padding = '10mm';
+              clonedBody.style.boxSizing = 'border-box';
+              clonedBody.style.display = 'flex';
+              clonedBody.style.flexDirection = 'column';
+              clonedBody.style.justifyContent = 'space-between';
+              clonedBody.style.backgroundColor = '#ffffff';
+            }
+          }
+        });
+        if (canvas) {
+          imgData = canvas.toDataURL('image/png');
+        } else {
+          useVectorFallback = true;
+        }
+      } catch (err) {
+        console.warn("Capture of invoice main body with html2canvas failed, will use vector fallback:", err);
+        useVectorFallback = true;
+      }
 
       if (useVectorFallback || !imgData) {
         // VECTOR COMPILATION FALLBACK: Crisp, clean, luxury vector design matching the professional system themes
@@ -1255,20 +1293,7 @@ export default function InvoicesModule({
       } else {
         const imgWidth = 210; // A4 standard width in mm
         const pageHeight = 297; // A4 standard height in mm
-        let renderedWidth = imgWidth;
-        let renderedHeight = (canvas.height * imgWidth) / canvas.width;
-
-        // If the rendered height exceeds the A4 page height, scale down so it fits on a single page
-        if (renderedHeight > pageHeight - 12) { // 6mm margins top and bottom
-          const scale = (pageHeight - 12) / renderedHeight;
-          renderedWidth = renderedWidth * scale;
-          renderedHeight = pageHeight - 12;
-        }
-        
-        const xOffset = (imgWidth - renderedWidth) / 2;
-        const yOffset = 6;
-        
-        pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pageHeight);
       }
 
       // Render Page 2 (Attached Delivery Challan) ONLY if it is an image and exists.
