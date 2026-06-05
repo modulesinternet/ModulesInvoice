@@ -1015,14 +1015,14 @@ export default function InvoicesModule({
         
         if (hasTaxSplit) {
           pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
-          pdf.text("QTY", 115, tableHeaderY + 5.5, { align: 'center' });
-          pdf.text("UNIT RATE (INR)", 144, tableHeaderY + 5.5, { align: 'right' });
-          pdf.text("TAX SPLIT", 168, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("QTY", 94, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("UNIT RATE (INR)", 128, tableHeaderY + 5.5, { align: 'right' });
+          pdf.text("TAX SPLIT", 154, tableHeaderY + 5.5, { align: 'center' });
           pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
         } else {
           pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
-          pdf.text("QTY", 130, tableHeaderY + 5.5, { align: 'center' });
-          pdf.text("UNIT RATE (INR)", 165, tableHeaderY + 5.5, { align: 'right' });
+          pdf.text("QTY", 112, tableHeaderY + 5.5, { align: 'center' });
+          pdf.text("UNIT RATE (INR)", 152, tableHeaderY + 5.5, { align: 'right' });
           pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
         }
         
@@ -1035,7 +1035,7 @@ export default function InvoicesModule({
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
             const nameText = item.name || item.productName || "Product/Service Detail";
-            const wrapWidth = hasTaxSplit ? 90 : 105;
+            const wrapWidth = hasTaxSplit ? 70 : 88;
             const wrappedLines = pdf.splitTextToSize(nameText, wrapWidth);
             
             // Total row height calculation including paddings
@@ -1066,8 +1066,8 @@ export default function InvoicesModule({
             const grossVal = formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0));
             
             if (hasTaxSplit) {
-              pdf.text(qtyVal, 115, firstLineBaselineY, { align: 'center' });
-              drawTextWithRupee(pdf, rateVal, 144, firstLineBaselineY, [71, 85, 105], 9.5, false);
+              pdf.text(qtyVal, 94, firstLineBaselineY, { align: 'center' });
+              drawTextWithRupee(pdf, rateVal, 128, firstLineBaselineY, [71, 85, 105], 9.5, false);
               
               const gst = item.gstPercent ?? item.gstRate ?? 0;
               let taxSplitStr = '';
@@ -1080,12 +1080,12 @@ export default function InvoicesModule({
               pdf.setFont('helvetica', 'normal');
               pdf.setFontSize(8.5); // slightly smaller font for tax split details to fit perfectly
               pdf.setTextColor(100, 116, 139); // slate-500
-              pdf.text(taxSplitStr, 168, firstLineBaselineY, { align: 'center' });
+              pdf.text(taxSplitStr, 154, firstLineBaselineY, { align: 'center' });
               
               drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.4, true);
             } else {
-              pdf.text(qtyVal, 130, firstLineBaselineY, { align: 'center' });
-              drawTextWithRupee(pdf, rateVal, 165, firstLineBaselineY, [71, 85, 105], 9.5, false);
+              pdf.text(qtyVal, 112, firstLineBaselineY, { align: 'center' });
+              drawTextWithRupee(pdf, rateVal, 152, firstLineBaselineY, [71, 85, 105], 9.5, false);
               drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.5, true);
             }
             
@@ -1179,13 +1179,15 @@ export default function InvoicesModule({
         });
         
         // Determine box height based on actual number of rows with wider layout
-        const totalsBoxHeight = totalsRows.length * 5.8 + 6;
+        const rowSpacing = 6.0;
+        const totalsBoxHeight = totalsRows.length * rowSpacing + 4.5;
+        const leftBlocksSize = 31; // Fixed 31mm square containers matching screen (110px) beautifully
         
         // Calculate stable footerSpaceY closer to the table
         let footerSpaceY = currentY + 10;
         
         // Expected total block space needed bottom of page (totalsBox + notes block + bottom signature disclaimer)
-        const requiredFooterSpace = Math.max(totalsBoxHeight, 34) + 5 + 5 + 13 + 12;
+        const requiredFooterSpace = Math.max(totalsBoxHeight, leftBlocksSize) + 5 + 5 + 13 + 12;
         
         if (footerSpaceY + requiredFooterSpace > 280) {
           pdf.addPage();
@@ -1193,21 +1195,20 @@ export default function InvoicesModule({
         }
         
         // Render Totals Box
-        const boxSize = totalsBoxHeight;
         pdf.setFillColor(248, 250, 252); // soft slate background (#f8fafc)
-        pdf.roundedRect(125, footerSpaceY + 6, 75, boxSize, 2.5, 2.5, 'F');
+        pdf.roundedRect(125, footerSpaceY + 6, 75, totalsBoxHeight, 2.5, 2.5, 'F');
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 divider and borders
         pdf.setLineWidth(0.25);
-        pdf.roundedRect(125, footerSpaceY + 6, 75, boxSize, 2.5, 2.5, 'D'); // Rounded outline box
+        pdf.roundedRect(125, footerSpaceY + 6, 75, totalsBoxHeight, 2.5, 2.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
-        let totalsCurrentY = footerSpaceY + 6 + 5.5;
+        let totalsCurrentY = footerSpaceY + 6 + 5.0;
         totalsRows.forEach((row, rIdx) => {
           if (rIdx === dividerIndexVal || rIdx === secondDividerIndex) {
             // Draw standard horizontal line before row
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.2);
-            pdf.line(125, totalsCurrentY - 2.8, 200, totalsCurrentY - 2.8);
+            pdf.line(125, totalsCurrentY - 3.0, 200, totalsCurrentY - 3.0);
           }
           
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
@@ -1226,7 +1227,7 @@ export default function InvoicesModule({
             row.isBold
           );
           
-          totalsCurrentY += 5.8;
+          totalsCurrentY += rowSpacing;
         });
         
         // Left Column Blocks layout (dynamic alignment based on visibility!)
@@ -1247,15 +1248,15 @@ export default function InvoicesModule({
             pdf.setFillColor(255, 255, 255);
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.25);
-            pdf.roundedRect(currentLeftX, footerSpaceY + 6, boxSize, boxSize, 2.5, 2.5, 'FD');
+            pdf.roundedRect(currentLeftX, footerSpaceY + 6, leftBlocksSize, leftBlocksSize, 2.5, 2.5, 'FD');
             
             // Draw centered circular/squared signature stamp image
-            const sigSize = Math.max(16, Math.min(26, boxSize * 0.72));
-            const imgX = currentLeftX + (boxSize - sigSize) / 2;
-            const imgY = (footerSpaceY + 6) + (boxSize - sigSize) / 2;
+            const sigSize = Math.max(16, Math.min(26, leftBlocksSize * 0.72));
+            const imgX = currentLeftX + (leftBlocksSize - sigSize) / 2;
+            const imgY = (footerSpaceY + 6) + (leftBlocksSize - sigSize) / 2;
             pdf.addImage(sUrlSig, format, imgX, imgY, sigSize, sigSize);
             
-            currentLeftX += boxSize + 6;
+            currentLeftX += leftBlocksSize + 6;
           } catch (sigErr) {
             console.warn("Could not draw authorized signature:", sigErr);
           }
@@ -1274,28 +1275,28 @@ export default function InvoicesModule({
             pdf.setFillColor(248, 250, 252); // bg-slate-50/50 (#f8fafc)
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.25);
-            pdf.roundedRect(currentLeftX, footerSpaceY + 6, boxSize, boxSize, 2.5, 2.5, 'FD');
+            pdf.roundedRect(currentLeftX, footerSpaceY + 6, leftBlocksSize, leftBlocksSize, 2.5, 2.5, 'FD');
             
             // Draw centered QR code inside verification frame
-            const qrSize = Math.max(14, Math.min(22, boxSize * 0.55));
-            const imgQrX = currentLeftX + (boxSize - qrSize) / 2;
-            const imgQrY = (footerSpaceY + 6) + (boxSize - qrSize) / 2 - 2;
+            const qrSize = Math.max(14, Math.min(22, leftBlocksSize * 0.55));
+            const imgQrX = currentLeftX + (leftBlocksSize - qrSize) / 2;
+            const imgQrY = (footerSpaceY + 6) + (leftBlocksSize - qrSize) / 2 - 2;
             pdf.addImage(qrCodeDataUrl, 'PNG', imgQrX, imgQrY, qrSize, qrSize);
             
-            // Drawcentered Click to Verify at the bottom
+            // Draw centered Click to Verify at the bottom
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(7.5);
             pdf.setTextColor(themeColor);
-            pdf.text("Click to Verify", currentLeftX + boxSize / 2, (footerSpaceY + 6) + boxSize - 3.5, { align: 'center' });
+            pdf.text("Click to Verify", currentLeftX + leftBlocksSize / 2, (footerSpaceY + 6) + leftBlocksSize - 3.5, { align: 'center' });
             
-            currentLeftX += boxSize + 6;
+            currentLeftX += leftBlocksSize + 6;
           } catch (qrErr) {
             console.warn("Could not draw UPI QR code:", qrErr);
           }
         }
         
         // Draw standard full-width horizontal divider line above Notes & Terms section
-        const midDividerY = footerSpaceY + 6 + boxSize + 5;
+        const midDividerY = footerSpaceY + 6 + Math.max(totalsBoxHeight, leftBlocksSize) + 5;
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 boundary line
         pdf.setLineWidth(0.25);
         pdf.line(10, midDividerY, 200, midDividerY);
