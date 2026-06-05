@@ -711,8 +711,20 @@ export default function InvoicesModule({
         fontSize: number = 8,
         isBold: boolean = false
       ) => {
+        let textStr = String(rawText || '').trim();
+        textStr = textStr.replace(/[\r\n]+/g, ' ').trim();
+        
+        let leadingSign = '';
+        if (textStr.startsWith('-')) {
+          leadingSign = '-';
+          textStr = textStr.substring(1).trim();
+        } else if (textStr.startsWith('+')) {
+          leadingSign = '+';
+          textStr = textStr.substring(1).trim();
+        }
+        
         // Strip out any Rs. / Rupee parts if they got in, keeping only clean numbers
-        const cleanNumber = String(rawText || '').replace(/^(Rs\.\s*|₹\s*)/gi, '').trim();
+        const cleanNumber = textStr.replace(/^(Rs\.\s*|₹\s*)/gi, '').trim();
         
         pdfObj.setFont('helvetica', isBold ? 'bold' : 'normal');
         pdfObj.setFontSize(fontSize);
@@ -726,6 +738,14 @@ export default function InvoicesModule({
         const symbolWidth = 1.6 * scale; // exactly match design scale
         const spaceBetween = 0.8 * scale;
         const startX = rightX - textWidth - symbolWidth - spaceBetween;
+        
+        // Draw leading sign (- or +) to the left of the Rupee vector
+        if (leadingSign) {
+          pdfObj.setFont('helvetica', isBold ? 'bold' : 'normal');
+          pdfObj.setFontSize(fontSize);
+          pdfObj.setTextColor(color[0], color[1], color[2]);
+          pdfObj.text(leadingSign, startX - (0.4 * scale), y, { align: 'right' });
+        }
         
         // Draw the vector Rupee sign next to the text
         pdfObj.setDrawColor(color[0], color[1], color[2]);
@@ -1110,13 +1130,15 @@ export default function InvoicesModule({
         // Determine box height based on actual number of rows with wider layout
         const totalsBoxHeight = totalsRows.length * 5.8 + 6;
         
-        // Calculate stable footerSpaceY
-        let footerSpaceY = currentY + 12;
-        if (footerSpaceY > 230) {
+        // Calculate stable footerSpaceY closer to the table
+        let footerSpaceY = currentY + 10;
+        
+        // Expected total block space needed bottom of page (totalsBox + notes block + bottom signature disclaimer)
+        const requiredFooterSpace = Math.max(totalsBoxHeight, 34) + 5 + 5 + 13 + 12;
+        
+        if (footerSpaceY + requiredFooterSpace > 280) {
           pdf.addPage();
           footerSpaceY = 20; // Fresh page layout flow
-        } else {
-          footerSpaceY = Math.max(178, footerSpaceY); // Minimum anchor Y to balance signatures
         }
         
         // Render Totals Box
@@ -1198,8 +1220,14 @@ export default function InvoicesModule({
           }
         }
         
+        // Draw standard full-width horizontal divider line above Notes & Terms section
+        const midDividerY = footerSpaceY + Math.max(totalsBoxHeight, 34) + 5;
+        pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 boundary line
+        pdf.setLineWidth(0.25);
+        pdf.line(10, midDividerY, 200, midDividerY);
+        
         // Notes container box
-        const notesY = footerSpaceY + Math.max(totalsBoxHeight, 34) + 6;
+        const notesY = midDividerY + 4;
         if (((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice?.notes)) {
           pdf.setFillColor(248, 250, 252);
           pdf.roundedRect(10, notesY, 190, 13, 1.5, 1.5, 'F');
@@ -1657,7 +1685,8 @@ export default function InvoicesModule({
               id="invoice-page-1"
               className={STANDARD_DOC_CLASS}
             >
-              <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
+              <div className="flex-1 flex flex-col justify-start w-full">
+                <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
             <div className={`flex flex-col sm:flex-row justify-between items-start gap-6 border-b ${activeTheme?.borderLineColorClass || 'border-[#5B21FF]/20'} pb-8`}>
               <div className="space-y-4">
@@ -1938,6 +1967,7 @@ export default function InvoicesModule({
                 </div>
               </div>
             </div>
+          </div>
 
             {/* Wide Bottom Notes section & Electronically Generated warning */}
             <div className={`mt-8 pt-6 border-t border-slate-200/60 space-y-4`}>
