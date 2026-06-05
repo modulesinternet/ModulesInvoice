@@ -268,6 +268,8 @@ interface InvoicesModuleProps {
 
 type InvoiceLayoutTemplate = 'navy' | 'minimal' | 'emerald';
 
+const STANDARD_DOC_CLASS = "bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full relative overflow-hidden font-sans text-slate-800 animate-fade-in";
+
 export default function InvoicesModule({
   invoices,
   clients,
@@ -1175,7 +1177,7 @@ export default function InvoicesModule({
                       clonedChallan.style.border = 'none';
                       clonedChallan.style.borderRadius = '0';
                       clonedChallan.style.margin = '0';
-                      clonedChallan.style.padding = '0';
+                      clonedChallan.style.padding = '20mm';
                     }
                   }
                 });
@@ -1558,7 +1560,7 @@ export default function InvoicesModule({
             <div 
               id="invoice-page-1"
               style={{ minHeight: '297mm' }}
-              className={`bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+              className={STANDARD_DOC_CLASS}
             >
               <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
             {/* Header section based on branding template chosen */}
@@ -1882,7 +1884,7 @@ export default function InvoicesModule({
                   <div 
                     id="challan-attachment-section"
                     style={{ minHeight: '297mm' }}
-                    className={`bg-white rounded-lg border border-slate-200 shadow-2xl p-0 w-full md:w-[210mm] mx-auto flex flex-col justify-center items-center animate-fade-in print:min-h-0 print:m-0 print:p-0 print:border-none print:shadow-none print:w-full`}
+                    className={STANDARD_DOC_CLASS}
                   >
                     {isPdf ? (
                       <div className="w-full h-full flex flex-col justify-between">
