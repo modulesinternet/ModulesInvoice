@@ -268,7 +268,7 @@ interface InvoicesModuleProps {
 
 type InvoiceLayoutTemplate = 'navy' | 'minimal' | 'emerald';
 
-const STANDARD_DOC_CLASS = "bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[20mm] w-full md:w-[210mm] mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full relative overflow-hidden font-sans text-slate-800 animate-fade-in";
+const STANDARD_DOC_CLASS = "bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[10mm] w-full md:w-[210mm] min-h-[297mm] print:!min-h-0 mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full relative overflow-hidden font-sans text-slate-800 animate-fade-in";
 
 export default function InvoicesModule({
   invoices,
@@ -766,17 +766,17 @@ export default function InvoicesModule({
         const isMinimal = invoiceTemplate === 'minimal';
         const themeBg = isEmerald ? '#f0fdfa' : (isMinimal ? '#f8fafc' : '#f5f3ff');
         
-        let textStartX = 20;
-        let addressWidth = 105;
+        let textStartX = 10;
+        let addressWidth = 120;
         
         // Render Premium Brand Logo if found
         const lUrl = base64Logo || businessSettings?.logoUrl;
         if (lUrl && (businessSettings?.showInvoiceLogo ?? true) !== false) {
           try {
             const format = lUrl.includes('png') || lUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-            pdf.addImage(lUrl, format, 20, 16, 18, 18);
-            textStartX = 41; // Offset text base next to logo
-            addressWidth = 83; // Narrow wrap width next to logo
+            pdf.addImage(lUrl, format, 10, 16, 18, 18);
+            textStartX = 31; // Offset text base next to logo
+            addressWidth = 95; // Narrow wrap width next to logo
           } catch (logoErr) {
             console.warn("Could not draw logo in PDF fallback:", logoErr);
           }
@@ -786,7 +786,7 @@ export default function InvoicesModule({
         const compName = businessSettings?.companyName || "Internet Modules";
         pdf.setTextColor(15, 23, 42); // slate-900
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(14.5);
+        pdf.setFontSize(16.5); // Increased from 14.5 for readability
         if (compName.includes("Modules")) {
           const index = compName.indexOf("Modules");
           const part1 = compName.substring(0, index);
@@ -800,24 +800,24 @@ export default function InvoicesModule({
         
         if (businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false) {
           pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(8);
+          pdf.setFontSize(9.5); // increased from 8
           pdf.setTextColor(themeColor);
-          pdf.text(`GSTIN: ${businessSettings.gstIn}`, textStartX, 28);
+          pdf.text(`GSTIN: ${businessSettings.gstIn}`, textStartX, 28.5);
         }
         
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8.5);
+        pdf.setFontSize(9.5); // increased from 8.5
         pdf.setTextColor(100, 116, 139); // slate-500
         
-        // Address starts on a fresh line at left-margin (X = 20) under the logo (Y = 16 + 18 = 34)
+        // Address starts on a fresh line at left-margin (X = 10) under the logo (Y = 16 + 18 = 34)
         let headerEndY = 38.5;
         if (businessSettings?.address && (businessSettings?.showInvoiceAddress ?? true) !== false) {
-          headerEndY = drawSafeMultilineText(businessSettings.address, 20, 38.5, 105, 4.2);
+          headerEndY = drawSafeMultilineText(businessSettings.address, 10, 38.5, 115, 4.2);
         } else {
           headerEndY = 38.5;
         }
         
-        // Draw Business Contact info underneath address starting at X = 20
+        // Draw Business Contact info underneath address starting at X = 10
         let contactY = headerEndY;
         let contactText = '';
         if ((businessSettings?.showInvoiceEmail ?? true) !== false && businessSettings?.email) {
@@ -830,24 +830,24 @@ export default function InvoicesModule({
         
         if (contactText) {
           pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(8);
+          pdf.setFontSize(9); // increased from 8
           pdf.setTextColor(100, 116, 139); // slate-500
-          pdf.text(contactText, 20, contactY);
+          pdf.text(contactText, 10, contactY);
           contactY += 4.5;
         }
         
-        // Right-aligned Modern Meta Header "TAX INVOICE" aligned with right margin at X = 190
+        // Right-aligned Modern Meta Header "TAX INVOICE" aligned with right margin at X = 200
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(13);
+        pdf.setFontSize(15); // increased from 13
         pdf.setTextColor(themeColor); // Styled with active theme accent color!
-        pdf.text("TAX INVOICE", 190, 23, { align: 'right' });
+        pdf.text("TAX INVOICE", 200, 23, { align: 'right' });
         
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
+        pdf.setFontSize(12.5); // increased from 11 (smaller than logo/TAX INVOICE header)
         pdf.setTextColor(15, 23, 42); // slate-900
-        pdf.text(selectedInvoice?.invoiceNumber || '', 190, 29.0, { align: 'right' });
+        pdf.text(selectedInvoice?.invoiceNumber || '', 200, 29.0, { align: 'right' });
         
-        // Render Status badge beautifully (dynamic color) aligned to right margin (X = 190)
+        // Render Status badge beautifully (dynamic color) aligned to right margin (X = 200)
         const statusStr = selectedInvoice?.status || 'UNPAID';
         const isPaid = statusStr === 'PAID';
         const isPartial = statusStr === 'PARTIAL_PAID' || statusStr === 'PARTIAL';
@@ -871,7 +871,7 @@ export default function InvoicesModule({
         pdf.setDrawColor(drawR, drawG, drawB);
         pdf.setLineWidth(0.2);
         const badgeWidth = pdf.getTextWidth(statusText) + 6;
-        const badgeX = 190 - badgeWidth;
+        const badgeX = 200 - badgeWidth;
         pdf.roundedRect(badgeX, 32.5, badgeWidth, 4.3, 1, 1, 'FD');
         pdf.setTextColor(textR, textG, textB);
         pdf.setFont('helvetica', 'bold');
@@ -880,84 +880,85 @@ export default function InvoicesModule({
         
         // Date of Issue & Due Date aligned beautifully on right column
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
+        pdf.setFontSize(9); // increased from 8
         pdf.setTextColor(100, 116, 139); // slate-500
-        pdf.text("Invoiced Date:", 145, 42.5);
+        pdf.text("Invoiced Date:", 150, 42.5);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(71, 85, 105); // slate-600
-        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.date) : '', 190, 42.5, { align: 'right' });
+        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.date) : '', 200, 42.5, { align: 'right' });
         
         pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9); // increased from 8
         pdf.setTextColor(100, 116, 139);
-        pdf.text("Due By:", 145, 46.5);
+        pdf.text("Due By:", 150, 46.5);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(225, 29, 72); // rose-600
-        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : '', 190, 46.5, { align: 'right' });
+        pdf.text(selectedInvoice ? formatDisplayDate(selectedInvoice.dueDate) : '', 200, 46.5, { align: 'right' });
         
         // Divider Axis Line styled cleanly in a thin elegant trace
         pdf.setDrawColor(226, 232, 240); // elegant Slate-200 boundary line
         pdf.setLineWidth(0.35);
         const dividerY = Math.max(58, contactY + 4);
-        pdf.line(20, dividerY, 190, dividerY);
+        pdf.line(10, dividerY, 200, dividerY);
         
         // Bill to Container Block (rounded-xl styled box)
         const billToY = dividerY + 6;
         pdf.setFillColor(248, 250, 252); // bg-slate-50/50 fill representation
         pdf.setDrawColor(226, 232, 240); // Soft, clean slate outline
         pdf.setLineWidth(0.25);
-        pdf.roundedRect(20, billToY, 170, 38, 2.5, 2.5, 'FD'); // Rounded corners matching theme
+        pdf.roundedRect(10, billToY, 190, 38, 2.5, 2.5, 'FD'); // Rounded corners matching theme
         
         // LEFT COLUMN: Client Bill-To Particulars
         pdf.setTextColor(148, 163, 184); // slate-400
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.5);
-        pdf.text("CLIENT BILL-TO PARTICULARS", 25, billToY + 6.5);
+        pdf.setFontSize(9); // increased from 7.5
+        pdf.text("CLIENT BILL-TO PARTICULARS", 15, billToY + 6.5);
         
         pdf.setTextColor(15, 23, 42); // slate-900
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 25, billToY + 12.5);
+        pdf.setFontSize(11.5); // increased from 10
+        pdf.text(selectedInvoice?.clientName || "Corporate Client Partner", 15, billToY + 12.5);
         
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
+        pdf.setFontSize(9.5); // increased from 8
         pdf.setTextColor(71, 85, 105); // slate-600
         
         const clientObj = clients.find(c => c.id === selectedInvoice?.clientId || c.name === selectedInvoice?.clientName);
         if (clientObj) {
           const billingAddress = clientObj.billingAddress || '';
           let addY = billToY + 17.5;
-          const addrLines = pdf.splitTextToSize(billingAddress, 80);
+          const addrLines = pdf.splitTextToSize(billingAddress, 90);
           addrLines.slice(0, 3).forEach((line: string) => {
-            pdf.text(line, 25, addY);
+            pdf.text(line, 15, addY);
             addY += 4.5;
           });
-          pdf.text(`Email: ${clientObj.email || 'N/A'}`, 25, billToY + 30);
-          pdf.text(`Tel: ${clientObj.phone || 'N/A'}`, 25, billToY + 34);
+          pdf.text(`Email: ${clientObj.email || 'N/A'}`, 15, billToY + 30);
+          pdf.text(`Tel: ${clientObj.phone || 'N/A'}`, 15, billToY + 34);
         } else {
-          pdf.text("Client Ledger Record Information Not Found.", 25, billToY + 17.5);
+          pdf.text("Client Ledger Record Information Not Found.", 15, billToY + 17.5);
         }
         
         // RIGHT COLUMN: Banking Payout Details
         if ((businessSettings?.showInvoiceBankDetails ?? true) !== false) {
           pdf.setTextColor(148, 163, 184); // slate-400
           pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(7.5);
-          pdf.text("BANKING PAYOUT DETAILS", 115, billToY + 6.5);
+          pdf.setFontSize(9); // increased from 7.5
+          pdf.text("BANKING PAYOUT DETAILS", 110, billToY + 6.5);
           
           pdf.setTextColor(15, 23, 42); // slate-900
           pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(9);
-          pdf.text(businessSettings?.bankName || 'N/A', 115, billToY + 12.5);
+          pdf.setFontSize(10.5); // increased from 9
+          pdf.text(businessSettings?.bankName || 'N/A', 110, billToY + 12.5);
           
           pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(8);
+          pdf.setFontSize(9.5); // increased from 8
           pdf.setTextColor(71, 85, 105); // slate-600
-          pdf.text(`A/C: ${businessSettings?.accountNum || 'N/A'}`, 115, billToY + 17.5);
-          pdf.text(`IFSC: ${businessSettings?.ifscCode || 'N/A'}`, 115, billToY + 22.0);
+          pdf.text(`A/C: ${businessSettings?.accountNum || 'N/A'}`, 110, billToY + 17.5);
+          pdf.text(`IFSC: ${businessSettings?.ifscCode || 'N/A'}`, 110, billToY + 22.0);
           
           let upiY = billToY + 26.5;
           if (businessSettings?.upiId && (businessSettings?.showInvoiceUpiId ?? true) !== false) {
-            pdf.text(`UPI ID: ${businessSettings.upiId}`, 115, upiY);
+            pdf.text(`UPI ID: ${businessSettings.upiId}`, 110, upiY);
             upiY += 4.5;
           }
         }
@@ -965,15 +966,15 @@ export default function InvoicesModule({
         // Dynamic Table Columns Configuration - Spacious margin added here!
         const tableHeaderY = billToY + 38 + 10;
         pdf.setFillColor(241, 245, 249); // bg-slate-100
-        pdf.roundedRect(20, tableHeaderY, 170, 8, 1.5, 1.5, 'F');
+        pdf.roundedRect(10, tableHeaderY, 190, 8, 1.5, 1.5, 'F');
         
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(8);
+        pdf.setFontSize(10); // increased from 8
         pdf.setTextColor(100, 116, 139); // slate-500
-        pdf.text("STANDARD DELIVERABLES LINE ITEM", 24, tableHeaderY + 5.5);
-        pdf.text("QTY", 128, tableHeaderY + 5.5, { align: 'center' });
-        pdf.text("UNIT RATE (INR)", 160, tableHeaderY + 5.5, { align: 'right' });
-        pdf.text("AMOUNT (GROSS)", 187, tableHeaderY + 5.5, { align: 'right' });
+        pdf.text("STANDARD DELIVERABLES LINE ITEM", 14, tableHeaderY + 5.5);
+        pdf.text("QTY", 130, tableHeaderY + 5.5, { align: 'center' });
+        pdf.text("UNIT RATE (INR)", 165, tableHeaderY + 5.5, { align: 'right' });
+        pdf.text("AMOUNT (GROSS)", 196, tableHeaderY + 5.5, { align: 'right' });
         
         // Loop and render dynamic rows beautifully with spacious padding
         let currentY = tableHeaderY + 8; // Starts exactly after table header banner
@@ -984,7 +985,7 @@ export default function InvoicesModule({
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
             const nameText = item.name || item.productName || "Product/Service Detail";
-            const wrappedLines = pdf.splitTextToSize(nameText, 95);
+            const wrappedLines = pdf.splitTextToSize(nameText, 105);
             
             // Total row height calculation including paddings
             const rowHeight = cellPaddingTop + (wrappedLines.length * lineH) + cellPaddingBottom;
@@ -997,30 +998,30 @@ export default function InvoicesModule({
             // Draw Item Name (multiline)
             pdf.setTextColor(15, 23, 42); // slate-900
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8.5);
+            pdf.setFontSize(10); // increased from 8.5
             wrappedLines.forEach((lineText: string, li: number) => {
               const textY = currentY + cellPaddingTop + (li * lineH) + 3.0; // offset matches row baseline
-              pdf.text(lineText, 24, textY);
+              pdf.text(lineText, 14, textY);
             });
             
             // Draw numerical values, vertically centered relative to first text line
             const firstLineBaselineY = currentY + cellPaddingTop + 3.0;
             pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
+            pdf.setFontSize(9.5); // increased from 8
             pdf.setTextColor(71, 85, 105); // slate-600
             
             const qtyVal = String(item.qty || item.quantity || 1);
             const rateVal = formatPDFCurrency(item.price || item.rate || 0);
             const grossVal = formatPDFCurrency((item.qty || item.quantity || 1) * (item.price || item.rate || 0));
             
-            pdf.text(qtyVal, 128, firstLineBaselineY, { align: 'center' });
-            drawTextWithRupee(pdf, rateVal, 160, firstLineBaselineY, [71, 85, 105], 8, false);
-            drawTextWithRupee(pdf, grossVal, 187, firstLineBaselineY, [15, 23, 42], 8, true);
+            pdf.text(qtyVal, 130, firstLineBaselineY, { align: 'center' });
+            drawTextWithRupee(pdf, rateVal, 165, firstLineBaselineY, [71, 85, 105], 9.5, false);
+            drawTextWithRupee(pdf, grossVal, 196, firstLineBaselineY, [15, 23, 42], 9.5, true);
             
             // Subtle cell row delimiter drawn cleanly at bottom of this row spacing
             pdf.setDrawColor(241, 245, 249);
             pdf.setLineWidth(0.25);
-            pdf.line(20, currentY + rowHeight, 190, currentY + rowHeight);
+            pdf.line(10, currentY + rowHeight, 200, currentY + rowHeight);
             
             currentY += rowHeight;
           });
@@ -1037,6 +1038,7 @@ export default function InvoicesModule({
           label: "Net Ledger Value:",
           valText: formatPDFCurrency(selectedInvoice?.subtotal || 0),
           isBold: true,
+          fontSize: 9.5, // increased from 8
           labelColor: [100, 116, 139], // slate-500
           isBoldLabel: false,
           color: [15, 23, 42] // slate-900
@@ -1048,6 +1050,7 @@ export default function InvoicesModule({
             label: "CGST/SGST/IGST Taxes:",
             valText: "+" + formatPDFCurrency(selectedInvoice?.taxAmount || 0),
             isBold: true,
+            fontSize: 9.5, // increased from 8
             labelColor: [100, 116, 139], // slate-500
             isBoldLabel: false,
             color: [15, 23, 42] // slate-900
@@ -1060,6 +1063,7 @@ export default function InvoicesModule({
             label: "Discount applied:",
             valText: "-" + formatPDFCurrency(selectedInvoice?.discount || 0),
             isBold: true,
+            fontSize: 10, // increased from 8
             labelColor: [16, 185, 129], // emerald-600
             isBoldLabel: false,
             color: [16, 185, 129] // emerald-600
@@ -1073,7 +1077,7 @@ export default function InvoicesModule({
           label: "Total Amount:",
           valText: formatPDFCurrency(selectedInvoice?.total || 0),
           isBold: true,
-          fontSize: 8.5,
+          fontSize: 11, // increased from 8.5
           labelColor: [15, 23, 42], // slate-900
           isBoldLabel: true,
           color: [15, 23, 42] // slate-900
@@ -1084,6 +1088,7 @@ export default function InvoicesModule({
           label: "Amount Paid:",
           valText: formatPDFCurrency(selectedInvoice?.paidAmount || 0),
           isBold: true,
+          fontSize: 10, // increased from 8
           labelColor: [13, 148, 136], // teal-600
           isBoldLabel: false,
           color: [16, 185, 129] // emerald-600
@@ -1096,7 +1101,7 @@ export default function InvoicesModule({
           label: "Pending Outstanding:",
           valText: formatPDFCurrency(selectedInvoice?.dueAmount || 0),
           isBold: true,
-          fontSize: 8.5,
+          fontSize: 11.5, // increased from 8.5
           labelColor: [225, 29, 72], // rose-600
           isBoldLabel: true,
           color: [225, 29, 72] // rose-600
@@ -1116,10 +1121,10 @@ export default function InvoicesModule({
         
         // Render Totals Box
         pdf.setFillColor(248, 250, 252); // soft slate background (#f8fafc)
-        pdf.roundedRect(115, footerSpaceY, 75, totalsBoxHeight, 1.5, 1.5, 'F');
+        pdf.roundedRect(120, footerSpaceY, 80, totalsBoxHeight, 1.5, 1.5, 'F');
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 divider and borders
         pdf.setLineWidth(0.25);
-        pdf.roundedRect(115, footerSpaceY, 75, totalsBoxHeight, 1.5, 1.5, 'D'); // Rounded outline box
+        pdf.roundedRect(120, footerSpaceY, 80, totalsBoxHeight, 1.5, 1.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
         let totalsCurrentY = footerSpaceY + 5.8;
@@ -1128,22 +1133,22 @@ export default function InvoicesModule({
             // Draw standard horizontal line before row
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.2);
-            pdf.line(115, totalsCurrentY - 2.5, 190, totalsCurrentY - 2.5);
+            pdf.line(120, totalsCurrentY - 2.5, 200, totalsCurrentY - 2.5);
           }
           
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
-          pdf.setFontSize(row.fontSize || 8);
+          pdf.setFontSize(row.fontSize || 9.5);
           pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
-          pdf.text(row.label, 118, totalsCurrentY);
+          pdf.text(row.label, 123, totalsCurrentY);
           
           // Draw value with vector Rupee sign preceding it
           drawTextWithRupee(
             pdf,
             row.valText,
-            186,
+            196,
             totalsCurrentY,
             row.color as [number, number, number],
-            row.fontSize || 8,
+            row.fontSize || 9.5,
             row.isBold
           );
           
@@ -1151,14 +1156,14 @@ export default function InvoicesModule({
         });
         
         // QR Code & Legal Signature Block on bottom left
-        let elementX = 20;
+        let elementX = 10;
         
         const sUrlSig = base64Signature || businessSettings?.signatureUrl;
         if (sUrlSig && (businessSettings?.showInvoiceSignature ?? true) !== false) {
           try {
             const format = sUrlSig.includes('png') || sUrlSig.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8);
+            pdf.setFontSize(9); // increased from 8
             pdf.setTextColor(100, 116, 139); // slate-500
             pdf.text("AUTHORIZED SIGNOFF", elementX, footerSpaceY + 4);
             
@@ -1183,7 +1188,7 @@ export default function InvoicesModule({
             
             // Draw the "Click to Verify" text centered at bottom of frame (no weird unicode characters)
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(7);
+            pdf.setFontSize(8); // increased from 7
             pdf.setTextColor(themeColor);
             pdf.text("Click to Verify", elementX + 14, footerSpaceY + 30.5, { align: 'center' });
             
@@ -1197,28 +1202,28 @@ export default function InvoicesModule({
         const notesY = footerSpaceY + Math.max(totalsBoxHeight, 34) + 6;
         if (((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice?.notes)) {
           pdf.setFillColor(248, 250, 252);
-          pdf.roundedRect(20, notesY, 170, 13, 1.5, 1.5, 'F');
+          pdf.roundedRect(10, notesY, 190, 13, 1.5, 1.5, 'F');
           pdf.setDrawColor(241, 245, 249);
           pdf.setLineWidth(0.2);
-          pdf.roundedRect(20, notesY, 170, 13, 1.5, 1.5, 'D');
+          pdf.roundedRect(10, notesY, 190, 13, 1.5, 1.5, 'D');
           
           pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(7);
+          pdf.setFontSize(8.5); // increased from 7
           pdf.setTextColor(148, 163, 184); // slate-400
-          pdf.text("INVOICE NOTES & TERMS", 24, notesY + 4.5);
+          pdf.text("INVOICE NOTES & TERMS", 14, notesY + 4.5);
           
           pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7.5);
+          pdf.setFontSize(9); // increased from 7.5
           pdf.setTextColor(71, 85, 105); // slate-600
           const subNotes = selectedInvoice.notes.length > 95 ? selectedInvoice.notes.substring(0, 92) + "..." : selectedInvoice.notes;
-          pdf.text(subNotes, 24, notesY + 9.5);
+          pdf.text(subNotes, 14, notesY + 9.5);
         }
         
         // Single beautiful terms footer
         pdf.setTextColor(148, 163, 184); // slate-400
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.5);
-        pdf.text("THIS IS AN ELECTRONICALLY GENERATED DOCUMENT, MANUAL SIGNATURE NOT REQUIRED.", 42, 282);
+        pdf.setFontSize(8); // increased from 7.5
+        pdf.text("THIS IS AN ELECTRONICALLY GENERATED DOCUMENT, MANUAL SIGNATURE NOT REQUIRED.", 105, 282, { align: 'center' });
       } else {
         const imgWidth = 210; // A4 standard width in mm
         const pageHeight = 297; // A4 standard height in mm
@@ -1650,7 +1655,6 @@ export default function InvoicesModule({
             {/* PAGE 1: TAX INVOICE CARD */}
             <div 
               id="invoice-page-1"
-              style={{ minHeight: '297mm' }}
               className={STANDARD_DOC_CLASS}
             >
               <div id="invoice-main-body" className="space-y-8 pb-4 bg-white">
@@ -1974,7 +1978,6 @@ export default function InvoicesModule({
                   {/* THE PURE, SINGLE-PAGE CHALAN ATTACHMENT DOCUMENT */}
                   <div 
                     id="challan-attachment-section"
-                    style={{ minHeight: '297mm' }}
                     className={STANDARD_DOC_CLASS}
                   >
                     {isPdf ? (
