@@ -307,6 +307,7 @@ export default function InvoicesModule({
 
   const [base64Logo, setBase64Logo] = useState<string>('');
   const [base64Signature, setBase64Signature] = useState<string>('');
+  const [signatureAspect, setSignatureAspect] = useState<number>(1.0);
 
   React.useEffect(() => {
     async function convertImages() {
@@ -325,11 +326,20 @@ export default function InvoicesModule({
         try {
           const b64 = await toBase64(businessSettings.signatureUrl);
           setBase64Signature(b64);
+          
+          // Compute natural aspect ratio to avoid stretching anywhere
+          const img = new Image();
+          img.onload = () => {
+            const aspect = (img.naturalWidth || img.width || 1) / (img.naturalHeight || img.height || 1);
+            setSignatureAspect(aspect);
+          };
+          img.src = b64;
         } catch (e) {
           console.warn("Failed signature convert", e);
         }
       } else {
         setBase64Signature('');
+        setSignatureAspect(1.0);
       }
     }
     convertImages();
@@ -728,7 +738,7 @@ export default function InvoicesModule({
         }).format(val || 0);
       };
 
-      // Helper: Draw text with scalable, crisp vector Rupee symbol preceding the amount text
+      // Helper: Draw text with "Rs " preceding the amount text
       const drawTextWithRupee = (
         pdfObj: any,
         rawText: string,
@@ -753,50 +763,13 @@ export default function InvoicesModule({
         // Strip out any Rs. / Rupee parts if they got in, keeping only clean numbers
         const cleanNumber = textStr.replace(/^(Rs\.\s*|₹\s*)/gi, '').trim();
         
+        // Create full string: e.g. "- Rs 10,000" or "Rs 20,000"
+        const formattedStr = (leadingSign ? leadingSign + ' ' : '') + 'Rs ' + cleanNumber;
+        
         pdfObj.setFont('helvetica', isBold ? 'bold' : 'normal');
         pdfObj.setFontSize(fontSize);
         pdfObj.setTextColor(color[0], color[1], color[2]);
-        pdfObj.text(cleanNumber, rightX, y, { align: 'right' });
-        
-        const textWidth = pdfObj.getTextWidth(cleanNumber);
-        
-        // Scale vertical dimension and sizing based on active fontSize
-        const scale = fontSize / 8;
-        const symbolWidth = 1.6 * scale; // exactly match design scale
-        const spaceBetween = 0.8 * scale;
-        const startX = rightX - textWidth - symbolWidth - spaceBetween;
-        
-        // Draw leading sign (- or +) to the left of the Rupee vector
-        if (leadingSign) {
-          pdfObj.setFont('helvetica', isBold ? 'bold' : 'normal');
-          pdfObj.setFontSize(fontSize);
-          pdfObj.setTextColor(color[0], color[1], color[2]);
-          pdfObj.text(leadingSign, startX - (0.4 * scale), y, { align: 'right' });
-        }
-        
-        // Draw the vector Rupee sign next to the text
-        pdfObj.setDrawColor(color[0], color[1], color[2]);
-        pdfObj.setLineWidth(fontSize * 0.026); // proportionate thin stroke
-        
-        const topBarY = y - (2.1 * scale);
-        const midBarY = y - (1.35 * scale);
-        const bottomY = y - (0.45 * scale);
-        
-        // 1. Vertical main stem
-        pdfObj.line(startX + (0.35 * scale), y - (2.15 * scale), startX + (0.35 * scale), y - (0.8 * scale));
-        
-        // 2. Top bar
-        pdfObj.line(startX, topBarY, startX + (1.6 * scale), topBarY);
-        
-        // 3. Middle bar
-        pdfObj.line(startX, midBarY, startX + (1.3 * scale), midBarY);
-        
-        // 4. Rounded loop curves (R top-middle hook)
-        pdfObj.line(startX + (1.6 * scale), topBarY, startX + (1.6 * scale), y - (1.7 * scale));
-        pdfObj.line(startX + (1.6 * scale), y - (1.7 * scale), startX + (0.35 * scale), midBarY);
-        
-        // 5. Slanted leg
-        pdfObj.line(startX + (0.75 * scale), midBarY, startX + (1.5 * scale), bottomY);
+        pdfObj.text(formattedStr, rightX, y, { align: 'right' });
       };
 
       // ALWAYS USE PURE VECTOR LAYOUT FOR EXTRAORDINARY CRISPNESS AND EXACT ALIGNMENT MATCHING PREVIEW
@@ -1054,9 +1027,9 @@ export default function InvoicesModule({
         
         // Loop and render dynamic rows beautifully with spacious padding
         let currentY = tableHeaderY + tableHeaderHeight; // Starts exactly after table header banner
-        const cellPaddingTop = 4.0;
-        const cellPaddingBottom = 4.0;
-        const lineH = 4.2;
+        const cellPaddingTop = 6.0;
+        const cellPaddingBottom = 6.0;
+        const lineH = 5.0;
         
         if (selectedInvoice?.items) {
           selectedInvoice.items.forEach((item: any) => {
@@ -1205,15 +1178,27 @@ export default function InvoicesModule({
         });
         
         // Determine box height based on actual number of rows with wider layout
-        const rowSpacing = 6.0;
+        const rowSpacing = 8.0; // wider row spacing for more professional layout
         const totalsBoxHeight = totalsRows.length * rowSpacing + 4.5;
         const leftBlocksSize = 38; // Increased from 31 to 38 for a beautiful, premium, non-shrunk block layout!
         
         // Calculate stable footerSpaceY closer to the table
         let footerSpaceY = currentY + 10;
         
+        // Pre-compute notes container wrapping and height
+        const notesWrapWidth = 180;
+        const wrappedNotesLines = ((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice?.notes)
+          ? pdf.splitTextToSize(selectedInvoice.notes, notesWrapWidth)
+          : [];
+        const notesLineHeight = 4.8;
+        const notesBoxHeight = wrappedNotesLines.length > 0
+          ? (7.0 + 4.5 + (wrappedNotesLines.length * notesLineHeight) + 4.5)
+          : 0;
+          
+        const notesBlockSpacing = notesBoxHeight > 0 ? (notesBoxHeight + 8) : 0;
+        
         // Expected total block space needed bottom of page (totalsBox + notes block + bottom signature disclaimer)
-        const requiredFooterSpace = Math.max(totalsBoxHeight, leftBlocksSize) + 5 + 5 + 13 + 12;
+        const requiredFooterSpace = Math.max(totalsBoxHeight, leftBlocksSize) + 8 + notesBlockSpacing + 15;
         
         if (footerSpaceY + requiredFooterSpace > 280) {
           pdf.addPage();
@@ -1228,13 +1213,13 @@ export default function InvoicesModule({
         pdf.roundedRect(125, footerSpaceY + 6, 75, totalsBoxHeight, 2.5, 2.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
-        let totalsCurrentY = footerSpaceY + 6 + 5.0;
+        let totalsCurrentY = footerSpaceY + 6 + 5.5;
         totalsRows.forEach((row, rIdx) => {
           if (rIdx === dividerIndexVal || rIdx === secondDividerIndex) {
-            // Draw standard horizontal line before row
+            // Draw standard horizontal line with safe margin on both sides so it DOES NOT touch borders
             pdf.setDrawColor(226, 232, 240);
-            pdf.setLineWidth(0.2);
-            pdf.line(125, totalsCurrentY - 3.0, 200, totalsCurrentY - 3.0);
+            pdf.setLineWidth(0.25);
+            pdf.line(128, totalsCurrentY - 4.0, 197, totalsCurrentY - 4.0);
           }
           
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
@@ -1242,7 +1227,7 @@ export default function InvoicesModule({
           pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
           pdf.text(row.label, 128, totalsCurrentY);
           
-          // Draw value with vector Rupee sign preceding it
+          // Draw value with text-based elegant Rupee sign preceding it
           drawTextWithRupee(
             pdf,
             row.valText,
@@ -1276,11 +1261,20 @@ export default function InvoicesModule({
             pdf.setLineWidth(0.25);
             pdf.roundedRect(currentLeftX, footerSpaceY + 6, leftBlocksSize, leftBlocksSize, 2.5, 2.5, 'FD');
             
-            // Draw centered circular/squared signature stamp image (scaling beautifully!)
-            const sigSize = Math.max(22, Math.min(32, leftBlocksSize * 0.84));
-            const imgX = currentLeftX + (leftBlocksSize - sigSize) / 2;
-            const imgY = (footerSpaceY + 6) + (leftBlocksSize - sigSize) / 2;
-            pdf.addImage(sUrlSig, format, imgX, imgY, sigSize, sigSize);
+            // Draw stamp image, strictly maintaining its authentic aspect ratio to prevent ANY squishing
+            const maxSigSize = leftBlocksSize * 0.84; // 32mm max
+            let drawW = maxSigSize;
+            let drawH = maxSigSize;
+            
+            if (signatureAspect > 1) { // Landscape orientation
+              drawH = maxSigSize / signatureAspect;
+            } else if (signatureAspect < 1) { // Portrait orientation
+              drawW = maxSigSize * signatureAspect;
+            }
+            
+            const imgX = currentLeftX + (leftBlocksSize - drawW) / 2;
+            const imgY = (footerSpaceY + 6) + (leftBlocksSize - drawH) / 2;
+            pdf.addImage(sUrlSig, format, imgX, imgY, drawW, drawH);
             
             currentLeftX += leftBlocksSize + 8;
           } catch (sigErr) {
@@ -1327,25 +1321,27 @@ export default function InvoicesModule({
         pdf.setLineWidth(0.25);
         pdf.line(10, midDividerY, 200, midDividerY);
         
-        // Notes container box
+        // Notes container box - Beautiful full height support for multiple long lines
         const notesY = midDividerY + 4;
-        if (((businessSettings?.showInvoiceNotes ?? true) !== false && selectedInvoice?.notes)) {
-          pdf.setFillColor(248, 250, 252);
-          pdf.roundedRect(10, notesY, 190, 13, 1.5, 1.5, 'F');
-          pdf.setDrawColor(241, 245, 249);
-          pdf.setLineWidth(0.2);
-          pdf.roundedRect(10, notesY, 190, 13, 1.5, 1.5, 'D');
+        if (notesBoxHeight > 0) {
+          pdf.setFillColor(248, 250, 252); // bg-slate-50
+          pdf.roundedRect(10, notesY, 190, notesBoxHeight, 2.5, 2.5, 'F');
+          pdf.setDrawColor(226, 232, 240); // slate-200 border
+          pdf.setLineWidth(0.25);
+          pdf.roundedRect(10, notesY, 190, notesBoxHeight, 2.5, 2.5, 'D'); // border outline
           
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(8.5); // increased from 7
           pdf.setTextColor(148, 163, 184); // slate-400
-          pdf.text("INVOICE NOTES & TERMS", 14, notesY + 4.5);
+          pdf.text("INVOICE NOTES & TERMS", 15, notesY + 5.5);
           
           pdf.setFont('helvetica', 'normal');
           pdf.setFontSize(9); // increased from 7.5
           pdf.setTextColor(71, 85, 105); // slate-600
-          const subNotes = selectedInvoice.notes.length > 95 ? selectedInvoice.notes.substring(0, 92) + "..." : selectedInvoice.notes;
-          pdf.text(subNotes, 14, notesY + 9.5);
+          
+          wrappedNotesLines.forEach((noteLine: string, nIdx: number) => {
+            pdf.text(noteLine, 15, notesY + 11.5 + (nIdx * notesLineHeight));
+          });
         }
         
         // Single beautiful terms footer
