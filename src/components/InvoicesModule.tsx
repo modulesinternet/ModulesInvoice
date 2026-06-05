@@ -1233,14 +1233,26 @@ export default function InvoicesModule({
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
           pdf.setFontSize(row.fontSize || 9.5);
           pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
-          pdf.text(row.label, 124, totalsCurrentY);
+
+          // Compute mathematically precise vertical baseline alignment correction so notes are perfectly centered
+          let shiftedY = totalsCurrentY;
+          const fontShift = (row.fontSize || 9.5) * 0.175;
+          if (rIdx === 0) {
+            shiftedY = totalsCurrentY - 1.25 + fontShift;
+          } else if (rIdx === totalsRows.length - 1) {
+            shiftedY = totalsCurrentY + 1.25 + fontShift;
+          } else {
+            shiftedY = totalsCurrentY + fontShift;
+          }
+          
+          pdf.text(row.label, 124, shiftedY);
           
           // Draw value with text-based elegant Rupee sign preceding it
           drawTextWithRupee(
             pdf,
             row.valText,
             196,
-            totalsCurrentY,
+            shiftedY,
             row.color as [number, number, number],
             row.fontSize || 9.5,
             row.isBold

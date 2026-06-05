@@ -19,7 +19,8 @@ import {
   Image,
   Database,
   Download,
-  QrCode
+  QrCode,
+  FileText
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 import SignaturePad from './SignaturePad';
@@ -600,20 +601,6 @@ export default function SettingsModule({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Default Invoice Notes / Terms</label>
-              <textarea 
-                rows={2}
-                value={defaultInvoiceNotes}
-                onChange={(e) => setDefaultInvoiceNotes(e.target.value)}
-                placeholder="e.g. Terms: 100% within 15 days of issue"
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
-              />
-              <p className="text-[10px] text-slate-400 font-sans">
-                These default notes will pre-populate the notes field of any new invoices you create.
-              </p>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Firm Email Desk</label>
@@ -698,6 +685,28 @@ export default function SettingsModule({
                 </select>
                 <p className="text-[10px] text-slate-400 font-sans">Controls the display currency symbol on compiled invoices, receipts, and ledger statements.</p>
               </div>
+            </div>
+          </div>
+
+          {/* Box 1.6: Standard Terms & Default Ledger Notes */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-indigo-500" />
+              <span>Standard Terms &amp; Default Invoice Notes</span>
+            </h3>
+
+            <div className="space-y-1.5">
+              <label className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Default Notes Section Content</label>
+              <textarea 
+                rows={4}
+                value={defaultInvoiceNotes}
+                onChange={(e) => setDefaultInvoiceNotes(e.target.value)}
+                placeholder="e.g. Terms: Pay within 15 days of issue to avoid 2% monthly late charge."
+                className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-sans"
+              />
+              <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+                These generic instructions are automatically populated as the standard terms on any newly created taxes / sales invoices. You can still modify or override them individually on a per-invoice basis of any draft prior to saving.
+              </p>
             </div>
           </div>
 
