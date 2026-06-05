@@ -781,13 +781,14 @@ export default function InvoicesModule({
         
         let textStartX = 10;
         let addressWidth = 120;
+        const lUrl = base64Logo || businessSettings?.logoUrl;
+        const showLogo = lUrl && (businessSettings?.showInvoiceLogo ?? true) !== false;
         
         // Render Premium Brand Logo if found
-        const lUrl = base64Logo || businessSettings?.logoUrl;
-        if (lUrl && (businessSettings?.showInvoiceLogo ?? true) !== false) {
+        if (showLogo) {
           try {
             const format = lUrl.includes('png') || lUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-            pdf.addImage(lUrl, format, 10, 16, 18, 18);
+            pdf.addImage(lUrl, format, 10, 14, 18, 18);
             textStartX = 31; // Offset text base next to logo
             addressWidth = 95; // Narrow wrap width next to logo
           } catch (logoErr) {
@@ -797,37 +798,42 @@ export default function InvoicesModule({
         
         // Draw Core Business Identity vertically centered next to logo
         const compName = businessSettings?.companyName || "Internet Modules";
+        const hasGst = businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false;
+        
         pdf.setTextColor(15, 23, 42); // slate-900
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(16.5); // Increased from 14.5 for readability
+        
+        const compY = showLogo ? (hasGst ? 21.0 : 24.5) : 22.0;
+        
         if (compName.includes("Modules")) {
           const index = compName.indexOf("Modules");
           const part1 = compName.substring(0, index);
-          pdf.text(part1, textStartX, 23.5);
+          pdf.text(part1, textStartX, compY);
           const part1Width = pdf.getTextWidth(part1);
           pdf.setTextColor(themeColor);
-          pdf.text("Modules", textStartX + part1Width, 23.5);
+          pdf.text("Modules", textStartX + part1Width, compY);
         } else {
-          pdf.text(compName, textStartX, 23.5);
+          pdf.text(compName, textStartX, compY);
         }
         
-        if (businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false) {
+        if (hasGst) {
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(9.5); // increased from 8
           pdf.setTextColor(themeColor);
-          pdf.text(`GSTIN: ${businessSettings.gstIn}`, textStartX, 28.5);
+          pdf.text(`GSTIN: ${businessSettings.gstIn}`, textStartX, compY + 5.5);
         }
         
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(9.5); // increased from 8.5
         pdf.setTextColor(100, 116, 139); // slate-500
         
-        // Address starts on a fresh line at left-margin (X = 10) under the logo (Y = 16 + 18 = 34)
-        let headerEndY = 38.5;
+        // Address starts on a fresh line at left-margin (X = 10) with safe space under logo and aligns with date
+        let headerEndY = 42.5;
         if (businessSettings?.address && (businessSettings?.showInvoiceAddress ?? true) !== false) {
-          headerEndY = drawSafeMultilineText(businessSettings.address, 10, 38.5, 115, 4.2);
+          headerEndY = drawSafeMultilineText(businessSettings.address, 10, 42.5, 115, 4.2);
         } else {
-          headerEndY = 38.5;
+          headerEndY = 42.5;
         }
         
         // Draw Business Contact info underneath address starting at X = 10
@@ -1177,9 +1183,10 @@ export default function InvoicesModule({
           color: [225, 29, 72] // rose-600
         });
         
-        // Determine box height based on actual number of rows with wider layout
-        const rowSpacing = 8.0; // wider row spacing for more professional layout
-        const totalsBoxHeight = totalsRows.length * rowSpacing + 4.5;
+        // Determine box height based on actual number of rows with wider layout using a robust symmetrical formula
+        const rowSpacing = 10.0; // Spacious vertical separation for premium drafting feel
+        const topBottomPadding = 7.5; // Balanced top and bottom internal padding
+        const totalsBoxHeight = (totalsRows.length - 1) * rowSpacing + 2 * topBottomPadding;
         const leftBlocksSize = 38; // Increased from 31 to 38 for a beautiful, premium, non-shrunk block layout!
         
         // Calculate stable footerSpaceY closer to the table
@@ -1205,33 +1212,34 @@ export default function InvoicesModule({
           footerSpaceY = 20; // Fresh page layout flow
         }
         
-        // Render Totals Box
+        // Render Totals Box (starting at X = 120 and width = 80 for more generous sizing)
         pdf.setFillColor(248, 250, 252); // soft slate background (#f8fafc)
-        pdf.roundedRect(125, footerSpaceY + 6, 75, totalsBoxHeight, 2.5, 2.5, 'F');
+        pdf.roundedRect(120, footerSpaceY + 6, 80, totalsBoxHeight, 2.5, 2.5, 'F');
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 divider and borders
         pdf.setLineWidth(0.25);
-        pdf.roundedRect(125, footerSpaceY + 6, 75, totalsBoxHeight, 2.5, 2.5, 'D'); // Rounded outline box
+        pdf.roundedRect(120, footerSpaceY + 6, 80, totalsBoxHeight, 2.5, 2.5, 'D'); // Rounded outline box
         
         // Draw each row inside the box
-        let totalsCurrentY = footerSpaceY + 6 + 5.5;
+        let totalsCurrentY = footerSpaceY + 6 + topBottomPadding;
         totalsRows.forEach((row, rIdx) => {
           if (rIdx === dividerIndexVal || rIdx === secondDividerIndex) {
             // Draw standard horizontal line with safe margin on both sides so it DOES NOT touch borders
+            const dividerY = totalsCurrentY - (rowSpacing / 2);
             pdf.setDrawColor(226, 232, 240);
             pdf.setLineWidth(0.25);
-            pdf.line(128, totalsCurrentY - 4.0, 197, totalsCurrentY - 4.0);
+            pdf.line(123, dividerY, 197, dividerY);
           }
           
           pdf.setFont('helvetica', row.isBoldLabel ? 'bold' : 'normal');
           pdf.setFontSize(row.fontSize || 9.5);
           pdf.setTextColor(row.labelColor[0], row.labelColor[1], row.labelColor[2]);
-          pdf.text(row.label, 128, totalsCurrentY);
+          pdf.text(row.label, 124, totalsCurrentY);
           
           // Draw value with text-based elegant Rupee sign preceding it
           drawTextWithRupee(
             pdf,
             row.valText,
-            197,
+            196,
             totalsCurrentY,
             row.color as [number, number, number],
             row.fontSize || 9.5,
@@ -1262,7 +1270,7 @@ export default function InvoicesModule({
             pdf.roundedRect(currentLeftX, footerSpaceY + 6, leftBlocksSize, leftBlocksSize, 2.5, 2.5, 'FD');
             
             // Draw stamp image, strictly maintaining its authentic aspect ratio to prevent ANY squishing
-            const maxSigSize = leftBlocksSize * 0.84; // 32mm max
+            const maxSigSize = leftBlocksSize - 3.5; // Leaving tiny ideal margin to fit round stamp flawlessly
             let drawW = maxSigSize;
             let drawH = maxSigSize;
             
@@ -1315,13 +1323,13 @@ export default function InvoicesModule({
           }
         }
         
-        // Draw standard full-width horizontal divider line above Notes & Terms section
-        const midDividerY = footerSpaceY + 6 + Math.max(totalsBoxHeight, leftBlocksSize) + 5;
+        // Anchor the Notes container box to dock perfectly towards the bottom side of the print page
+        const midDividerY = (notesBoxHeight > 0) ? (274 - notesBoxHeight - 4) : (footerSpaceY + 6 + Math.max(totalsBoxHeight, leftBlocksSize) + 5);
         pdf.setDrawColor(226, 232, 240); // Soft, clean Slate-200 boundary line
         pdf.setLineWidth(0.25);
         pdf.line(10, midDividerY, 200, midDividerY);
         
-        // Notes container box - Beautiful full height support for multiple long lines
+        // Notes container box - Beautiful full height support for multiple long lines docked at the bottom of the page
         const notesY = midDividerY + 4;
         if (notesBoxHeight > 0) {
           pdf.setFillColor(248, 250, 252); // bg-slate-50
@@ -2011,47 +2019,60 @@ export default function InvoicesModule({
                 )}
               </div>
 
-              {/* Right mathematical sums */}
-              <div className="w-[300px] bg-slate-50/50 border border-slate-200 p-4 rounded-xl space-y-3 text-xs text-slate-600 font-sans" id="invoice-totals-card">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Net Ledger Value:</span>
-                  <span className="font-mono font-bold text-slate-800">
-                    {renderFormattedCurrency(selectedInvoice.subtotal, true)}
-                  </span>
-                </div>
-                {businessSettings.gstOption !== 'zero_tax' && (
+              {/* Right mathematical sums - Restructured into beautiful professional cards */}
+              <div className="w-[320px] space-y-4 font-sans text-xs" id="invoice-totals-card">
+                {/* Card 1: Standard ledger breakdown */}
+                <div className="bg-slate-50/75 border border-slate-200/80 p-3.5 rounded-xl space-y-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">CGST/SGST/IGST Taxes:</span>
-                    <span className="font-mono font-bold text-slate-800">
-                      {renderFormattedCurrency(selectedInvoice.taxAmount, true, 'plus')}
+                    <span className="text-slate-500 font-medium">Net Ledger Value:</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {renderFormattedCurrency(selectedInvoice.subtotal, true)}
                     </span>
                   </div>
-                )}
-                {selectedInvoice.discount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-600 font-medium">
-                    <span>Discount applied:</span>
-                    <span className="font-mono font-bold">
-                      {renderFormattedCurrency(selectedInvoice.discount, true, 'minus')}
+                  {businessSettings.gstOption !== 'zero_tax' && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-medium font-sans">CGST/SGST/IGST Taxes:</span>
+                      <span className="font-mono font-bold text-slate-700">
+                        {renderFormattedCurrency(selectedInvoice.taxAmount, true, 'plus')}
+                      </span>
+                    </div>
+                  )}
+                  {selectedInvoice.discount > 0 && (
+                    <div className="flex justify-between items-center text-emerald-600 font-semibold pt-2 border-t border-slate-200/40">
+                      <span>Discount applied:</span>
+                      <span className="font-mono font-bold">
+                        {renderFormattedCurrency(selectedInvoice.discount, true, 'minus')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card 2: Total Amount & Payment Details */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.03)]">
+                  {/* Total row with beautiful accent background */}
+                  <div className={`${invoiceTemplate === 'emerald' ? 'bg-teal-50 border-teal-100' : invoiceTemplate === 'minimal' ? 'bg-slate-50 border-slate-100' : 'bg-indigo-50/45'} p-3.5 flex justify-between items-center border-b border-slate-100`}>
+                    <span className="text-slate-900 font-bold text-sm">Total Amount:</span>
+                    <span className={`font-mono font-black text-base ${invoiceTemplate === 'emerald' ? 'text-teal-800' : invoiceTemplate === 'minimal' ? 'text-slate-950' : 'text-indigo-950'}`}>
+                      {renderFormattedCurrency(selectedInvoice.total, true)}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between items-center text-slate-900 border-t border-slate-200 pt-2.5 font-bold">
-                  <span>Total Amount:</span>
-                  <span className="font-mono font-black text-slate-950">
-                    {renderFormattedCurrency(selectedInvoice.total, true)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-emerald-700 pt-1 font-semibold font-sans">
-                  <span>Amount Paid:</span>
-                  <span className="font-mono font-bold text-emerald-600">
-                    {renderFormattedCurrency(selectedInvoice.paidAmount, true)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-rose-700 border-t border-slate-200 pt-2.5 font-bold">
-                  <span>Pending Outstanding:</span>
-                  <span className="font-mono font-black text-rose-600">
-                    {renderFormattedCurrency(selectedInvoice.dueAmount, true)}
-                  </span>
+
+                  {/* Payment status, split with a subtle line */}
+                  <div className="bg-white p-3.5 space-y-2.5">
+                    <div className="flex justify-between items-center text-emerald-800 font-bold">
+                      <span>Amount Paid:</span>
+                      <span className="font-mono font-bold text-emerald-600 bg-emerald-50/60 px-2 py-0.5 rounded">
+                        {renderFormattedCurrency(selectedInvoice.paidAmount, true)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-rose-800 font-extrabold border-t border-slate-100 pt-2.5">
+                      <span>Pending Outstanding:</span>
+                      <span className="font-mono font-black text-rose-600 bg-rose-50/60 px-2 py-0.5 rounded">
+                        {renderFormattedCurrency(selectedInvoice.dueAmount, true)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
