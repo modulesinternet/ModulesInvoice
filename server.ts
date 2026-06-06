@@ -18,7 +18,8 @@ import {
   deleteDoc, 
   collection, 
   writeBatch, 
-  getDocFromServer 
+  getDocFromServer,
+  onSnapshot 
 } from 'firebase/firestore';
 
 // Import our types and default seeds
@@ -746,6 +747,9 @@ async function bootstrapFromFirestore() {
     // Run custom system ledger and accounts self-healing audit
     await performSelfHealingAudit();
 
+    // Call active real-time listeners on firestore database to stream any external/collaborative updates instantly
+    registerBackendRealtimeListeners();
+
     console.log("Firebase Firestore synchronization successfully primed!");
   } catch (error) {
     console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap:", error);
@@ -753,6 +757,124 @@ async function bootstrapFromFirestore() {
     console.warn("Keeping active Firestore database reference in case of dynamic recovery.");
     // Crucial: DO NOT drop `db = null` reference so future writes/reads and dynamic connections can still auto-recover and succeed!
   }
+}
+
+// Real-time dynamic Firestore onSnapshot listener subscription model for backend
+function registerBackendRealtimeListeners() {
+  if (!db) return;
+  console.log("Registering active backend real-time Firestore listeners to keep cache fresh...");
+
+  onSnapshot(collection(db, 'clients'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+    db_clients = list;
+  }, (error) => {
+    console.error("Backend client snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'products'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+    db_products = list;
+  }, (error) => {
+    console.error("Backend product snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'invoices'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+    db_invoices = list;
+  }, (error) => {
+    console.error("Backend invoice snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'quotations'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
+    db_quotations = list;
+  }, (error) => {
+    console.error("Backend quotation snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'payments'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
+    db_payments = list;
+  }, (error) => {
+    console.error("Backend payment snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'ledger'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
+    db_ledger = list;
+  }, (error) => {
+    console.error("Backend ledger snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'cashbook'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
+    const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
+    db_cashbook = filtered;
+  }, (error) => {
+    console.error("Backend cashbook snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'activityLogs'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
+    db_logs = list;
+  }, (error) => {
+    console.error("Backend logs snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'notifications'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+    db_notifications = list;
+  }, (error) => {
+    console.error("Backend notifications snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'users'), (snapshot) => {
+    const list = snapshot.docs.map(d => ({ userId: d.id, ...d.data() } as UserProfile));
+    db_users = list;
+  }, (error) => {
+    console.error("Backend users snapshot error:", error);
+  });
+
+  onSnapshot(doc(db, 'businessSettings', 'global'), (docSnap) => {
+    if (docSnap.exists()) {
+      db_settings = docSnap.data() as BusinessSettings;
+    }
+  }, (error) => {
+    console.error("Backend settings global snapshot error:", error);
+  });
+
+  onSnapshot(doc(db, 'businessSettings', 'categories'), (docSnap) => {
+    if (docSnap.exists()) {
+      const listData = (docSnap.data() as { list?: string[] }).list;
+      if (Array.isArray(listData)) {
+        db_categories = listData;
+      }
+    }
+  }, (error) => {
+    console.error("Backend settings categories snapshot error:", error);
+  });
+
+  onSnapshot(doc(db, 'businessSettings', 'roles'), (docSnap) => {
+    if (docSnap.exists()) {
+      const listData = (docSnap.data() as { list?: RolePermissions[] }).list;
+      if (Array.isArray(listData) && listData.length > 0) {
+        db_roles = listData;
+      }
+    }
+  }, (error) => {
+    console.error("Backend settings roles snapshot error:", error);
+  });
+
+  onSnapshot(doc(db, 'businessSettings', 'passwords'), (docSnap) => {
+    if (docSnap.exists()) {
+      const listData = docSnap.data();
+      if (listData && Object.keys(listData).length > 0) {
+        db_passwords = listData as { [email: string]: string };
+      }
+    }
+  }, (error) => {
+    console.error("Backend settings passwords snapshot error:", error);
+  });
 }
 
 bootstrapFromFirestore();

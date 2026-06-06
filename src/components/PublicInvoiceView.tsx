@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Invoice, BusinessSettings, formatDisplayDate } from '../types';
+import { db as firestoreDb } from '../services/firebase';
+import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
 
 interface PublicInvoiceViewProps {
   invoiceNumber: string;
@@ -24,22 +26,76 @@ export default function PublicInvoiceView({ invoiceNumber }: PublicInvoiceViewPr
   const [data, setData] = useState<{ invoice: Invoice; settings: BusinessSettings } | null>(null);
 
   useEffect(() => {
-    async function loadPublicData() {
+    if (!invoiceNumber) return;
+
+    let activeInvoice: Invoice | null = null;
+    let activeSettings: BusinessSettings | null = null;
+
+    // Direct Firestore real-time listener for Settings
+    const unsubSettings = onSnapshot(doc(firestoreDb, 'businessSettings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        activeSettings = docSnap.data() as BusinessSettings;
+        if (activeInvoice && activeSettings) {
+          setData({ invoice: activeInvoice, settings: activeSettings });
+          setError(null);
+        }
+      }
+    }, (err) => {
+      console.error("Public settings subscription error: ", err);
+    });
+
+    // Direct Firestore real-time listener for Invoice query
+    const q = query(
+      collection(firestoreDb, 'invoices'),
+      where('invoiceNumber', '==', invoiceNumber)
+    );
+
+    const unsubInvoice = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        activeInvoice = { id: docSnap.id, ...docSnap.data() } as Invoice;
+        if (activeInvoice && activeSettings) {
+          setData({ invoice: activeInvoice, settings: activeSettings });
+          setError(null);
+        }
+      } else {
+        // Only set error if we don't have existing backup data loaded
+        if (!activeInvoice) {
+          setError("Invoice record is missing, deleted, or you might be offline.");
+        }
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Public invoice subscription error: ", err);
+      if (!activeInvoice) {
+        setError("Failed to fetch real-time invoice updates.");
+      }
+      setLoading(false);
+    });
+
+    // REST fallback initializer to guarantee instant rendering inside frameworks
+    async function fetchBackupFirst() {
       try {
-        setLoading(true);
         const res = await api.getPublicInvoice(invoiceNumber);
-        setData(res);
-        setError(null);
+        if (res && res.invoice && res.settings) {
+          if (!activeInvoice) activeInvoice = res.invoice;
+          if (!activeSettings) activeSettings = res.settings;
+          setData({ invoice: activeInvoice, settings: activeSettings });
+          setError(null);
+        }
       } catch (err: any) {
-        console.error("Public fetch failed: ", err);
-        setError(err.message || "We could not locate this invoice registry.");
+        console.warn("REST fallback failed (non-blocking if Firestore is connecting):", err);
       } finally {
         setLoading(false);
       }
     }
-    if (invoiceNumber) {
-      loadPublicData();
-    }
+
+    fetchBackupFirst();
+
+    return () => {
+      unsubSettings();
+      unsubInvoice();
+    };
   }, [invoiceNumber]);
 
   if (loading) {
