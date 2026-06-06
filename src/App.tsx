@@ -402,7 +402,7 @@ export default function App() {
   };
 
   // Master fetch pipeline connecting React state variables with backend routes
-  const loadMasterData = async (force = true) => {
+  const loadMasterData = async (force = true, silent = false) => {
     const lastSyncStr = localStorage.getItem('last_batch_sync_time');
     const now = Date.now();
     const thirtyMinutesMs = 30 * 60 * 1000;
@@ -416,7 +416,9 @@ export default function App() {
     }
 
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
 
       // Fetch all collections in a single unified high-performance batch call
       // to avoid HTTP/1.1 browser concurrent connection queue limitations (max 6)
@@ -1083,7 +1085,7 @@ export default function App() {
     try {
       await api.saveSettings(settings);
       showToast("Approved: System firm parameters updated.");
-      await loadMasterData();
+      await loadMasterData(true, true);
     } catch (err: any) {
       showToast(err.message, 'error');
     }

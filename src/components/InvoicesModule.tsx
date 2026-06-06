@@ -478,7 +478,7 @@ export default function InvoicesModule({
   const [clientId, setClientId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 15*24*60*60*1000).toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('Humble warning: Please quote our invoice serial number in all bank payouts.');
+  const [notes, setNotes] = useState(businessSettings?.defaultInvoiceNotes || 'Humble warning: Please quote our invoice serial number in all bank payouts.');
   const [discount, setDiscount] = useState('0');
 
   React.useEffect(() => {
@@ -492,7 +492,7 @@ export default function InvoicesModule({
         setNotes('Humble warning: Please quote our invoice serial number in all bank payouts.');
       }
     }
-  }, [isCreateOpen, isEditing, businessSettings, invoices]);
+  }, [isCreateOpen, isEditing, businessSettings?.defaultInvoiceNotes, invoices, businessSettings?.invoicePrefix]);
 
   // Multi item table adding states for invoice wizard
   const [addedItems, setAddedItems] = useState<Array<{
@@ -2203,7 +2203,22 @@ export default function InvoicesModule({
 
             {canWrite && (
               <button 
-                onClick={() => setIsCreateOpen(true)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditingInvoiceId(null);
+                  setClientId('');
+                  setDiscount('0');
+                  setAddedItems([]);
+                  setInvoiceNumber('');
+                  setDate(new Date().toISOString().split('T')[0]);
+                  setDueDate(new Date(Date.now() + 15*24*60*60*1000).toISOString().split('T')[0]);
+                  if (businessSettings?.defaultInvoiceNotes) {
+                    setNotes(businessSettings.defaultInvoiceNotes);
+                  } else {
+                    setNotes('Humble warning: Please quote our invoice serial number in all bank payouts.');
+                  }
+                  setIsCreateOpen(true);
+                }}
                 className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm w-full md:w-auto flex items-center justify-center gap-1.5"
                 id="toolbar-invoice-raise-btn"
               >
