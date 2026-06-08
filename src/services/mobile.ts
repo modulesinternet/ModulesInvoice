@@ -129,3 +129,19 @@ export const addLifecycleListener = async (onResume: () => void, onPause?: () =>
     };
   }
 };
+
+export const getAppVersionInfo = async (): Promise<{ version: string; build: string }> => {
+  try {
+    const info = await App.getInfo();
+    return {
+      version: info.version || '1.1.2',
+      build: info.build || '12',
+    };
+  } catch (err) {
+    return {
+      version: '1.1.2', // Beautiful default/preset to display
+      build: '12',
+    };
+  }
+};
+

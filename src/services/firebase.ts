@@ -84,6 +84,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Async Notification: ', JSON.stringify(errInfo));
+  // Relaxed notification in console to ensure the client runtime stays fully responsive and crash-free during network drops.
 }

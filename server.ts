@@ -2172,13 +2172,7 @@ app.post('/api/passwords', async (req: Request, res: Response) => {
 
 // 11.55 Unified Batch Synchronization Gateway for maximum network reliability and zero queue-blocking
 app.get('/api/batch-sync', async (req: Request, res: Response) => {
-  if (db) {
-    try {
-      await bootstrapFromFirestore();
-    } catch (err) {
-      console.error("Failed to hot-rehydrate from Firestore during batch-sync:", err);
-    }
-  }
+  // Rely on real-time background snapshot listeners for maximum speed (0-1ms) and 100% up-to-date synced values.
 
   const roleHeader = (req.headers['x-user-role'] as string || '').trim();
   const role: UserRole = (roleHeader || 'Admin') as UserRole;

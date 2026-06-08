@@ -688,7 +688,7 @@ export default function SettingsModule({
             </div>
           </div>
 
-          {/* Box 1.6: Standard Terms & Default Ledger Notes */}
+          {/* Box 1.6: Invoice Notes & Terms (Standard Terms) */}
           <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
             <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
               <FileText className="w-4 h-4 text-indigo-500" />
@@ -696,7 +696,7 @@ export default function SettingsModule({
             </h3>
 
             <div className="space-y-1.5">
-              <label className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Default Notes Section Content</label>
+              <label className="text-[10.5px] font-bold text-slate-400 uppercase font-sans">Default Invoice Notes &amp; Terms Content</label>
               <textarea 
                 rows={4}
                 value={defaultInvoiceNotes}
@@ -1321,7 +1321,7 @@ export default function SettingsModule({
                         onChange={(e) => setShowInvoiceNotes(e.target.checked)}
                         className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-0"
                       />
-                      <span>Show Ledger Notes / Warnings</span>
+                      <span>Show Invoice Notes &amp; Terms</span>
                     </label>
                   </div>
                 </div>

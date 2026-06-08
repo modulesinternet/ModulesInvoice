@@ -28,7 +28,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { api } from './services/api';
-import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto } from './services/mobile';
+import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto, getAppVersionInfo } from './services/mobile';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { DEFAULT_SETTINGS } from './lib/demoData';
@@ -232,6 +232,7 @@ export default function App() {
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
+  const [appVersion, setAppVersion] = useState({ version: '1.1.2', build: '12' });
   
   // GLOBAL ERP SEARCH ENGINE (POINT 16)
   const [globalSearch, setGlobalSearch] = useState('');
@@ -573,6 +574,9 @@ export default function App() {
 
   useEffect(() => {
     loadMasterData(false); // Page load: use cache if fresh (<30min)
+    getAppVersionInfo().then(info => {
+      setAppVersion(info);
+    }).catch(() => null);
   }, []);
 
   // Background scheduled synchronization every 5 minutes (strictly background silent syncing)
@@ -1598,6 +1602,11 @@ export default function App() {
             <p className="text-[10px] text-slate-400 font-sans leading-normal">
               Enterprises authentication policies active. Multi-user billing, cashbooks and operations logs will isolate actions securely to this identity.
             </p>
+          </div>
+
+          <div className="text-center pt-1.5 flex items-center justify-center gap-2 font-mono text-[10px] font-bold text-slate-400 select-none">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span>iModules Device Build: v{appVersion.version} (Build {appVersion.build})</span>
           </div>
         </div>
       </div>
