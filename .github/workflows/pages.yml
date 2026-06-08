@@ -34,8 +34,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          rm -f package-lock.json
-          npm install
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 15000
+          npm config set fetch-retry-maxtimeout 60000
+          npm install --no-audit --no-fund
 
       - name: Compile and Build Static Assets
         run: npm run build
