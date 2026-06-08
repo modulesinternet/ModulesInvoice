@@ -2,7 +2,7 @@ import { Client, Product, Invoice, Quotation, Payment, LedgerEntry, CashbookEntr
 
 // Global configurations defaults
 export const DEFAULT_SETTINGS: BusinessSettings = {
-  companyName: "Your Enterprise Platform",
+  companyName: "iModules",
   gstIn: "27AAZCA4312R1ZX",
   pan: "AAZCA4312R",
   address: "Please update your corporate office address in Settings Module.",
@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   signatureUrl: "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
   timezone: "Asia/Kolkata",
   gstOption: "standard",
-  titleBarText: "Apex Digital Solutions",
+  titleBarText: "iModules",
   invoiceTheme: "navy",
   moharSize: 40,
   showInvoiceGst: true,

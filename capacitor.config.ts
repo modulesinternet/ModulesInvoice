@@ -2,11 +2,37 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.apex.erp',
-  appName: 'Apex ERP',
+  appName: 'iModules',
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    cleartext: true,
+    allowNavigation: [
+      'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+    ]
+  },
+  android: {
+    allowMixedContent: true,
+    backgroundColor: '#ffffff'
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1800,
+      launchAutoHide: true,
+      launchFadeOutDuration: 300,
+      backgroundColor: '#ffffff',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: true,
+      androidSpinnerStyle: 'large',
+      spinnerColor: '#6366f1'
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'dark',
+      resizeOnFullScreen: true
+    }
   }
 };
 
 export default config;
+

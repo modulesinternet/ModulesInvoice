@@ -415,8 +415,12 @@ export default function App() {
       return;
     }
 
+    // Auto-silence background syncs and page reloads if we already have local cache or memory data available.
+    // This strictly avoids locking up the user viewport with full-screen loading shields.
+    const isSilent = silent || hasData;
+
     try {
-      if (!silent) {
+      if (!isSilent) {
         setLoading(true);
       }
 
@@ -438,20 +442,20 @@ export default function App() {
           dash, clientsVal, productsVal, invoicesVal, quotationsVal, paymentsVal, ledgerVal, cashbookVal, usersVal, logsVal, notificationsVal, settingsVal, rolesVal, categoriesVal, passwordsVal
         ] = await Promise.all([
           safeFetch(api.getDashboard(), null),
-          safeFetch(api.getClients(), []),
-          safeFetch(api.getProducts(), []),
-          safeFetch(api.getInvoices(), []),
-          safeFetch(api.getQuotations(), []),
-          safeFetch(api.getPayments(), []),
-          safeFetch(api.getLedgers(), []),
-          safeFetch(api.getCashbook(), []),
-          safeFetch(api.getUsers(), []),
-          safeFetch(api.getLogs(), []),
-          safeFetch(api.getNotifications(), []),
-          safeFetch(api.getSettings(), null),
-          safeFetch(api.getRoles(), []),
-          safeFetch(api.getCategories(), []),
-          safeFetch(api.getPasswords(), {})
+          safeFetch(api.getClients(), getCachedItem<Client[]>('db_clients', [])),
+          safeFetch(api.getProducts(), getCachedItem<Product[]>('db_products', [])),
+          safeFetch(api.getInvoices(), getCachedItem<Invoice[]>('db_invoices', [])),
+          safeFetch(api.getQuotations(), getCachedItem<Quotation[]>('db_quotations', [])),
+          safeFetch(api.getPayments(), getCachedItem<Payment[]>('db_payments', [])),
+          safeFetch(api.getLedgers(), getCachedItem<LedgerEntry[]>('db_ledger', [])),
+          safeFetch(api.getCashbook(), getCachedItem<CashbookEntry[]>('db_cashbook', [])),
+          safeFetch(api.getUsers(), getCachedItem<UserProfile[]>('db_users', [])),
+          safeFetch(api.getLogs(), getCachedItem<ActivityLog[]>('db_logs', [])),
+          safeFetch(api.getNotifications(), getCachedItem<Notification[]>('db_notifications', [])),
+          safeFetch(api.getSettings(), getCachedItem<BusinessSettings | null>('db_settings', null)),
+          safeFetch(api.getRoles(), getCachedItem<RolePermissions[]>('db_roles', [])),
+          safeFetch(api.getCategories(), getCachedItem<string[]>('db_categories', [])),
+          safeFetch(api.getPasswords(), getCachedItem<Record<string, string>>('user_passwords_store', {}))
         ]);
         batch = {
           dashboard: dash,
@@ -571,13 +575,13 @@ export default function App() {
     loadMasterData(false); // Page load: use cache if fresh (<30min)
   }, []);
 
-  // Background scheduled synchronization every 30 minutes
+  // Background scheduled synchronization every 5 minutes (strictly background silent syncing)
   useEffect(() => {
     if (!currentUser) return;
     const interval = setInterval(() => {
-      console.log("Automatic 30-minute background synchronization triggered...");
-      loadMasterData(true);
-    }, 1800000); // 30 minutes
+      console.log("Automatic 5-minute background synchronization triggered...");
+      loadMasterData(true, true); // force = true, silent = true
+    }, 300000); // 5 minutes
     return () => clearInterval(interval);
   }, [currentUser]);
 
@@ -831,7 +835,7 @@ export default function App() {
       setIsConnected(status.connected);
       if (status.connected) {
         showToast("Network restored. Syncing with cloud central register...", "success");
-        loadMasterData();
+        loadMasterData(true, true); // force=true, silent=true (seamless background sync)
       } else {
         showToast("Platform offline. Showing local ERP snapshot view.", "error");
       }
@@ -1604,7 +1608,7 @@ export default function App() {
     <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
       
       {/* PROFESSIONAL SYSTEM LOADERS - CENTERED CIRCULAR REFRESH OVERLAY TO PREVENT OLD DATA GLITCHES */}
-      {loading && (
+      {loading && !dashboardMetrics && (
         <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in" id="global-refresh-barrier">
           <div className="relative flex items-center justify-center">
             {/* Radial pulsing waves */}

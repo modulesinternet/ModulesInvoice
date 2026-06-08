@@ -214,9 +214,13 @@ function getApiUrl(url: string) {
     return `${base}${url}`;
   }
 
-  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' || window.location.protocol === 'capacitor:';
+  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' || 
+                      window.location.protocol === 'capacitor:' || 
+                      window.location.origin.startsWith('capacitor://') ||
+                      navigator.userAgent.includes('Capacitor') ||
+                      (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001');
   const isCloudRun = window.location.hostname.includes('run.app');
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
   // If running inside Capacitor, or loaded from GitHub Pages / third-party server remotely,
   // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
   const base = (isCapacitor || (!isCloudRun && !isLocalhost))

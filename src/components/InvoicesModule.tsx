@@ -486,13 +486,18 @@ export default function InvoicesModule({
       const computedPrefix = businessSettings?.invoicePrefix || 'INV-';
       const autoNum = `${computedPrefix}${String(invoices.length + 1).padStart(3, '0')}`;
       setInvoiceNumber(autoNum);
+    }
+  }, [isCreateOpen, isEditing, invoices, businessSettings?.invoicePrefix]);
+
+  React.useEffect(() => {
+    if (!isEditing) {
       if (businessSettings?.defaultInvoiceNotes) {
         setNotes(businessSettings.defaultInvoiceNotes);
       } else {
         setNotes('Humble warning: Please quote our invoice serial number in all bank payouts.');
       }
     }
-  }, [isCreateOpen, isEditing, businessSettings?.defaultInvoiceNotes, invoices, businessSettings?.invoicePrefix]);
+  }, [businessSettings?.defaultInvoiceNotes, isEditing]);
 
   // Multi item table adding states for invoice wizard
   const [addedItems, setAddedItems] = useState<Array<{
