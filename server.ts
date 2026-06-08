@@ -794,8 +794,9 @@ async function bootstrapFromFirestore() {
     
     // 1. Settings (25 seconds timeout for cold starts)
     const settingsDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'global')), 25000);
-    const isFirstSeed = !settingsDoc.exists();
-    if (!isFirstSeed) {
+    const clientsSnap = await withTimeout(getDocs(collection(db, 'clients')), 25000).catch(() => null);
+    const isFirstSeed = !settingsDoc.exists() || !clientsSnap || clientsSnap.empty;
+    if (settingsDoc.exists()) {
       const settingsData = settingsDoc.data();
       if (settingsData && Object.keys(settingsData).length > 0) {
         db_settings = settingsData as BusinessSettings;
