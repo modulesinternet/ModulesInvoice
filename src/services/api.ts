@@ -195,15 +195,22 @@ function getHeaders(): HeadersInit {
   const activeRole = localStorage.getItem('active_role') || 'Admin';
   const savedUser = localStorage.getItem('current_user');
   let email = '';
+  let name = '';
+  let userId = '';
   if (savedUser) {
     try {
-      email = JSON.parse(savedUser).email || '';
+      const parsed = JSON.parse(savedUser);
+      email = parsed.email || '';
+      name = parsed.name || '';
+      userId = parsed.userId || '';
     } catch (_) {}
   }
   return {
     'Content-Type': 'application/json',
     'x-user-role': activeRole,
-    'x-user-email': email.trim().toLowerCase()
+    'x-user-email': email.trim().toLowerCase(),
+    'x-user-name': name,
+    'x-user-id': userId
   };
 }
 
@@ -214,6 +221,12 @@ function getApiUrl(url: string) {
     return `${base}${url}`;
   }
 
+  // Support VITE_BACKEND_API_URL environment configuration
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv && metaEnv.VITE_BACKEND_API_URL && metaEnv.VITE_BACKEND_API_URL.trim() !== '') {
+    return `${metaEnv.VITE_BACKEND_API_URL.trim().replace(/\/+$/, '')}${url}`;
+  }
+
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined' || 
                       window.location.protocol === 'capacitor:' || 
                       window.location.origin.startsWith('capacitor://') ||
@@ -221,10 +234,16 @@ function getApiUrl(url: string) {
                       (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001');
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
+
+  // Intelligent fallback URL selector matching the current execution environment (dev vs pre/shared)
+  const fallbackUrl = (typeof window !== 'undefined' && window.location.hostname.includes('ais-dev'))
+    ? 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+    : 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+
   // If running inside Capacitor, or loaded from GitHub Pages / third-party server remotely,
   // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
   const base = (isCapacitor || (!isCloudRun && !isLocalhost))
-    ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+    ? fallbackUrl
     : '';
   return `${base}${url}`;
 }
@@ -1658,6 +1677,19 @@ export const api = {
         localStorage.removeItem('backend_api_url');
       }
       return { success: false, error: err.message || String(err) };
+    }
+  },
+
+  registerFcmToken: async (userId: string, deviceToken: string, platform: string) => {
+    try {
+      return await request<{ success: boolean; message?: string }>('/api/fcm-token', 'POST', {
+        userId,
+        deviceToken,
+        platform
+      });
+    } catch (err: any) {
+      console.warn("FCM registration request failed:", err);
+      return { success: false, message: err.message };
     }
   }
 };

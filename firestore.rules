@@ -51,5 +51,9 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read, write: if isAuthenticated() || true;
     }
+
+    match /fcmTokens/{tokenId} {
+      allow read, write: if isAuthenticated() || true;
+    }
   }
 }

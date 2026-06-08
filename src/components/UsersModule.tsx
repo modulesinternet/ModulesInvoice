@@ -63,6 +63,14 @@ export default function UsersModule({
   const [logsPageSize, setLogsPageSize] = useState(10);
   const [isSaving, setIsSaving] = useState(false);
 
+  const sortedLogs = React.useMemo(() => {
+    return [...logs].sort((a, b) => {
+      const timeA = a.timestamp || '';
+      const timeB = b.timestamp || '';
+      return timeB.localeCompare(timeA);
+    });
+  }, [logs]);
+
   // Form states for adding/editing member
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [name, setName] = useState('');
@@ -400,7 +408,7 @@ export default function UsersModule({
             </div>
 
             <div className="overflow-y-auto max-h-[480px] pr-2 divide-y divide-slate-100 text-xs">
-              {logs.slice((logsCurrentPage - 1) * logsPageSize, logsCurrentPage * logsPageSize).map((log) => (
+              {sortedLogs.slice((logsCurrentPage - 1) * logsPageSize, logsCurrentPage * logsPageSize).map((log) => (
                 <div key={log.id} className="py-4 flex gap-3 items-start hover:bg-slate-50/20 transition px-2 rounded-xl">
                   <div className="shrink-0 p-1.5 bg-slate-100 rounded-lg text-slate-500 mt-1">
                     <Clock className="w-4 h-4" />
@@ -427,14 +435,14 @@ export default function UsersModule({
                 </div>
               ))}
 
-              {logs.length === 0 && (
+              {sortedLogs.length === 0 && (
                 <div className="text-center py-12 text-slate-400 italic">No operational logs recorded in the last 24h.</div>
               )}
             </div>
 
             <Pagination
               currentPage={logsCurrentPage}
-              totalItems={logs.length}
+              totalItems={sortedLogs.length}
               pageSize={logsPageSize}
               onPageChange={setLogsCurrentPage}
               onPageSizeChange={setLogsPageSize}

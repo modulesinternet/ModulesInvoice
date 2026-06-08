@@ -145,3 +145,160 @@ export const getAppVersionInfo = async (): Promise<{ version: string; build: str
   }
 };
 
+// Exit the native app
+export const exitApp = async (): Promise<void> => {
+  try {
+    await App.exitApp();
+  } catch (err) {
+    console.warn("Could not exit app in this context: ", err);
+  }
+};
+
+// Listen to native backbutton press
+export const addBackButtonListener = async (onBackButton: (canGoBack: boolean) => void): Promise<{ remove: () => void }> => {
+  try {
+    const listener = await App.addListener('backButton', (data) => {
+      onBackButton(data.canGoBack);
+    });
+    return {
+      remove: () => {
+        listener.remove();
+      }
+    };
+  } catch (err) {
+    console.log("Capacitor backButton unsupported in browser context.");
+    return {
+      remove: () => {}
+    };
+  }
+};
+
+// Import LocalNotifications for native overlay alerts
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { api } from './api';
+
+export const setupPushNotifications = async (
+  userId: string, 
+  onRouteNeeded: (route: string) => void
+): Promise<void> => {
+  if (!isMobileDevice()) {
+    console.log("FCM setup skipped: Not running on a native mobile device platform.");
+    return;
+  }
+
+  try {
+    // Check permission
+    let status = await PushNotifications.checkPermissions();
+    if (status.receive !== 'granted') {
+      const requested = await PushNotifications.requestPermissions();
+      if (requested.receive !== 'granted') {
+        console.warn("FCM Push notification permission denied by user.");
+        return;
+      }
+    }
+
+    // Register with Apple / Google push services
+    await PushNotifications.register();
+
+    // Listen for FCM token generation
+    await PushNotifications.addListener('registration', async (token) => {
+      console.log('Mobile device registered with FCM. Token:', token.value);
+      // Dispatch token registration payload to backend proxy
+      try {
+        const result = await api.registerFcmToken(userId, token.value, 'android');
+        console.log('FCM token synchronization result:', result);
+      } catch (err) {
+        console.error('Error synchronizing FCM token with backend:', err);
+      }
+    });
+
+    // Listen for registration errors
+    await PushNotifications.addListener('registrationError', (error) => {
+      console.error('FCM registration failed:', error);
+    });
+
+    // Listen for when push notification arrives while app is open
+    await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      console.log('FCM push notification received in foreground:', notification);
+      // Display/trigger standard local overlay notification for better visual parity in foreground
+      triggerLocalNotification(
+        notification.title || "Message Received", 
+        notification.body || "New update registered."
+      );
+    });
+
+    // Listen for push notification action perform (tapping the notification bubble)
+    await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      console.log('User performed action on FCM notification:', action);
+      const data = action.notification.data;
+      if (data && data.route) {
+        console.log('FCM notification requested routing navigation to:', data.route);
+        onRouteNeeded(data.route);
+      }
+    });
+
+  } catch (err) {
+    console.error("Capacitor PushNotifications invocation failure:", err);
+  }
+};
+
+export const requestNotificationPermission = async (): Promise<boolean> => {
+  try {
+    const status = await LocalNotifications.checkPermissions();
+    if (status.display !== 'granted') {
+      const request = await LocalNotifications.requestPermissions();
+      return request.display === 'granted';
+    }
+    return true;
+  } catch (err) {
+    console.warn("Native local notification permission check skipped/unsupported:", err);
+    return false;
+  }
+};
+
+export const triggerLocalNotification = async (title: string, body: string): Promise<void> => {
+  try {
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      // Fallback to standard web alert to prevent silent updates
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body });
+      } else if ('Notification' in window && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            new Notification(title, { body });
+          }
+        });
+      }
+      return;
+    }
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title,
+          body,
+          id: Math.floor(Math.random() * 100000),
+          schedule: { at: new Date(Date.now() + 500) }, // fire almost instantly
+          sound: undefined,
+          actionTypeId: "",
+          extra: null
+        }
+      ]
+    });
+  } catch (err) {
+    console.warn("Capacitor LocalNotification error, falling back to Web browser Notification API: ", err);
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body });
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          new Notification(title, { body });
+        }
+      });
+    }
+  }
+};
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, 
   Users, 
@@ -28,7 +28,8 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { api } from './services/api';
-import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto, getAppVersionInfo } from './services/mobile';
+import versionData from '../version.json';
+import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto, getAppVersionInfo, addBackButtonListener, exitApp, triggerLocalNotification, requestNotificationPermission, setupPushNotifications } from './services/mobile';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { DEFAULT_SETTINGS } from './lib/demoData';
@@ -208,7 +209,9 @@ export default function App() {
     return (saved as TabType) || 'dashboard';
   });
 
+  const activeTabRef = useRef<TabType>(activeTab);
   useEffect(() => {
+    activeTabRef.current = activeTab;
     localStorage.setItem('active_tab', activeTab);
   }, [activeTab]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -217,7 +220,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   // Master database state arrays
-  const [dashboardMetrics, setDashboardMetrics] = useState<any>(null);
+  const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
+    const clientsInit = getCachedItem<Client[]>('db_clients', []);
+    const invoicesInit = getCachedItem<Invoice[]>('db_invoices', []);
+    const paymentsInit = getCachedItem<Payment[]>('db_payments', []);
+    const cashbookInit = getCachedItem<CashbookEntry[]>('db_cashbook', []);
+    if (clientsInit.length > 0 || invoicesInit.length > 0) {
+      return computeLocalDashboardMetrics(clientsInit, invoicesInit, paymentsInit, cashbookInit);
+    }
+    return null;
+  });
   const [clients, setClients] = useState<Client[]>(() => getCachedItem('db_clients', []));
   const [products, setProducts] = useState<Product[]>(() => getCachedItem('db_products', []));
   const [invoices, setInvoices] = useState<Invoice[]>(() => getCachedItem('db_invoices', []));
@@ -232,7 +244,21 @@ export default function App() {
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
-  const [appVersion, setAppVersion] = useState({ version: '1.1.2', build: '12' });
+  const [appVersion, setAppVersion] = useState(() => {
+    try {
+      return versionData;
+    } catch (_) {
+      return { version: '1.1.2', build: '12' };
+    }
+  });
+
+  const [fullScreenLoading, setFullScreenLoading] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFullScreenLoading(false);
+    }, 1000); // capped at exactly 1 second
+    return () => clearTimeout(timer);
+  }, []);
   
   // GLOBAL ERP SEARCH ENGINE (POINT 16)
   const [globalSearch, setGlobalSearch] = useState('');
@@ -573,11 +599,53 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadMasterData(false); // Page load: use cache if fresh (<30min)
+    // 1. Ask for local notification permissions on app mount (required for status bar overlays/lockscreen alerts)
+    requestNotificationPermission().then(granted => {
+      console.log("Local notifications permission grant status:", granted);
+    });
+
+    // 2. Perform silent background sync on launch to guarantee fresh client synchronization
+    loadMasterData(true, true); // force=true, silent=true (doesn't trigger full-viewport block screen spinner)
+
+    // 3. Register native backbutton listener
+    let backButtonHandle: any = null;
+    addBackButtonListener((canGoBack) => {
+      if (activeTabRef.current !== 'dashboard') {
+        setActiveTab('dashboard');
+      } else {
+        exitApp();
+      }
+    }).then(handle => {
+      backButtonHandle = handle;
+    });
+
     getAppVersionInfo().then(info => {
       setAppVersion(info);
     }).catch(() => null);
+
+    return () => {
+      if (backButtonHandle) {
+        backButtonHandle.remove();
+      }
+    };
   }, []);
+
+  // 1b. Configure and register Capacitor FCM Push Notifications on authenticated user state changes
+  useEffect(() => {
+    if (currentUser && currentUser.userId) {
+      console.log("Enabling real-time push notifications listener on User authenticated state:", currentUser.userId);
+      setupPushNotifications(currentUser.userId, (route: string) => {
+        // Map native notification actions to specific app UI tabs
+        if (route.includes('invoices')) {
+          setActiveTab('invoices');
+        } else if (route.includes('payments')) {
+          setActiveTab('payments');
+        } else if (route.includes('cashbook')) {
+          setActiveTab('cashbook');
+        }
+      });
+    }
+  }, [currentUser]);
 
   // Background scheduled synchronization every 5 minutes (strictly background silent syncing)
   useEffect(() => {
@@ -623,6 +691,38 @@ export default function App() {
       setInvoices(prev => {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
+
+        // Detect dynamic additions or modifications for lockscreen and system status bar notifications
+        try {
+          if (prev && prev.length > 0) {
+            const prevIds = new Set(prev.map(i => i.id));
+            const newInvoices = list.filter(i => !prevIds.has(i.id));
+
+            const prevMap = new Map(prev.map(i => [i.id, i]));
+            const updatedInvoices = list.filter(i => {
+              const old = prevMap.get(i.id);
+              return old && JSON.stringify(old) !== JSON.stringify(i);
+            });
+
+            newInvoices.forEach(inv => {
+              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total);
+              triggerLocalNotification(
+                "📄 New Invoice Dispatched",
+                `Invoice ${inv.invoiceNumber} created for ${inv.clientName} worth ${formattedAmt}.`
+              );
+            });
+
+            updatedInvoices.forEach(inv => {
+              triggerLocalNotification(
+                "🔄 Invoice Modified",
+                `Invoice ${inv.invoiceNumber} for ${inv.clientName} updated to status: ${inv.status.replace('_', ' ').toUpperCase()}.`
+              );
+            });
+          }
+        } catch (e) {
+          console.error("Local notification dispatcher error: ", e);
+        }
+
         localStorage.setItem('db_invoices', nextStr);
         return list;
       });
@@ -848,7 +948,8 @@ export default function App() {
     });
 
     addLifecycleListener(() => {
-      console.log("App resumed foreground execution. Active listeners are running.");
+      console.log("App resumed foreground execution. Auto silent sync triggered.");
+      loadMasterData(true, true); // force=true, silent=true (seamless sync on app resume/reopen)
     }).then(handle => {
       lifecycleHandle = handle;
     });
@@ -1617,7 +1718,7 @@ export default function App() {
     <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
       
       {/* PROFESSIONAL SYSTEM LOADERS - CENTERED CIRCULAR REFRESH OVERLAY TO PREVENT OLD DATA GLITCHES */}
-      {loading && !dashboardMetrics && (
+      {fullScreenLoading && !dashboardMetrics && (
         <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in" id="global-refresh-barrier">
           <div className="relative flex items-center justify-center">
             {/* Radial pulsing waves */}
@@ -1829,6 +1930,10 @@ export default function App() {
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout Securely</span>
             </button>
+            <div className="text-center pt-1 flex items-center justify-center gap-1.5 font-mono text-[9px] text-slate-400 select-none border-t border-slate-100">
+              <span className="w-1 w-1 bg-emerald-500 rounded-full animate-pulse"></span>
+              <span>v{appVersion.version} (Build {appVersion.build})</span>
+            </div>
           </div>
         )}
       </aside>

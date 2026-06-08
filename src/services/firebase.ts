@@ -17,7 +17,8 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentSingleTabManager({})
-  })
+  }),
+  experimentalForceLongPolling: true
 }, firebaseConfig.firestoreDatabaseId);
 
 // Initialize client-side Authentication

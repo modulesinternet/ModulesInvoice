@@ -4,6 +4,40 @@ import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import nodemailer from 'nodemailer';
+import { AsyncLocalStorage } from 'async_hooks';
+
+// Gracefully intercept and suppress benign internal Firestore gRPC idle stream disconnection messages to keep the server log clean
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+const isBenignFirestoreMessage = (msg: string) => {
+  return (
+    msg.includes('Disconnecting idle stream') ||
+    (msg.includes('stream') && msg.includes('CANCELLED') && msg.includes('targets')) ||
+    msg.includes('GrpcConnection RPC') ||
+    (msg.includes('@firebase/firestore') && msg.includes('Code: 1'))
+  );
+};
+
+console.error = function (...args) {
+  const message = args.map(arg => typeof arg === 'string' ? arg : (arg instanceof Error ? arg.message : String(arg))).join(' ');
+  if (isBenignFirestoreMessage(message)) {
+    console.log("[Firestore Backend Silent Recovery]: Swallowed benign stream idle timeout error.");
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
+
+console.warn = function (...args) {
+  const message = args.map(arg => typeof arg === 'string' ? arg : (arg instanceof Error ? arg.message : String(arg))).join(' ');
+  if (isBenignFirestoreMessage(message)) {
+    console.log("[Firestore Backend Silent Recovery]: Swallowed benign stream idle timeout warning.");
+    return;
+  }
+  originalConsoleWarn.apply(console, args);
+};
+
+const requestContext = new AsyncLocalStorage<{ req: Request }>();
 
 // Initialize Firebase SDK
 import { initializeApp } from 'firebase/app';
@@ -50,11 +84,18 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-active-role, x-user-email");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-active-role, x-user-email, x-user-name, x-user-id");
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
+});
+
+// Run RequestContext AsyncLocalStorage context for logging session operators
+app.use((req, res, next) => {
+  requestContext.run({ req }, () => {
+    next();
+  });
 });
 
 // In-Memory Database Server State (serving as high-speed backend cache mapped to Firestore)
@@ -69,6 +110,7 @@ let db_cashbook = [ ...DEMO_CASHBOOK ];
 let db_logs = [ ...DEMO_LOGS ];
 let db_notifications = [ ...DEMO_NOTIFICATIONS ];
 let db_users = [ ...DEMO_USERS ];
+let db_fcm_tokens: any[] = [];
 let db_passwords: { [email: string]: string } = {
   "modulesinternet@gmail.com": "Admin@123",
   "manager@demo.com": "manager123",
@@ -177,6 +219,102 @@ try {
   }
 } catch (err) {
   console.error("Failed to initialize Firebase:", err);
+}
+
+// --- Firebase Admin SDK & FCM Dispatch Engine ---
+import admin from 'firebase-admin';
+
+let isFcmSupported = false;
+try {
+  admin.initializeApp();
+  isFcmSupported = true;
+  console.log("Firebase Admin SDK successfully initialized on backend.");
+} catch (adminErr: any) {
+  if (adminErr.code === 'app/duplicate-app') {
+    isFcmSupported = true;
+    console.log("Firebase Admin SDK was already initialized (duplicate-app). proceeding.");
+  } else {
+    console.warn("Could not load/initialize Firebase Admin credentials locally, running in fallback push log simulation mode:", adminErr.message);
+  }
+}
+
+// Active multicast FCM notification delivery engine
+async function sendFcmNotification(title: string, body: string, extraData: Record<string, string> = {}) {
+  console.log(`[FCM BROADCAST] Broadcast request initiated: "${title}" - "${body}"`);
+  
+  if (db_fcm_tokens.length === 0) {
+    console.log("[FCM BROADCAST] Active recipient registration dictionary is empty. Skipping notification delivery.");
+    return;
+  }
+
+  const tokens = Array.from(new Set(db_fcm_tokens.map(t => t.deviceToken))).filter(Boolean);
+  if (tokens.length === 0) {
+    console.log("[FCM BROADCAST] No valid FCM registration keys extracted. Skipping.");
+    return;
+  }
+
+  // Create standard logging line in local Activity Logs list for developer parity
+  const logId = `notif-log-${Date.now()}`;
+  const notifType: "info" | "warning" | "success" = extraData.type === "warning" ? "warning" : (extraData.type === "success" ? "success" : "info");
+  const newNotif: Notification = {
+    id: logId,
+    title,
+    message: body,
+    isRead: false,
+    type: notifType,
+    createdAt: new Date().toISOString()
+  };
+  db_notifications.unshift(newNotif);
+  syncStateToFirestore('notifications', logId).catch(() => null);
+
+  if (!isFcmSupported) {
+    console.log(`[FCM SIMULATED DELIVERY] Simulated multicast delivery to ${tokens.length} device(s) complete.`);
+    return;
+  }
+
+  console.log(`[FCM BROADCAST] dispatching message packet to ${tokens.length} active recipient tokens.`);
+
+  const messagePayload = {
+    notification: {
+      title,
+      body,
+    },
+    android: {
+      priority: 'high' as const,
+      notification: {
+        sound: 'custom_sound', // Play Custom wav sound configured in Android res/raw
+        channelId: 'high_priority_notifications', // Use the custom high-priority notification channel
+        visibility: 'public' as const, // Render details on lockscreen securely
+      }
+    },
+    data: {
+      ...extraData,
+      title,
+      body,
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  for (const token of tokens) {
+    try {
+      await admin.messaging().send({
+        token,
+        ...messagePayload
+      });
+      console.log(`[FCM SUCCESS] Delivered push message to device endpoint: ${token.substring(0, 15)}...`);
+    } catch (err: any) {
+      console.warn(`[FCM FAILED] Failed delivery on endpoint: ${token.substring(0, 15)}... Error:`, err.message);
+      if (err.code === 'messaging/registration-token-not-registered' || err.message?.includes('not-registered')) {
+        console.log(`[FCM MAINTENANCE] Evicting stale/expired device key: ${token.substring(0, 15)}...`);
+        const index = db_fcm_tokens.findIndex(t => t.deviceToken === token);
+        if (index !== -1) {
+          const expiredTokenId = db_fcm_tokens[index].tokenId;
+          db_fcm_tokens.splice(index, 1);
+          await syncStateToFirestore('fcmTokens', expiredTokenId).catch(() => null);
+        }
+      }
+    }
+  }
 }
 
 // --- Hardened Firestore Error Handlers ---
@@ -328,109 +466,199 @@ async function syncStateToFirestore(topic: string, id?: string) {
   try {
     const timeoutVal = 15000; // Tolerant 15-second write limit for heavy logo/mohar data payloads
     if (topic === 'settings') {
+      trackRecentLocalUpdate('businessSettings', 'global', db_settings);
       await withTimeout(setDoc(doc(db, 'businessSettings', 'global'), db_settings), timeoutVal);
     } else if (topic === 'categories') {
+      trackRecentLocalUpdate('businessSettings', 'categories', { list: db_categories });
       await withTimeout(setDoc(doc(db, 'businessSettings', 'categories'), { list: db_categories }), timeoutVal);
     } else if (topic === 'roles') {
+      trackRecentLocalUpdate('businessSettings', 'roles', { list: db_roles });
       await withTimeout(setDoc(doc(db, 'businessSettings', 'roles'), { list: db_roles }), timeoutVal);
     } else if (topic === 'clients') {
       if (id) {
         const item = db_clients.find(c => c.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'clients', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'clients', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('clients', id, item);
+          await withTimeout(setDoc(doc(db, 'clients', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('clients', id);
+          deleteRecentLocalUpdate('clients', id);
+          await withTimeout(deleteDoc(doc(db, 'clients', id)), timeoutVal);
+        }
       } else {
         for (const item of db_clients) {
+          trackRecentLocalUpdate('clients', item.id, item);
           await withTimeout(setDoc(doc(db, 'clients', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'products') {
       if (id) {
         const item = db_products.find(p => p.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'products', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'products', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('products', id, item);
+          await withTimeout(setDoc(doc(db, 'products', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('products', id);
+          deleteRecentLocalUpdate('products', id);
+          await withTimeout(deleteDoc(doc(db, 'products', id)), timeoutVal);
+        }
       } else {
         for (const item of db_products) {
+          trackRecentLocalUpdate('products', item.id, item);
           await withTimeout(setDoc(doc(db, 'products', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'invoices') {
       if (id) {
         const item = db_invoices.find(v => v.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'invoices', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'invoices', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('invoices', id, item);
+          await withTimeout(setDoc(doc(db, 'invoices', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('invoices', id);
+          deleteRecentLocalUpdate('invoices', id);
+          await withTimeout(deleteDoc(doc(db, 'invoices', id)), timeoutVal);
+        }
       } else {
         for (const item of db_invoices) {
+          trackRecentLocalUpdate('invoices', item.id, item);
           await withTimeout(setDoc(doc(db, 'invoices', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'quotations') {
       if (id) {
         const item = db_quotations.find(q => q.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'quotations', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'quotations', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('quotations', id, item);
+          await withTimeout(setDoc(doc(db, 'quotations', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('quotations', id);
+          deleteRecentLocalUpdate('quotations', id);
+          await withTimeout(deleteDoc(doc(db, 'quotations', id)), timeoutVal);
+        }
       } else {
         for (const item of db_quotations) {
+          trackRecentLocalUpdate('quotations', item.id, item);
           await withTimeout(setDoc(doc(db, 'quotations', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'payments') {
       if (id) {
         const item = db_payments.find(p => p.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'payments', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'payments', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('payments', id, item);
+          await withTimeout(setDoc(doc(db, 'payments', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('payments', id);
+          deleteRecentLocalUpdate('payments', id);
+          await withTimeout(deleteDoc(doc(db, 'payments', id)), timeoutVal);
+        }
       } else {
         for (const item of db_payments) {
+          trackRecentLocalUpdate('payments', item.id, item);
           await withTimeout(setDoc(doc(db, 'payments', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'ledger') {
       if (id) {
         const item = db_ledger.find(l => l.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'ledger', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'ledger', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('ledger', id, item);
+          await withTimeout(setDoc(doc(db, 'ledger', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('ledger', id);
+          deleteRecentLocalUpdate('ledger', id);
+          await withTimeout(deleteDoc(doc(db, 'ledger', id)), timeoutVal);
+        }
       } else {
         for (const item of db_ledger) {
+          trackRecentLocalUpdate('ledger', item.id, item);
           await withTimeout(setDoc(doc(db, 'ledger', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'cashbook') {
       if (id) {
         const item = db_cashbook.find(cb => cb.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'cashbook', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'cashbook', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('cashbook', id, item);
+          await withTimeout(setDoc(doc(db, 'cashbook', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('cashbook', id);
+          deleteRecentLocalUpdate('cashbook', id);
+          await withTimeout(deleteDoc(doc(db, 'cashbook', id)), timeoutVal);
+        }
       } else {
         for (const item of db_cashbook) {
+          trackRecentLocalUpdate('cashbook', item.id, item);
           await withTimeout(setDoc(doc(db, 'cashbook', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'logs') {
       if (id) {
         const item = db_logs.find(lg => lg.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'activityLogs', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'activityLogs', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('activityLogs', id, item);
+          await withTimeout(setDoc(doc(db, 'activityLogs', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('activityLogs', id);
+          deleteRecentLocalUpdate('activityLogs', id);
+          await withTimeout(deleteDoc(doc(db, 'activityLogs', id)), timeoutVal);
+        }
       } else {
         for (const item of db_logs) {
+          trackRecentLocalUpdate('activityLogs', item.id, item);
           await withTimeout(setDoc(doc(db, 'activityLogs', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'notifications') {
       if (id) {
         const item = db_notifications.find(n => n.id === id);
-        if (item) await withTimeout(setDoc(doc(db, 'notifications', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'notifications', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('notifications', id, item);
+          await withTimeout(setDoc(doc(db, 'notifications', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('notifications', id);
+          deleteRecentLocalUpdate('notifications', id);
+          await withTimeout(deleteDoc(doc(db, 'notifications', id)), timeoutVal);
+        }
       } else {
         for (const item of db_notifications) {
+          trackRecentLocalUpdate('notifications', item.id, item);
           await withTimeout(setDoc(doc(db, 'notifications', item.id), item), timeoutVal);
         }
       }
     } else if (topic === 'users') {
       if (id) {
         const item = db_users.find(u => u.userId === id);
-        if (item) await withTimeout(setDoc(doc(db, 'users', id), item), timeoutVal);
-        else await withTimeout(deleteDoc(doc(db, 'users', id)), timeoutVal);
+        if (item) {
+          trackRecentLocalUpdate('users', id, item);
+          await withTimeout(setDoc(doc(db, 'users', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('users', id);
+          deleteRecentLocalUpdate('users', id);
+          await withTimeout(deleteDoc(doc(db, 'users', id)), timeoutVal);
+        }
       } else {
         for (const item of db_users) {
+          trackRecentLocalUpdate('users', item.userId, item);
           await withTimeout(setDoc(doc(db, 'users', item.userId), item), timeoutVal);
+        }
+      }
+    } else if (topic === 'fcmTokens') {
+      if (id) {
+        const item = db_fcm_tokens.find(t => t.tokenId === id);
+        if (item) {
+          trackRecentLocalUpdate('fcmTokens', id, item);
+          await withTimeout(setDoc(doc(db, 'fcmTokens', id), item), timeoutVal);
+        } else {
+          trackRecentLocalDelete('fcmTokens', id);
+          deleteRecentLocalUpdate('fcmTokens', id);
+          await withTimeout(deleteDoc(doc(db, 'fcmTokens', id)), timeoutVal);
+        }
+      } else {
+        for (const item of db_fcm_tokens) {
+          trackRecentLocalUpdate('fcmTokens', item.tokenId, item);
+          await withTimeout(setDoc(doc(db, 'fcmTokens', item.tokenId), item), timeoutVal);
         }
       }
     }
@@ -601,11 +829,11 @@ async function bootstrapFromFirestore() {
     }
 
     // Modern Self-healing Collection Bootstrapper Utility (25 seconds timeouts)
-    const syncCollectionOnStartup = async <T extends { id?: string; userId?: string }>(
+    const syncCollectionOnStartup = async <T extends { id?: string; userId?: string; tokenId?: string }>(
       collectionName: string,
       currentList: T[],
       demoSeedList: T[],
-      idKey: 'id' | 'userId' = 'id'
+      idKey: 'id' | 'userId' | 'tokenId' = 'id'
     ): Promise<T[]> => {
       const snap = await withTimeout(getDocs(collection(db, collectionName)), 25000);
       if (snap.empty) {
@@ -616,7 +844,7 @@ async function bootstrapFromFirestore() {
           console.log(`Firestore '${collectionName}' collection is empty. First-time seeding with default dataset (${seedData.length} records) to cloud...`);
           const batch = writeBatch(db);
           for (const item of seedData) {
-            const docId = idKey === 'id' ? item.id : item.userId;
+            const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
             if (docId) batch.set(doc(db, collectionName, docId), item);
           }
           await withTimeout(batch.commit(), 25000);
@@ -674,6 +902,9 @@ async function bootstrapFromFirestore() {
 
     // 13. Users
     db_users = await syncCollectionOnStartup('users', db_users, DEMO_USERS, 'userId');
+
+    // 14. FCM Tokens
+    db_fcm_tokens = await syncCollectionOnStartup('fcmTokens', db_fcm_tokens, [], 'tokenId');
 
     // Ensure modulesinternet@gmail.com is in db_users and default demo users are both kept and restored with password integrity
     const finalUsers: UserProfile[] = [];
@@ -759,49 +990,128 @@ async function bootstrapFromFirestore() {
   }
 }
 
+// Track recent local memory writes to prevent async onSnapshot collection overwrites of unpropagated/lagging Firestore documents.
+interface RecentUpdate {
+  timestamp: number;
+  data: any;
+}
+const recentLocalUpdates = new Map<string, Map<string, RecentUpdate>>();
+const recentLocalDeletes = new Map<string, Map<string, number>>();
+
+function trackRecentLocalUpdate(collectionName: string, docId: string, data: any) {
+  if (!recentLocalUpdates.has(collectionName)) {
+    recentLocalUpdates.set(collectionName, new Map());
+  }
+  recentLocalUpdates.get(collectionName)!.set(docId, {
+    timestamp: Date.now(),
+    data: JSON.parse(JSON.stringify(data)) // deep clone to prevent mutation bugs
+  });
+}
+
+function trackRecentLocalDelete(collectionName: string, docId: string) {
+  if (!recentLocalDeletes.has(collectionName)) {
+    recentLocalDeletes.set(collectionName, new Map());
+  }
+  recentLocalDeletes.get(collectionName)!.set(docId, Date.now());
+}
+
+function deleteRecentLocalUpdate(collectionName: string, docId: string) {
+  const collectionMap = recentLocalUpdates.get(collectionName);
+  if (collectionMap) {
+    collectionMap.delete(docId);
+  }
+}
+
+function mergeRecentUpdates(collectionName: string, incomingList: any[], idKey: string = 'id'): any[] {
+  const collectionUpdates = recentLocalUpdates.get(collectionName);
+  const collectionDeletes = recentLocalDeletes.get(collectionName);
+  const cutoffTime = Date.now() - 30000; // Keep items in memory for 30s as a safety replication window
+
+  // Clean up old updates and deletes key records to avoid memory leaks
+  if (collectionUpdates) {
+    for (const [id, update] of collectionUpdates.entries()) {
+      if (update.timestamp < cutoffTime) {
+        collectionUpdates.delete(id);
+      }
+    }
+  }
+  if (collectionDeletes) {
+    for (const [id, timestamp] of collectionDeletes.entries()) {
+      if (timestamp < cutoffTime) {
+        collectionDeletes.delete(id);
+      }
+    }
+  }
+
+  // Filter out any items that were deleted recently
+  let merged = incomingList;
+  if (collectionDeletes && collectionDeletes.size > 0) {
+    merged = merged.filter(item => {
+      const id = item[idKey];
+      return !collectionDeletes.has(id);
+    });
+  }
+
+  // Merge back in or overwrite with items that were modified / added recently
+  if (collectionUpdates && collectionUpdates.size > 0) {
+    const listCopy = [...merged];
+    for (const [id, update] of collectionUpdates.entries()) {
+      const idx = listCopy.findIndex(item => item[idKey] === id);
+      if (idx !== -1) {
+        listCopy[idx] = update.data;
+      } else {
+        listCopy.unshift(update.data);
+      }
+    }
+    return listCopy;
+  }
+
+  return merged;
+}
+
 // Real-time dynamic Firestore onSnapshot listener subscription model for backend
 function registerBackendRealtimeListeners() {
   if (!db) return;
-  console.log("Registering active backend real-time Firestore listeners to keep cache fresh...");
+  console.log("Registering active backend real-time Firestore listeners to keep cache fresh with race-condition guards...");
 
   onSnapshot(collection(db, 'clients'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
-    db_clients = list;
+    db_clients = mergeRecentUpdates('clients', list, 'id');
   }, (error) => {
     console.error("Backend client snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'products'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
-    db_products = list;
+    db_products = mergeRecentUpdates('products', list, 'id');
   }, (error) => {
     console.error("Backend product snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'invoices'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
-    db_invoices = list;
+    db_invoices = mergeRecentUpdates('invoices', list, 'id');
   }, (error) => {
     console.error("Backend invoice snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'quotations'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
-    db_quotations = list;
+    db_quotations = mergeRecentUpdates('quotations', list, 'id');
   }, (error) => {
     console.error("Backend quotation snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'payments'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
-    db_payments = list;
+    db_payments = mergeRecentUpdates('payments', list, 'id');
   }, (error) => {
     console.error("Backend payment snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'ledger'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
-    db_ledger = list;
+    db_ledger = mergeRecentUpdates('ledger', list, 'id');
   }, (error) => {
     console.error("Backend ledger snapshot error:", error);
   });
@@ -809,33 +1119,38 @@ function registerBackendRealtimeListeners() {
   onSnapshot(collection(db, 'cashbook'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
     const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
-    db_cashbook = filtered;
+    db_cashbook = mergeRecentUpdates('cashbook', filtered, 'id');
   }, (error) => {
     console.error("Backend cashbook snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'activityLogs'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
-    db_logs = list;
+    db_logs = mergeRecentUpdates('activityLogs', list, 'id');
   }, (error) => {
     console.error("Backend logs snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'notifications'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
-    db_notifications = list;
+    db_notifications = mergeRecentUpdates('notifications', list, 'id');
   }, (error) => {
     console.error("Backend notifications snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'users'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ userId: d.id, ...d.data() } as UserProfile));
-    db_users = list;
+    db_users = mergeRecentUpdates('users', list, 'userId');
   }, (error) => {
     console.error("Backend users snapshot error:", error);
   });
 
   onSnapshot(doc(db, 'businessSettings', 'global'), (docSnap) => {
+    const globalUpdates = recentLocalUpdates.get('businessSettings');
+    const recentGlobal = globalUpdates?.get('global');
+    if (recentGlobal && recentGlobal.timestamp > Date.now() - 30000) {
+      return;
+    }
     if (docSnap.exists()) {
       db_settings = docSnap.data() as BusinessSettings;
     }
@@ -844,6 +1159,11 @@ function registerBackendRealtimeListeners() {
   });
 
   onSnapshot(doc(db, 'businessSettings', 'categories'), (docSnap) => {
+    const globalUpdates = recentLocalUpdates.get('businessSettings');
+    const recentCategories = globalUpdates?.get('categories');
+    if (recentCategories && recentCategories.timestamp > Date.now() - 30000) {
+      return;
+    }
     if (docSnap.exists()) {
       const listData = (docSnap.data() as { list?: string[] }).list;
       if (Array.isArray(listData)) {
@@ -855,6 +1175,11 @@ function registerBackendRealtimeListeners() {
   });
 
   onSnapshot(doc(db, 'businessSettings', 'roles'), (docSnap) => {
+    const globalUpdates = recentLocalUpdates.get('businessSettings');
+    const recentRoles = globalUpdates?.get('roles');
+    if (recentRoles && recentRoles.timestamp > Date.now() - 30000) {
+      return;
+    }
     if (docSnap.exists()) {
       const listData = (docSnap.data() as { list?: RolePermissions[] }).list;
       if (Array.isArray(listData) && listData.length > 0) {
@@ -866,6 +1191,11 @@ function registerBackendRealtimeListeners() {
   });
 
   onSnapshot(doc(db, 'businessSettings', 'passwords'), (docSnap) => {
+    const globalUpdates = recentLocalUpdates.get('businessSettings');
+    const recentPasswords = globalUpdates?.get('passwords');
+    if (recentPasswords && recentPasswords.timestamp > Date.now() - 30000) {
+      return;
+    }
     if (docSnap.exists()) {
       const listData = docSnap.data();
       if (listData && Object.keys(listData).length > 0) {
@@ -874,6 +1204,26 @@ function registerBackendRealtimeListeners() {
     }
   }, (error) => {
     console.error("Backend settings passwords snapshot error:", error);
+  });
+
+  onSnapshot(collection(db, 'fcmTokens'), (snapshot) => {
+    const globalUpdates = recentLocalUpdates.get('fcmTokens');
+    const incoming: any[] = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const localUpdate = globalUpdates?.get(doc.id);
+      if (localUpdate && localUpdate.timestamp > Date.now() - 30000) {
+        const cachedItem = db_fcm_tokens.find(t => t.tokenId === doc.id);
+        if (cachedItem) {
+          incoming.push(cachedItem);
+          return;
+        }
+      }
+      incoming.push(data);
+    });
+    db_fcm_tokens = incoming;
+  }, (error) => {
+    console.error("Backend fcmTokens collection snapshot error:", error);
   });
 }
 
@@ -908,14 +1258,42 @@ function checkPermission(module: keyof RolePermissions['modules'], action: 'read
   };
 }
 
-// Helper to log audit activity
-function logUserActivity(userId: string, userName: string, action: string, details: string) {
+// Helper to log audit activity with support for Express Request object auto-extraction
+function logUserActivity(reqOrUserId: any, userNameOrAction: string, actionOrDetails?: string, details?: string) {
+  let userId = "demo-admin";
+  let userName = "Karan Sharma";
+  let action = "";
+  let finalDetails = "";
+
+  if (reqOrUserId && typeof reqOrUserId === 'object' && 'headers' in reqOrUserId) {
+    const req = reqOrUserId;
+    userId = (req.headers['x-user-id'] as string) || "demo-admin";
+    userName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+    action = userNameOrAction;
+    finalDetails = actionOrDetails || "";
+  } else {
+    userId = reqOrUserId || "demo-admin";
+    userName = userNameOrAction || "Karan Sharma";
+    action = actionOrDetails || "";
+    finalDetails = details || "";
+
+    // Intercept with AsyncLocalStorage store to capture the currently executing route operator
+    const store = requestContext.getStore();
+    if (store && store.req) {
+      const req = store.req;
+      const headerUid = req.headers['x-user-id'] as string;
+      const headerName = req.headers['x-user-name'] as string;
+      if (headerUid) userId = headerUid;
+      if (headerName) userName = headerName;
+    }
+  }
+
   const newLog: ActivityLog = {
     id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     userId,
     userName,
     action,
-    details,
+    details: finalDetails,
     timestamp: new Date().toISOString()
   };
   db_logs.unshift(newLog);
@@ -1305,6 +1683,13 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
   await syncStateToFirestore('invoices', newInvoice.id);
   await syncStateToFirestore('ledger', newLedger.id);
 
+  // Trigger FCM push notification alert
+  sendFcmNotification(
+    "New Invoice Created",
+    `Invoice #${newInvoice.invoiceNumber} for ₹${Number(newInvoice.total).toLocaleString()} has been generated.`,
+    { route: '/invoices', invoiceId: newInvoice.id, tab: 'invoices' }
+  ).catch(err => console.error("FCM dispatch caught error:", err));
+
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
 });
@@ -1347,6 +1732,14 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
     };
     
     await syncStateToFirestore('invoices', id);
+
+    // Trigger FCM push notification alert
+    sendFcmNotification(
+      "Invoice Updated",
+      `Invoice #${db_invoices[index].invoiceNumber} has been modified.`,
+      { route: '/invoices', invoiceId: id, tab: 'invoices' }
+    ).catch(err => console.error("FCM dispatch caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
     res.json(db_invoices[index]);
   } else {
@@ -1653,6 +2046,13 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     await syncStateToFirestore('ledger', newLedger.id);
     await syncStateToFirestore('cashbook', newCashbook.id);
 
+    // Trigger FCM payment received notification alert
+    sendFcmNotification(
+      "Payment Received",
+      `₹${Number(newPayment.amount).toLocaleString()} received against Invoice #${newPayment.invoiceNumber || "N/A"}.`,
+      { route: '/payments', paymentId: newPayment.id, invoiceId: newPayment.invoiceId, tab: 'payments' }
+    ).catch(err => console.error("FCM dispatch caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
     res.status(201).json(newPayment);
   } catch (err: any) {
@@ -1911,6 +2311,17 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Requ
 
   db_cashbook.unshift(newEntry);
   await syncStateToFirestore('cashbook', newEntry.id);
+
+  // Trigger FCM cashbook transaction notification alert (Payment Given)
+  if (newEntry.type === 'expense') {
+    const payModeLabel = newEntry.paymentMode || "Cash";
+    sendFcmNotification(
+      "Payment Given",
+      `₹${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} payment recorded.`,
+      { route: '/cashbook', cashbookId: newEntry.id, tab: 'cashbook' }
+    ).catch(err => console.error("FCM dispatch caught error:", err));
+  }
+
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
 });
@@ -2162,6 +2573,7 @@ app.post('/api/passwords', async (req: Request, res: Response) => {
     db_passwords = { ...db_passwords, ...req.body };
     saveStateToLocalCache();
     if (db) {
+      trackRecentLocalUpdate('businessSettings', 'passwords', db_passwords);
       await setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords);
     }
     res.json({ success: true, passwords: db_passwords });
@@ -2469,6 +2881,40 @@ app.post('/api/restore', checkPermission('settings', 'write'), async (req: Reque
     res.json({ success: true, message: "Database backup imported and synchronized successfully with Cloud Firestore!" });
   } catch (error: any) {
     res.status(500).json({ error: `Firestore restoration failed: ${error.message}` });
+  }
+});
+
+// 14. Real-time Push Notifications FCM registration
+app.post('/api/fcm-token', async (req: Request, res: Response) => {
+  const { userId, deviceToken, platform } = req.body;
+  if (!userId || !deviceToken) {
+    return res.status(400).json({ error: "Missing required parameters: userId and deviceToken are mandatory." });
+  }
+
+  try {
+    const tokenId = deviceToken.replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 100);
+    const existingIndex = db_fcm_tokens.findIndex(t => t.deviceToken === deviceToken);
+    
+    const entry = {
+      tokenId,
+      userId,
+      deviceToken,
+      platform: platform || 'android',
+      updatedAt: new Date().toISOString()
+    };
+
+    if (existingIndex !== -1) {
+      db_fcm_tokens[existingIndex] = entry;
+    } else {
+      db_fcm_tokens.push(entry);
+    }
+
+    await syncStateToFirestore('fcmTokens', tokenId);
+    console.log(`[FCM BACKEND] Registered token for user ${userId}: ${deviceToken.substring(0, 15)}...`);
+    res.json({ success: true, message: "FCM Device Token registered successfully." });
+  } catch (err: any) {
+    console.error("[FCM BACKEND] Registration error:", err);
+    res.status(500).json({ error: `FCM registration failed: ${err.message}` });
   }
 });
 

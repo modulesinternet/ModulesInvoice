@@ -61,6 +61,16 @@ export default function QuotationsModule({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [expiryDate, setExpiryDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]);
   const [notes, setNotes] = useState('This quotation remains valid for 30 calendar days from issue. Terms: 50% advance, balance on deliverable signoff.');
+
+  React.useEffect(() => {
+    if (!isEditing) {
+      if (businessSettings?.defaultInvoiceNotes) {
+        setNotes(businessSettings.defaultInvoiceNotes);
+      } else {
+        setNotes('This quotation remains valid for 30 calendar days from issue. Terms: 50% advance, balance on deliverable signoff.');
+      }
+    }
+  }, [businessSettings?.defaultInvoiceNotes, isEditing]);
   const [discount, setDiscount] = useState('0');
 
   // Multi item addition fields
@@ -445,7 +455,19 @@ export default function QuotationsModule({
             </div>
             {canWrite && (
               <button 
-                onClick={() => setIsCreateOpen(true)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditingQuotationId(null);
+                  setClientId('');
+                  setAddedItems([]);
+                  setDiscount('0');
+                  if (businessSettings?.defaultInvoiceNotes) {
+                    setNotes(businessSettings.defaultInvoiceNotes);
+                  } else {
+                    setNotes('This quotation remains valid for 30 calendar days from issue. Terms: 50% advance, balance on deliverable signoff.');
+                  }
+                  setIsCreateOpen(true);
+                }}
                 className="gradient-btn px-4 py-2 rounded-lg text-xs font-semibold shadow-sm w-full md:w-auto flex items-center justify-center gap-1.5"
                 id="raise-new-proposal-btn"
               >

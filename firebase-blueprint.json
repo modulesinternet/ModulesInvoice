@@ -203,6 +203,19 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "title", "message", "isRead", "createdAt"]
+    },
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "FCM device registration tokens for push notifications mapped to user profiles.",
+      "type": "object",
+      "properties": {
+        "tokenId": { "type": "string", "description": "Unique identifier / sanitised representation of the token." },
+        "userId": { "type": "string", "description": "UID of the logged-in user profile." },
+        "deviceToken": { "type": "string", "description": "Raw Firebase Cloud Messaging registration token." },
+        "platform": { "type": "string", "description": "Target device platform (android, ios, web, etc)." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last registration refresh timestamp." }
+      },
+      "required": ["tokenId", "userId", "deviceToken", "platform", "updatedAt"]
     }
   },
   "firestore": {
@@ -249,6 +262,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "General system notices."
+    },
+    "/fcmTokens/{tokenId}": {
+      "schema": "FcmToken",
+      "description": "Registered FCM device tokens for real-time push routing."
     }
   }
 }
