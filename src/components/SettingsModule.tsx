@@ -20,7 +20,8 @@ import {
   Database,
   Download,
   QrCode,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 import SignaturePad from './SignaturePad';
@@ -39,6 +40,47 @@ export default function SettingsModule({
 }: SettingsModuleProps) {
   const [success, setSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Backend connection state
+  const [backendUrl, setBackendUrlInput] = useState(api.getSavedBackendUrl() || api.getDefaultBackendUrl());
+  const [testResult, setTestResult] = useState<{ success?: boolean; msg?: string; pingMs?: number } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleTestBackend = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    const start = Date.now();
+    try {
+      const res = await api.testHealth(backendUrl);
+      const end = Date.now();
+      if (res.success) {
+        setTestResult({
+          success: true,
+          msg: `Online - Connected to central db. Version: ${res.data?.version || 'v2'}`,
+          pingMs: end - start
+        });
+        api.setBackendUrl(backendUrl);
+      } else {
+        setTestResult({
+          success: false,
+          msg: `Offline: ${res.error || 'Server unreachable'}`
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        msg: err.message || 'Connection crashed'
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleClearOverride = () => {
+    api.setBackendUrl('');
+    setBackendUrlInput(api.getDefaultBackendUrl());
+    setTestResult(null);
+  };
 
   // Form parameters
   const [companyName, setCompanyName] = useState(settings?.companyName || '');
@@ -915,6 +957,71 @@ export default function SettingsModule({
 
         {/* RIGHT COLUMN: ADDITIONAL & SIGNATURE */}
         <div className="space-y-6">
+          {/* Cloud Sync & Android Connectivity Diagnostic Console */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <Globe2 className="w-4 h-4 text-indigo-500 animate-pulse" />
+              <span>Cloud Server &amp; Android Sync</span>
+            </h3>
+
+            <p className="text-[11px] text-slate-500 leading-normal font-sans">
+              Verify real-time replication or switch the active server link for mobile connectivity.
+            </p>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-400 uppercase font-sans">Active Server API URL</label>
+                <input 
+                  type="url"
+                  placeholder="e.g. https://ais-dev-...run.app"
+                  value={backendUrl}
+                  onChange={(e) => setBackendUrlInput(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-[#E5E7EB] rounded-xl font-mono focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestBackend}
+                  disabled={isTesting}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
+                  <span>{isTesting ? 'Verifying...' : 'Test & Save Link'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearOverride}
+                  className="px-3 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 transition rounded-xl text-[10px] font-bold cursor-pointer font-sans"
+                >
+                  Clear/Reset
+                </button>
+              </div>
+
+              {testResult && (
+                <div className={`p-3 rounded-2xl flex items-start gap-2 text-[10px] border ${
+                  testResult.success 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
+                    : 'bg-rose-50 text-rose-800 border-rose-100'
+                }`}>
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5">
+                    <p className="font-bold leading-none">{testResult.success ? 'Sync Connected' : 'Sync Error'}</p>
+                    <p className="text-[9px] leading-relaxed opacity-90">{testResult.msg}</p>
+                    {testResult.pingMs !== undefined && (
+                      <p className="text-[8px] font-mono opacity-75">Latency response: {testResult.pingMs}ms</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           {/* Box 3: Stamp & Signatures */}
           <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">

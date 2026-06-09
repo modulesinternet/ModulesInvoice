@@ -62,6 +62,7 @@ import UsersModule from './components/UsersModule';
 import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
 import ProfileModule from './components/ProfileModule';
+import SplashAnimation from './components/SplashAnimation';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile';
 
@@ -218,6 +219,16 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
@@ -747,6 +758,25 @@ export default function App() {
       setPayments(prev => {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
+
+        // Trigger local notification for new payments added (real-time/multicast overlay)
+        try {
+          if (prev && prev.length > 0) {
+            const prevIds = new Set(prev.map(p => p.id));
+            const newPayments = list.filter(p => !prevIds.has(p.id));
+
+            newPayments.forEach(pay => {
+              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
+              triggerLocalNotification(
+                "💰 Payment Received",
+                `Received ${formattedAmt} from ${pay.clientName} against Invoice #${pay.invoiceNumber || 'N/A'}.`
+              );
+            });
+          }
+        } catch (e) {
+          console.error("Local payment notification runner error: ", e);
+        }
+
         localStorage.setItem('db_payments', nextStr);
         return list;
       });
@@ -772,6 +802,27 @@ export default function App() {
       setCashbook(prev => {
         const nextStr = JSON.stringify(filtered);
         if (JSON.stringify(prev) === nextStr) return prev;
+
+        // Trigger local notification for manual cash out / expense recorded (real-time sync)
+        try {
+          if (prev && prev.length > 0) {
+            const prevIds = new Set(prev.map(c => c.id));
+            const newEntries = filtered.filter(c => !prevIds.has(c.id));
+
+            newEntries.forEach(entry => {
+              if (entry.type === 'expense') {
+                const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount);
+                triggerLocalNotification(
+                  "💸 Payment Cash Out",
+                  `Registered payout of ${formattedAmt} structure: ${entry.description || 'General expense'}.`
+                );
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Local cashbook notification runner error: ", e);
+        }
+
         localStorage.setItem('db_cashbook', nextStr);
         return filtered;
       });
@@ -930,19 +981,25 @@ export default function App() {
   useEffect(() => {
     let networkHandle: any = null;
     let lifecycleHandle: any = null;
+    let lastNetworkConnected: boolean | null = null;
 
     getNetworkStatus().then(status => {
       setIsConnected(status.connected);
+      lastNetworkConnected = status.connected;
     });
 
     addNetworkListener(status => {
       setIsConnected(status.connected);
-      if (status.connected) {
-        showToast("Network restored. Syncing with cloud central register...", "success");
-        loadMasterData(true, true); // force=true, silent=true (seamless background sync)
-      } else {
-        showToast("Platform offline. Showing local ERP snapshot view.", "error");
+      // Only display the network state change toast if the state actually changes!
+      if (lastNetworkConnected !== null && status.connected !== lastNetworkConnected) {
+        if (status.connected) {
+          showToast("Network restored. Syncing with cloud central register...", "success");
+          loadMasterData(true, true); // force=true, silent=true (seamless background sync)
+        } else {
+          showToast("Platform offline. Showing local ERP snapshot view.", "error");
+        }
       }
+      lastNetworkConnected = status.connected;
     }).then(handle => {
       networkHandle = handle;
     });
@@ -1416,6 +1473,15 @@ export default function App() {
       showToast(`Could not sync updated credentials inside the cloud: ${err.message}`, "error");
     }
   };
+
+  if (showSplash) {
+    return (
+      <SplashAnimation 
+        companyName={businessSettings?.companyName || 'Internet Modules'} 
+        logoUrl={businessSettings?.logoUrl || ''} 
+      />
+    );
+  }
 
   // Intercept the public invoice QR scan page route (robust subdirectory compatibility)
   const isPublicInvoiceRoute = window.location.pathname.includes('/public/invoice/');
