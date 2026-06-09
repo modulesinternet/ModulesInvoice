@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 import https from 'https';
 
 // --- Phase 1: Build Number Auto-Increment ---
@@ -24,18 +25,23 @@ console.log(`Prebuild auto-increment: Version v${versionData.version} (Build ${v
 const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
 let projectId = 'reverberant-grammar-ptgzl';
 let databaseId = 'ai-studio-fd4d4c28-547e-4d9a-a6cd-f7c2e20eb217';
+let apiKey = '';
 
 if (fs.existsSync(firebaseConfigPath)) {
   try {
     const raw = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
     if (raw.projectId) projectId = raw.projectId;
     if (raw.firestoreDatabaseId) databaseId = raw.firestoreDatabaseId;
+    if (raw.apiKey) apiKey = raw.apiKey;
   } catch (err) {
     console.error("Error reading firebase-applet-config.json:", err.message);
   }
 }
 
-const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/businessSettings/global`;
+let docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/businessSettings/global`;
+if (apiKey) {
+  docUrl += `?key=${apiKey}`;
+}
 
 function fetchSettings() {
   return new Promise((resolve, reject) => {
@@ -64,7 +70,8 @@ function fetchSettings() {
 
 function downloadImage(url, dest) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 15000 }, (res) => {
+    const client = url.startsWith('https') ? https : http;
+    const req = client.get(url, { timeout: 15000 }, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP Status ${res.statusCode}`));
         return;

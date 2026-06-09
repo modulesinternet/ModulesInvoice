@@ -12,9 +12,9 @@ export default function SplashAnimation({ companyName, logoUrl }: SplashAnimatio
   const [statusText, setStatusText] = useState('Initializing secure sandbox environment...');
 
   useEffect(() => {
-    const timer1 = setTimeout(() => setStatusText('Establishing handshake with secure Google Cloud Run node...'), 400);
-    const timer2 = setTimeout(() => setStatusText('Mirroring real-time Firestore relational snapshot...'), 1100);
-    const timer3 = setTimeout(() => setStatusText('Sanitizing transactional double-entry books...'), 1700);
+    const timer1 = setTimeout(() => setStatusText('Establishing handshake with secure Google Cloud Run node...'), 200);
+    const timer2 = setTimeout(() => setStatusText('Mirroring real-time Firestore relational snapshot...'), 500);
+    const timer3 = setTimeout(() => setStatusText('Sanitizing transactional double-entry books...'), 800);
 
     const progressInterval = setInterval(() => {
       setProgress(p => {
@@ -22,9 +22,9 @@ export default function SplashAnimation({ companyName, logoUrl }: SplashAnimatio
           clearInterval(progressInterval);
           return 100;
         }
-        return p + Math.floor(Math.random() * 8) + 4;
+        return p + Math.floor(Math.random() * 12) + 8;
       });
-    }, 120);
+    }, 45);
 
     return () => {
       clearTimeout(timer1);

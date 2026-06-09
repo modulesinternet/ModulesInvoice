@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import nodemailer from 'nodemailer';
@@ -2538,6 +2539,32 @@ app.post('/api/settings', checkPermission('settings', 'write'), async (req: Requ
   try {
     db_settings = { ...db_settings, ...req.body };
     await syncStateToFirestore('settings');
+
+    // Securely write to local cache file so prebuild has instant disk-level access
+    try {
+      const cachePath = path.join(process.cwd(), 'local-db-cache.json');
+      let cacheData: any = {};
+      if (fs.existsSync(cachePath)) {
+        try {
+          cacheData = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        } catch (_) {}
+      }
+      cacheData.db_settings = db_settings;
+      fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
+
+      // Async trigger prebuild script to regenerate Android resources on the fly inside the workspace!
+      console.log("[Settings Engine]: Invoking prebuild hook to synchronize Android metadata/assets...");
+      exec('node prebuild.js', (err, stdout, stderr) => {
+        if (err) {
+          console.error("[Settings Engine] prebuild trigger encountered error: ", err, stderr);
+        } else {
+          console.log("[Settings Engine] prebuild trigger successfully synchronized Android icons/appName:", stdout);
+        }
+      });
+    } catch (fsErr) {
+      console.error("[Settings Engine] Failed to cache/trigger prebuild: ", fsErr);
+    }
+
     logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", "Updated corporate profile settings & banking info");
     res.json(db_settings);
   } catch (err: any) {
