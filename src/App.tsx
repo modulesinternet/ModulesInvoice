@@ -218,7 +218,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
 
   useEffect(() => {
@@ -263,7 +263,7 @@ export default function App() {
     }
   });
 
-  const [fullScreenLoading, setFullScreenLoading] = useState(true);
+  const [fullScreenLoading, setFullScreenLoading] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => {
       setFullScreenLoading(false);
@@ -360,6 +360,11 @@ export default function App() {
     }
     return null;
   });
+
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   // Enhanced Login Engine parameters
   const [loginEmail, setLoginEmail] = useState('');
@@ -629,6 +634,10 @@ export default function App() {
     // 3. Register native backbutton listener
     let backButtonHandle: any = null;
     addBackButtonListener((canGoBack) => {
+      if (!currentUserRef.current) {
+        exitApp();
+        return;
+      }
       if (activeTabRef.current !== 'dashboard') {
         setActiveTab('dashboard');
       } else {
@@ -1537,8 +1546,8 @@ export default function App() {
                   return companyNameText;
                 })()}
               </h1>
-              <p className="text-xs text-slate-400 font-sans tracking-wide uppercase">
-                Enterprise Central Security Node
+              <p className="text-xs text-indigo-600 font-sans font-semibold tracking-wide uppercase">
+                Accounts & Billing System
               </p>
             </div>
           </div>
@@ -1548,11 +1557,6 @@ export default function App() {
           {/* VIEW: SIGN IN */}
           {loginMode === 'signin' && (
             <form onSubmit={handleSignIn} className="space-y-4">
-              <div className="text-center space-y-1">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Sign In to Dashboard</h3>
-                <p className="text-[11px] text-slate-400">Use email and passkey assigned by management node.</p>
-              </div>
-
               <div className="space-y-3">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Email ID</label>
@@ -1781,7 +1785,7 @@ export default function App() {
 
           <div className="text-center pt-1.5 flex items-center justify-center gap-2 font-mono text-[10px] font-bold text-slate-400 select-none">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span>iModules Device Build: v{appVersion.version} (Build {appVersion.build})</span>
+            <span>App Version: v{appVersion.version} (Build {appVersion.build})</span>
           </div>
         </div>
       </div>
@@ -2407,7 +2411,7 @@ export default function App() {
         </header>
 
         {/* DYNAMIC COMPONENT PANEL CANVAS */}
-        <div className="p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto" id="dynamic-element-stage">
+        <div className="p-6 md:p-8 pb-20 md:pb-8 flex-1 max-w-7xl w-full mx-auto" id="dynamic-element-stage">
           {loading && !dashboardMetrics ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
               <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
@@ -2589,6 +2593,68 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* MOBILE FRIENDLY BOTTOM PORTAL NAVIGATION */}
+      {currentUser && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 z-40 flex items-center justify-around px-2 pb-safe shadow-lg no-print">
+          <button 
+            onClick={() => {
+              if (activeTab !== 'dashboard') setActiveTab('dashboard');
+            }}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
+              activeTab === 'dashboard' ? 'text-indigo-600 scale-105' : 'text-slate-400'
+            }`}
+          >
+            <Activity className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight">Home</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              if (activeTab !== 'products') setActiveTab('products');
+            }}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
+              activeTab === 'products' ? 'text-indigo-600 scale-105' : 'text-slate-400'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight">Products</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              if (activeTab !== 'invoices') setActiveTab('invoices');
+            }}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
+              activeTab === 'invoices' ? 'text-indigo-600 scale-105' : 'text-slate-400'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight">Invoices</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              if (activeTab !== 'ledger') setActiveTab('ledger');
+            }}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
+              activeTab === 'ledger' ? 'text-indigo-600 scale-105' : 'text-slate-400'
+            }`}
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight">Ledger</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 flex-1 py-1 text-slate-400 active:scale-95 transition-all"
+          >
+            <Menu className="w-5 h-5 text-slate-500" />
+            <span className="text-[10px] font-bold tracking-tight text-slate-500">More</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
