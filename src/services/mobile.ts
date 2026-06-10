@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { mobileConfig } from '../mobile-config';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Network } from '@capacitor/network';
@@ -184,6 +185,12 @@ export const setupPushNotifications = async (
 ): Promise<void> => {
   if (!isMobileDevice()) {
     console.log("FCM setup skipped: Not running on a native mobile device platform.");
+    return;
+  }
+
+  // CRITICAL: Protect against native app crashes if google-services.json is missing in the build
+  if (!mobileConfig.googleServicesAvailable) {
+    console.warn("FCM setup skipped: google-services.json is missing from android/app/. Push notifications are disabled to prevent native app crash.");
     return;
   }
 

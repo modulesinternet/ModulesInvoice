@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+import groovy.json.JsonSlurper
+
+def getAppVersionAndBuild() {
+    try {
+        def versionFile = file("../../version.json")
+        if (versionFile.exists()) {
+            def parsedJson = new JsonSlurper().parseText(versionFile.text)
+            return [parsedJson.version, parsedJson.build]
+        }
+    } catch (Exception e) {
+        // Fallback
+    }
+    return ["1.1.2", "12"]
+}
+
+def (appVersionName, appVersionCodeStr) = getAppVersionAndBuild()
+def appVersionCode = appVersionCodeStr.toInteger()
+
 android {
     namespace = "com.apex.erp"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +25,8 @@ android {
         applicationId "com.apex.erp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

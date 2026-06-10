@@ -1,8 +1,9 @@
 import { Client, Product, Invoice, Quotation, Payment, LedgerEntry, CashbookEntry, BusinessSettings, ActivityLog, Notification, UserProfile } from '../types';
+import { prebuiltSettings } from '../prebuilt-settings';
 
 // Global configurations defaults
 export const DEFAULT_SETTINGS: BusinessSettings = {
-  companyName: "iModules",
+  companyName: prebuiltSettings.companyName || "iModules",
   gstIn: "27AAZCA4312R1ZX",
   pan: "AAZCA4312R",
   address: "Please update your corporate office address in Settings Module.",
@@ -16,7 +17,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   invoicePrefix: "INV/",
   quotationPrefix: "QTN/",
   currency: "INR",
-  logoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
+  logoUrl: prebuiltSettings.logoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80",
   signatureUrl: "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=150&h=50&q=80",
   timezone: "Asia/Kolkata",
   gstOption: "standard",
