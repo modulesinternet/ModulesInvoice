@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "598615866613",
+    "project_number": "136984818838",
     "project_id": "reverberant-grammar-ptgzl",
     "storage_bucket": "reverberant-grammar-ptgzl.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:598615866613:android:9d2fb99b61ef65b1",
+        "mobilesdk_app_id": "1:136984818838:android:e10e756f709149bb85e8d8",
         "android_client_info": {
           "package_name": "com.apex.erp"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDummyKeyPlaceholder-ReplaceWithYourActualKey"
+          "current_key": "AIzaSyDx-16U5VXpjxGWcHx6H_vkC0T3YSVQyvk"
         }
       ],
       "services": {
@@ -26,7 +26,7 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:598615866613:android:9d2fb99b61ef65b1",
+        "mobilesdk_app_id": "1:136984818838:android:e10e756f709149bb85e8d8",
         "android_client_info": {
           "package_name": "com.internetmodules.erp"
         }
@@ -34,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDummyKeyPlaceholder-ReplaceWithYourActualKey"
+          "current_key": "AIzaSyDx-16U5VXpjxGWcHx6H_vkC0T3YSVQyvk"
         }
       ],
       "services": {

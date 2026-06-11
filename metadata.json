@@ -1,6 +1,6 @@
 {
-  "name": "Smart Invoice Generator & Invoice Management System",
-  "description": "Enterprise-grade smart invoice builder and billing platform with live analytics, ledger, cashbook, multi-currency templates, GST calculations, and automated accounts tracking.",
+  "name": "iMODULES",
+  "description": "Enterprise-grade smart invoice builder and billing platform under the iMODULES brand, featuring live billing analytics, accounts ledgers, cashbook management, GST automation, and automatic data synchronization.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

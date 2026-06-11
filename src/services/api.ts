@@ -1328,6 +1328,18 @@ export const api = {
   },
 
   // 10. Business & Banking settings
+  getPublicSettings: () => {
+    if (isLocalOnly) {
+      const current = getLocalItem<BusinessSettings>('db_settings', DEFAULT_SETTINGS);
+      return Promise.resolve({
+        companyName: current.companyName,
+        logoUrl: current.logoUrl,
+        titleBarText: current.titleBarText
+      });
+    }
+    return request<Partial<BusinessSettings>>('/api/public/settings');
+  },
+
   getSettings: () => {
     if (isLocalOnly) {
       return Promise.resolve(getLocalItem<BusinessSettings>('db_settings', DEFAULT_SETTINGS));

@@ -73,6 +73,7 @@ function downloadImage(url, dest) {
     const client = url.startsWith('https') ? https : http;
     const req = client.get(url, { timeout: 1500 }, (res) => {
       if (res.statusCode !== 200) {
+        res.resume(); // Consume response data to prevent memory leak / hanging socket
         reject(new Error(`HTTP Status ${res.statusCode}`));
         return;
       }

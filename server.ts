@@ -425,8 +425,8 @@ function saveStateToLocalCache() {
   }
 }
 
-function loadStateFromLocalCache() {
-  if (db) {
+function loadStateFromLocalCache(force = false) {
+  if (db && !force) {
     // If Firebase DB is active, we bypass local JSON recovery, pulling fresh from cloud collections.
     return;
   }
@@ -784,7 +784,7 @@ function getCleanLedger(): LedgerEntry[] {
 // or performs an automatic default seed if Firestore is detected to be completely empty.
 async function bootstrapFromFirestore() {
   // Always load from local JSON cache first to keep any changes saved offline
-  loadStateFromLocalCache();
+  loadStateFromLocalCache(true);
 
   if (!db) {
     console.log("Firebase DB not configured or disabled. Running in full local cache model.");
@@ -2571,6 +2571,15 @@ app.post('/api/settings', checkPermission('settings', 'write'), async (req: Requ
     console.error("Error saving global corporate settings:", err);
     res.status(500).json({ error: `Settings update failed: ${err.message}` });
   }
+});
+
+// 11.4 Public Settings Endpoint for App Branding prior to Authentication
+app.get('/api/public/settings', (req: Request, res: Response) => {
+  res.json({
+    companyName: db_settings.companyName || "Internet Modules",
+    logoUrl: db_settings.logoUrl || "",
+    titleBarText: db_settings.titleBarText || ""
+  });
 });
 
 // 11.5 Public Invoice and Passwords sync routes

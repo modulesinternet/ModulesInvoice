@@ -629,6 +629,16 @@ export default function App() {
     });
 
     // 2. Perform silent background sync on launch to guarantee fresh client synchronization
+    api.getPublicSettings()
+      .then(pubSettings => {
+        if (pubSettings) {
+          setBusinessSettings(prev => ({ ...prev, ...pubSettings }));
+          const currentCached = getCachedItem<any>('db_settings', DEFAULT_SETTINGS || {});
+          localStorage.setItem('db_settings', JSON.stringify({ ...currentCached, ...pubSettings }));
+        }
+      })
+      .catch((e) => console.log("Public branding settings fetch bypassed:", e));
+
     loadMasterData(true, true); // force=true, silent=true (doesn't trigger full-viewport block screen spinner)
 
     // 3. Register native backbutton listener
@@ -690,7 +700,34 @@ export default function App() {
     if (!currentUser) return;
     console.log("Registering active real-time Firestore listeners for instant responsive feedback...");
 
-    const unsubClients = onSnapshot(collection(firestoreDb, 'clients'), (snapshot) => {
+    // Safe, unauthenticated-client-aware subscription helper that auto-disconnects on permission/auth errors
+    const registerSafeSnapshot = (
+      refOrQuery: any,
+      onNext: (snapshot: any) => void,
+      errorCollectionName: string
+    ) => {
+      let unsub: (() => void) | null = null;
+      try {
+        unsub = onSnapshot(refOrQuery, onNext, (error) => {
+          handleFirestoreError(error, OperationType.GET, errorCollectionName);
+          if (unsub) {
+            console.log(`[Safe Snapshot] Auto-decoupling listener for "${errorCollectionName}" due to:`, error.message);
+            unsub();
+            unsub = null;
+          }
+        });
+      } catch (err) {
+        console.warn(`[Safe Snapshot] Direct subscription failed for "${errorCollectionName}":`, err);
+      }
+      return () => {
+        if (unsub) {
+          unsub();
+          unsub = null;
+        }
+      };
+    };
+
+    const unsubClients = registerSafeSnapshot(collection(firestoreDb, 'clients'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Client));
       setClients(prev => {
         const nextStr = JSON.stringify(list);
@@ -698,11 +735,9 @@ export default function App() {
         localStorage.setItem('db_clients', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'clients');
-    });
+    }, 'clients');
 
-    const unsubProducts = onSnapshot(collection(firestoreDb, 'products'), (snapshot) => {
+    const unsubProducts = registerSafeSnapshot(collection(firestoreDb, 'products'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
       setProducts(prev => {
         const nextStr = JSON.stringify(list);
@@ -710,11 +745,9 @@ export default function App() {
         localStorage.setItem('db_products', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'products');
-    });
+    }, 'products');
 
-    const unsubInvoices = onSnapshot(collection(firestoreDb, 'invoices'), (snapshot) => {
+    const unsubInvoices = registerSafeSnapshot(collection(firestoreDb, 'invoices'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
       setInvoices(prev => {
         const nextStr = JSON.stringify(list);
@@ -754,11 +787,9 @@ export default function App() {
         localStorage.setItem('db_invoices', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'invoices');
-    });
+    }, 'invoices');
 
-    const unsubQuotations = onSnapshot(collection(firestoreDb, 'quotations'), (snapshot) => {
+    const unsubQuotations = registerSafeSnapshot(collection(firestoreDb, 'quotations'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
       setQuotations(prev => {
         const nextStr = JSON.stringify(list);
@@ -766,11 +797,9 @@ export default function App() {
         localStorage.setItem('db_quotations', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'quotations');
-    });
+    }, 'quotations');
 
-    const unsubPayments = onSnapshot(collection(firestoreDb, 'payments'), (snapshot) => {
+    const unsubPayments = registerSafeSnapshot(collection(firestoreDb, 'payments'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
       setPayments(prev => {
         const nextStr = JSON.stringify(list);
@@ -797,11 +826,9 @@ export default function App() {
         localStorage.setItem('db_payments', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'payments');
-    });
+    }, 'payments');
 
-    const unsubLedger = onSnapshot(collection(firestoreDb, 'ledger'), (snapshot) => {
+    const unsubLedger = registerSafeSnapshot(collection(firestoreDb, 'ledger'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
       setLedger(prev => {
         const nextStr = JSON.stringify(list);
@@ -809,11 +836,9 @@ export default function App() {
         localStorage.setItem('db_ledger', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'ledger');
-    });
+    }, 'ledger');
 
-    const unsubCashbook = onSnapshot(collection(firestoreDb, 'cashbook'), (snapshot) => {
+    const unsubCashbook = registerSafeSnapshot(collection(firestoreDb, 'cashbook'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
       const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
       setCashbook(prev => {
@@ -843,11 +868,9 @@ export default function App() {
         localStorage.setItem('db_cashbook', nextStr);
         return filtered;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'cashbook');
-    });
+    }, 'cashbook');
 
-    const unsubLogs = onSnapshot(collection(firestoreDb, 'activityLogs'), (snapshot) => {
+    const unsubLogs = registerSafeSnapshot(collection(firestoreDb, 'activityLogs'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
       setLogs(prev => {
         const nextStr = JSON.stringify(list);
@@ -855,11 +878,9 @@ export default function App() {
         localStorage.setItem('db_logs', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'activityLogs');
-    });
+    }, 'activityLogs');
 
-    const unsubNotifications = onSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
+    const unsubNotifications = registerSafeSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
       setNotifications(prev => {
         const nextStr = JSON.stringify(list);
@@ -867,11 +888,9 @@ export default function App() {
         localStorage.setItem('db_notifications', nextStr);
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'notifications');
-    });
+    }, 'notifications');
 
-    const unsubUsers = onSnapshot(collection(firestoreDb, 'users'), (snapshot) => {
+    const unsubUsers = registerSafeSnapshot(collection(firestoreDb, 'users'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ userId: d.id, ...d.data() } as UserProfile));
       setUsers(prev => {
         const nextStr = JSON.stringify(list);
@@ -894,11 +913,9 @@ export default function App() {
         }
         return list;
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'users');
-    });
+    }, 'users');
 
-    const unsubSettings = onSnapshot(doc(firestoreDb, 'businessSettings', 'global'), (docSnap) => {
+    const unsubSettings = registerSafeSnapshot(doc(firestoreDb, 'businessSettings', 'global'), (docSnap) => {
       if (docSnap.exists()) {
         const settingsData = docSnap.data() as BusinessSettings;
         setBusinessSettings(prev => {
@@ -908,11 +925,9 @@ export default function App() {
           return settingsData;
         });
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'businessSettings/global');
-    });
+    }, 'businessSettings/global');
 
-    const unsubCategories = onSnapshot(doc(firestoreDb, 'businessSettings', 'categories'), (docSnap) => {
+    const unsubCategories = registerSafeSnapshot(doc(firestoreDb, 'businessSettings', 'categories'), (docSnap) => {
       if (docSnap.exists()) {
         const listData = (docSnap.data() as { list?: string[] }).list;
         if (Array.isArray(listData)) {
@@ -924,11 +939,9 @@ export default function App() {
           });
         }
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'businessSettings/categories');
-    });
+    }, 'businessSettings/categories');
 
-    const unsubRoles = onSnapshot(doc(firestoreDb, 'businessSettings', 'roles'), (docSnap) => {
+    const unsubRoles = registerSafeSnapshot(doc(firestoreDb, 'businessSettings', 'roles'), (docSnap) => {
       if (docSnap.exists()) {
         const listData = (docSnap.data() as { list?: RolePermissions[] }).list;
         if (Array.isArray(listData) && listData.length > 0) {
@@ -940,9 +953,7 @@ export default function App() {
           });
         }
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'businessSettings/roles');
-    });
+    }, 'businessSettings/roles');
 
     return () => {
       console.log("Deregistering active real-time Firestore listeners...");

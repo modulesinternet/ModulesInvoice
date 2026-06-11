@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Internet Modules</string>
-    <string name="title_activity_main">Internet Modules</string>
+    <string name="app_name">iMODULES</string>
+    <string name="title_activity_main">iMODULES</string>
     <string name="package_name">com.apex.erp</string>
     <string name="custom_url_scheme">com.apex.erp</string>
 </resources>
