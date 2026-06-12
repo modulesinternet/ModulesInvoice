@@ -458,12 +458,25 @@ function loadStateFromLocalCache(force = false) {
 testConnection();
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 
   if (!db) return;
-  
+
+  if (!blocking) {
+    // Run Firestore operation completely in the background, not blocking the active HTTP response thread!
+    runBackgroundFirestoreSync(topic, id).catch(err => {
+      console.warn("WARNING: Background Firestore sync failed. Continuing in-memory.", err);
+    });
+    return;
+  }
+
+  await runBackgroundFirestoreSync(topic, id);
+}
+
+// Background worker to perform the actual Firestore network calls
+async function runBackgroundFirestoreSync(topic: string, id?: string) {
   try {
     const timeoutVal = 15000; // Tolerant 15-second write limit for heavy logo/mohar data payloads
     if (topic === 'settings') {
@@ -640,7 +653,7 @@ async function syncStateToFirestore(topic: string, id?: string) {
           await withTimeout(deleteDoc(doc(db, 'users', id)), timeoutVal);
         }
       } else {
-        for (const item of db_users) {
+         for (const item of db_users) {
           trackRecentLocalUpdate('users', item.userId, item);
           await withTimeout(setDoc(doc(db, 'users', item.userId), item), timeoutVal);
         }
@@ -664,7 +677,6 @@ async function syncStateToFirestore(topic: string, id?: string) {
       }
     }
   } catch (error) {
-    // If saving fails due to permissions/connection/billing, log it and ignore so user CRUD can succeed in-memory
     console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
   }
 }

@@ -219,16 +219,7 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(false);
-
-  useEffect(() => {
-    if (!loading) {
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
+  const [showSplash, setShowSplash] = useState(true);
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
@@ -443,12 +434,9 @@ export default function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
 
-    // Automatically trigger the 1-second splash animation overlay specifically on data saves or success triggers!
+    // Automatically trigger the splash animation overlay specifically on data saves or success triggers!
     if (type === 'success' && !message.includes('Access Granted')) {
       setShowSplash(true);
-      setTimeout(() => {
-        setShowSplash(false);
-      }, 1000); // Capped at exactly 1 second max
     }
   };
 
@@ -1507,6 +1495,7 @@ export default function App() {
       <SplashAnimation 
         companyName={businessSettings?.companyName || 'Internet Modules'} 
         logoUrl={businessSettings?.logoUrl || ''} 
+        onComplete={() => setShowSplash(false)}
       />
     );
   }

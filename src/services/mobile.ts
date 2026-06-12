@@ -264,8 +264,30 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
+const recentNotifications = new Map<string, number>();
+
 export const triggerLocalNotification = async (title: string, body: string): Promise<void> => {
   try {
+    const now = Date.now();
+    const signature = `${title.trim()}:${body.trim()}`;
+    
+    // De-duplicate matching notifications within an 8-second sliding time window
+    const lastTime = recentNotifications.get(signature);
+    if (lastTime && now - lastTime < 8000) {
+      console.log(`[Notification De-duplicator] Suppressed duplicate notification: "${title}" - "${body}"`);
+      return;
+    }
+    recentNotifications.set(signature, now);
+
+    // Keep memory clean
+    if (recentNotifications.size > 50) {
+      for (const [sig, time] of recentNotifications.entries()) {
+        if (now - time > 10000) {
+          recentNotifications.delete(sig);
+        }
+      }
+    }
+
     const granted = await requestNotificationPermission();
     if (!granted) {
       // Fallback to standard web alert to prevent silent updates

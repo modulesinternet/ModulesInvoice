@@ -5,11 +5,13 @@ import { Sparkles, Server, ShieldCheck } from 'lucide-react';
 interface SplashAnimationProps {
   companyName: string;
   logoUrl: string;
+  onComplete?: () => void;
 }
 
-export default function SplashAnimation({ companyName, logoUrl }: SplashAnimationProps) {
+export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Initializing secure sandbox environment...');
+  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
     const timer1 = setTimeout(() => setStatusText('Establishing handshake with secure Google Cloud Run node...'), 200);
@@ -20,6 +22,14 @@ export default function SplashAnimation({ companyName, logoUrl }: SplashAnimatio
       setProgress(p => {
         if (p >= 100) {
           clearInterval(progressInterval);
+          setTimeout(() => {
+            setIsExiting(true);
+            setTimeout(() => {
+              if (onComplete) {
+                onComplete();
+              }
+            }, 500); // Wait for exit animation to complete
+          }, 350); // Pause briefly at 100% stable
           return 100;
         }
         return p + Math.floor(Math.random() * 12) + 8;
@@ -32,13 +42,15 @@ export default function SplashAnimation({ companyName, logoUrl }: SplashAnimatio
       clearTimeout(timer3);
       clearInterval(progressInterval);
     };
-  }, []);
+  }, [onComplete]);
 
   const cleanLogo = logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-between p-8 select-none z-[10000] overflow-hidden"
+      className={`fixed inset-0 bg-slate-950 flex flex-col items-center justify-between p-8 select-none z-[10000] overflow-hidden transition-all duration-500 ease-in-out ${
+        isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
+      }`}
       id="app-splash-screen"
     >
       {/* Dynamic ambient starfield / blur blobs */}

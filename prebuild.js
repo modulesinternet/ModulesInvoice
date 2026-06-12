@@ -100,31 +100,40 @@ async function syncAppDetails() {
   let companyName = "Internet Modules";
   let logoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80";
 
-  try {
-    console.log("Fetching live corporate settings from Firestore...");
-    const data = await fetchSettings();
-    if (data && data.fields) {
-      if (data.fields.companyName && data.fields.companyName.stringValue) {
-        companyName = data.fields.companyName.stringValue.trim();
-      }
-      if (data.fields.logoUrl && data.fields.logoUrl.stringValue) {
-        logoUrl = data.fields.logoUrl.stringValue.trim();
-      }
-    }
-    console.log(`Active Corporate settings loaded. Name: "${companyName}", Logo URL: ${logoUrl}`);
-  } catch (error) {
-    console.log("Bypassing live fetch, reading from local DB-cache fallback...", error.message);
+  // Priority 1: Check Local cache file first (offline, 100% reliable during build sandbox)
+  const cachePath = path.join(process.cwd(), 'local-db-cache.json');
+  let cacheFound = false;
+  if (fs.existsSync(cachePath)) {
     try {
-      const cachePath = path.join(process.cwd(), 'local-db-cache.json');
-      if (fs.existsSync(cachePath)) {
-        const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-        if (raw.db_settings) {
-          if (raw.db_settings.companyName) companyName = raw.db_settings.companyName;
-          if (raw.db_settings.logoUrl) logoUrl = raw.db_settings.logoUrl;
-        }
+      console.log("Loading brand parameters from local database cache...");
+      const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      if (raw.db_settings) {
+        if (raw.db_settings.companyName) companyName = raw.db_settings.companyName.trim();
+        if (raw.db_settings.logoUrl) logoUrl = raw.db_settings.logoUrl.trim();
+        cacheFound = true;
+        console.log(`Successfully restored cached corporate brand details. Name: "${companyName}", Logo URL: ${logoUrl && logoUrl.startsWith('data:') ? 'base64 payload' : logoUrl}`);
       }
     } catch (e) {
-      console.log("Local cache lookup failed:", e.message);
+      console.warn("Local cache read failed, falling back...", e.message);
+    }
+  }
+
+  // Priority 2: In case cache was not found or empty, fetch via Firestore REST API as fallback
+  if (!cacheFound) {
+    try {
+      console.log("No local brand cache found. Contacting remote Cloud Firestore REST endpoints...");
+      const data = await fetchSettings();
+      if (data && data.fields) {
+        if (data.fields.companyName && data.fields.companyName.stringValue) {
+          companyName = data.fields.companyName.stringValue.trim();
+        }
+        if (data.fields.logoUrl && data.fields.logoUrl.stringValue) {
+          logoUrl = data.fields.logoUrl.stringValue.trim();
+        }
+      }
+      console.log(`Successfully fetched brand parameters. Name: "${companyName}"`);
+    } catch (error) {
+      console.log("Cloud Run build offline: REST fallback failed. Using hardcoded defaults.", error.message);
     }
   }
 
@@ -189,9 +198,25 @@ async function syncAppDetails() {
   if (fs.existsSync(resPath)) {
     const tempFile = path.join(process.cwd(), 'temp_logo_sync.png');
     try {
-      console.log(`Downloading corporate icon assets from ${logoUrl}...`);
-      await downloadImage(logoUrl, tempFile);
-      console.log("Icon download completed, beginning mipmap directory transplantation...");
+      if (logoUrl && logoUrl.startsWith('data:image/')) {
+        console.log("Analyzing base64-encoded corporate logo data payload...");
+        const matches = logoUrl.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const buffer = Buffer.from(matches[2], 'base64');
+          fs.writeFileSync(tempFile, buffer);
+          console.log("Base64 logo successfully decoded and written to temp file.");
+        } else {
+          throw new Error("Invalid base64 payload format structure");
+        }
+      } else if (logoUrl) {
+        console.log(`Downloading corporate icon assets from ${logoUrl}...`);
+        await downloadImage(logoUrl, tempFile);
+        console.log("Icon download completed.");
+      } else {
+        throw new Error("No valid logo URL or base64 data available");
+      }
+
+      console.log("Beginning mipmap directory transplantation...");
 
       const MIPPED_DIRS = [
         'mipmap-hdpi',
