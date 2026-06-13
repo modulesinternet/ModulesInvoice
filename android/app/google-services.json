@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "136984818838",
-    "project_id": "reverberant-grammar-ptgzl",
-    "storage_bucket": "reverberant-grammar-ptgzl.appspot.com"
+    "project_number": "502890188008",
+    "project_id": "imodules-de7bf",
+    "storage_bucket": "imodules-de7bf.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:136984818838:android:e10e756f709149bb85e8d8",
+        "mobilesdk_app_id": "1:502890188008:android:e10e756f709149bb85e8d8",
         "android_client_info": {
           "package_name": "com.apex.erp"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDx-16U5VXpjxGWcHx6H_vkC0T3YSVQyvk"
+          "current_key": "AIzaSyD_Set_JX6h6KvQjcCZ8Kj0-ES_hU-snfs"
         }
       ],
       "services": {
@@ -26,7 +26,7 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:136984818838:android:e10e756f709149bb85e8d8",
+        "mobilesdk_app_id": "1:502890188008:android:e10e756f709149bb85e8d8",
         "android_client_info": {
           "package_name": "com.internetmodules.erp"
         }
@@ -34,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDx-16U5VXpjxGWcHx6H_vkC0T3YSVQyvk"
+          "current_key": "AIzaSyD_Set_JX6h6KvQjcCZ8Kj0-ES_hU-snfs"
         }
       ],
       "services": {

@@ -1358,6 +1358,10 @@ export const api = {
     return request<BusinessSettings>('/api/settings', 'POST', settings);
   },
 
+  transferCacheToCloud: () => {
+    return request<{ success: boolean; message: string }>('/api/transfer-cache', 'POST');
+  },
+
   getPublicInvoice: (invoiceNumber: string) => {
     return fetch(getApiUrl(`/api/public/invoice/${encodeURIComponent(invoiceNumber)}`)).then(res => {
       if (!res.ok) throw new Error("Could not find invoice details");

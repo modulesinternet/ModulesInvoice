@@ -361,6 +361,8 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginMode, setLoginMode] = useState<'signin' | 'forgot' | 'otp' | 'reset'>('signin');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signInStep, setSignInStep] = useState(0);
   const [forgotEmail, setForgotEmail] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [typedOtp, setTypedOtp] = useState('');
@@ -419,6 +421,9 @@ export default function App() {
     if (savedUser) {
       try {
         const u = JSON.parse(savedUser);
+        if (u.email?.trim().toLowerCase() === 'modulesinternet@gmail.com') {
+          return 'Admin';
+        }
         return u.role;
       } catch (_) {}
     }
@@ -433,11 +438,6 @@ export default function App() {
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
-
-    // Automatically trigger the splash animation overlay specifically on data saves or success triggers!
-    if (type === 'success' && !message.includes('Access Granted')) {
-      setShowSplash(true);
-    }
   };
 
   // Master fetch pipeline connecting React state variables with backend routes
@@ -1321,14 +1321,14 @@ export default function App() {
   const currentRolePerms = appRoles.find(r => r.role === activeRole)?.modules;
   const hasReadPermission = (tab: TabType) => {
     if (tab === 'profile') return true;
-    if (activeRole === 'Admin') return true;
+    if (activeRole === 'Admin' || currentUser?.email?.toLowerCase() === 'modulesinternet@gmail.com') return true;
     if (!currentRolePerms) return true;
     const perm = currentRolePerms[tab as keyof RolePermissions['modules']];
     return perm?.read !== false;
   };
 
   const getModulePermissions = (tab: TabType) => {
-    if (activeRole === 'Admin') return { read: true, write: true, delete: true };
+    if (activeRole === 'Admin' || currentUser?.email?.toLowerCase() === 'modulesinternet@gmail.com') return { read: true, write: true, delete: true };
     if (!currentRolePerms) return { read: true, write: true, delete: true };
     const perm = currentRolePerms[tab as keyof RolePermissions['modules']];
     return {
@@ -1359,61 +1359,42 @@ export default function App() {
     
     const emailLower = loginEmail.toLowerCase().trim();
     let userMatched = loginUsersList.find(u => u.email.toLowerCase() === emailLower);
-    
-    if (!userMatched) {
-      // Dynamic on-the-fly onboarding of any user with any domain
-      const nameFromEmail = emailLower.split('@')[0] || 'User';
-      const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
-      
-      const newUser: UserProfile = {
-        userId: `u-${Date.now()}`,
-        email: emailLower,
-        name: cleanName,
-        role: "Admin" as UserRole, // Elevate automatically to Admin role for full settings & invoices access
-        status: "active" as const,
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString()
-      };
+    const correctPassword = userPasswords[emailLower] || (emailLower === "modulesinternet@gmail.com" ? "Admin@123" : null);
 
-      try {
-        showToast("Provisioning access account...", "info");
-        // Create user in the database
-        await api.createUser(newUser);
-        
-        // Save user's password so they can log in next time
-        const updatedPasswords = { ...userPasswords, [emailLower]: loginPassword };
-        await api.savePasswords(updatedPasswords);
-        
-        // Set local state
-        setUserPasswords(updatedPasswords);
-        localStorage.setItem('user_passwords_store', JSON.stringify(updatedPasswords));
-        setUsers(prev => [...prev, newUser]);
-                  
-        userMatched = newUser;
-      } catch (err: any) {
-        console.warn("Server dynamic user provisioning bypass activated:", err);
-        // Fallback for offline mode
-        const updatedPasswords = { ...userPasswords, [emailLower]: loginPassword };
-        setUserPasswords(updatedPasswords);
-        localStorage.setItem('user_passwords_store', JSON.stringify(updatedPasswords));
-        setUsers(prev => [...prev, newUser]);
-        userMatched = newUser;
-      }
-    } else {
-      const correctPassword = userPasswords[emailLower] || "admin123";
-      if (loginPassword !== correctPassword) {
-        showToast("Incorrect password. Please verify credentials or recover via OTP.", "error");
-        return;
-      }
+    if (!userMatched) {
+      showToast("Access Denied: Email address is not registered in the system.", "error");
+      return;
     }
 
-    // Persist login state
-    localStorage.setItem('current_user', JSON.stringify(userMatched));
-    localStorage.setItem('active_role', userMatched.role);
-    setCurrentUser(userMatched as UserProfile);
-    setActiveRole(userMatched.role);
-    showToast(`Access Granted: ${userMatched.name} (${userMatched.role})`, "success");
-    loadMasterData();
+    if (userMatched.status !== 'active') {
+      showToast("Access Denied: Your corporate account is currently inactive. Please contact your system Administrator.", "error");
+      return;
+    }
+
+    if (!correctPassword || loginPassword !== correctPassword) {
+      showToast("Access Denied: Incorrect password. Please try again.", "error");
+      return;
+    }
+    
+    // Activate 2-second professional transition overlay state
+    setIsSigningIn(true);
+    setSignInStep(0);
+    
+    // Smooth timing milestones
+    const t1 = setTimeout(() => setSignInStep(1), 500);
+    const t2 = setTimeout(() => setSignInStep(2), 1000);
+    const t3 = setTimeout(() => setSignInStep(3), 1500);
+
+    setTimeout(async () => {
+      // Persist login state
+      localStorage.setItem('current_user', JSON.stringify(userMatched));
+      localStorage.setItem('active_role', userMatched!.role);
+      setCurrentUser(userMatched as UserProfile);
+      setActiveRole(userMatched!.role);
+      setIsSigningIn(false);
+      showToast(`Access Granted: ${userMatched!.name} (${userMatched!.role})`, "success");
+      loadMasterData();
+    }, 2000);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -1508,6 +1489,59 @@ export default function App() {
     if (pubInvNum) {
       return <PublicInvoiceView invoiceNumber={pubInvNum} />;
     }
+  }
+
+  if (isSigningIn) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans text-white">
+        {/* Ambient glowing radial lights */}
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-650/10 rounded-full blur-3xl"></div>
+        
+        <div className="relative z-10 max-w-sm w-full text-center space-y-8 flex flex-col items-center">
+          {/* Main loader design */}
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            {/* Pulsing ring outer */}
+            <div className="absolute inset-0 border-2 border-indigo-500/20 rounded-full animate-ping pointer-events-none"></div>
+            {/* Dual rotating orbits */}
+            <div className="absolute inset-2 border-2 border-t-indigo-400 border-r-indigo-400 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-4 border border-b-purple-400 border-l-purple-400 border-t-transparent border-r-transparent rounded-full animate-spin [animation-direction:reverse]"></div>
+            
+            {/* Central icon or text */}
+            <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700/80 flex items-center justify-center text-indigo-400">
+              <span className="font-display font-medium text-lg tracking-wider">iM</span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold font-display tracking-tight text-white">
+              Authorizing Corporate Session
+            </h2>
+            
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-xs font-semibold text-indigo-200/90 min-h-[1.5rem] font-mono">
+                {signInStep === 0 && "Establishing secure gateway..."}
+                {signInStep === 1 && "Authenticating registry profiles..."}
+                {signInStep === 2 && "Synchronizing live ledger data..."}
+                {signInStep === 3 && "Initializing live session database..."}
+              </span>
+              
+              {/* Progress bar */}
+              <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
+                <div 
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-[400ms] ease-out"
+                  style={{ width: `${(signInStep + 1) * 25}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-slate-500 tracking-wider uppercase font-semibold font-mono">
+            Powered by iModules Workspace • SSL Secured
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!currentUser) {

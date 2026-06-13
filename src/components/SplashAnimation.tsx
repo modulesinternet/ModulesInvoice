@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { Sparkles, Server, ShieldCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Loader2, Shield } from 'lucide-react';
 
 interface SplashAnimationProps {
   companyName: string;
@@ -10,113 +10,117 @@ interface SplashAnimationProps {
 
 export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('Initializing secure sandbox environment...');
+  const [statusText, setStatusText] = useState('Verifying credentials...');
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    const timer1 = setTimeout(() => setStatusText('Establishing handshake with secure Google Cloud Run node...'), 200);
-    const timer2 = setTimeout(() => setStatusText('Mirroring real-time Firestore relational snapshot...'), 500);
-    const timer3 = setTimeout(() => setStatusText('Sanitizing transactional double-entry books...'), 800);
-
-    const progressInterval = setInterval(() => {
+    // Elegant, smooth milestones that mimic a real system boot
+    const interval = setInterval(() => {
       setProgress(p => {
         if (p >= 100) {
-          clearInterval(progressInterval);
-          setTimeout(() => {
-            setIsExiting(true);
-            setTimeout(() => {
-              if (onComplete) {
-                onComplete();
-              }
-            }, 500); // Wait for exit animation to complete
-          }, 350); // Pause briefly at 100% stable
+          clearInterval(interval);
           return 100;
         }
-        return p + Math.floor(Math.random() * 12) + 8;
+        // Smooth deceleration curve
+        const remaining = 100 - p;
+        const speed = Math.max(2, Math.floor(remaining * 0.1));
+        return Math.min(p + speed, 100);
       });
-    }, 45);
+    }, 120);
+
+    // Timed professional status messages matching milestones
+    const t1 = setTimeout(() => setStatusText('Synchronizing workspace settings...'), 600);
+    const t2 = setTimeout(() => setStatusText('Optimizing application interface...'), 1400);
+    const t3 = setTimeout(() => setStatusText('Starting session secure handshake...'), 2200);
+
+    // Initiate beautiful scale-and-fade exit after exactly 2.6s, completing the 3.0s load sequence
+    const exitTimer = setTimeout(() => {
+      setIsExiting(true);
+      const completeTimer = setTimeout(() => {
+        if (onComplete) {
+          onComplete();
+        }
+      }, 550); // Match Tailwind duration ease-out fade
+      return () => clearTimeout(completeTimer);
+    }, 2550);
 
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      clearInterval(progressInterval);
+      clearInterval(interval);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(exitTimer);
     };
   }, [onComplete]);
 
-  const cleanLogo = logoUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
+  const fallbackLogo = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
+  const cleanLogo = logoUrl ? logoUrl.trim() : fallbackLogo;
 
   return (
     <div 
-      className={`fixed inset-0 bg-slate-950 flex flex-col items-center justify-between p-8 select-none z-[10000] overflow-hidden transition-all duration-500 ease-in-out ${
-        isExiting ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
+      className={`fixed inset-0 bg-slate-950 flex flex-col items-center justify-between py-16 px-8 select-none z-[10000] overflow-hidden transition-all duration-600 ease-in-out ${
+        isExiting ? 'opacity-0 scale-[1.03] pointer-events-none' : 'opacity-100 scale-100'
       }`}
       id="app-splash-screen"
     >
-      {/* Dynamic ambient starfield / blur blobs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-[120px] animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+      {/* Premium Cinematic Ambient Backglow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-[140px] pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-violet-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
-      {/* Top micro elements */}
-      <div className="flex items-center gap-2 pt-6 opacity-30 select-none">
-        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-        <span className="text-[10px] font-mono tracking-widest uppercase text-slate-400">Enterprise Secure Sync v3.x</span>
+      {/* Top Header Label - Understated & Minimal */}
+      <div className="flex items-center gap-2 opacity-40">
+        <Shield className="w-3.5 h-3.5 text-indigo-400" />
+        <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-slate-400">Secure Node authorization</span>
       </div>
 
       {/* Centerpiece: Logo and Title */}
-      <div className="flex flex-col items-center space-y-6 max-w-sm text-center">
-        {/* Pulsing ring around the corporate Logo */}
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 w-28 h-28 bg-indigo-500/20 rounded-full blur-md animate-ping" style={{ animationDuration: '3s' }}></div>
-          <div className="absolute inset-0 w-24 h-24 border border-indigo-500/30 rounded-full animate-pulse" style={{ animationDuration: '2s' }}></div>
+      <div className="flex flex-col items-center max-w-sm text-center">
+        {/* Logo Container with continuous professional breath glow */}
+        <div className="relative mb-6">
+          <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-indigo-500/10 to-violet-500/10 opacity-70 blur-md animate-pulse duration-[4000ms]"></div>
+          <div className="absolute -inset-px rounded-3xl bg-slate-800/50 border border-slate-700/30"></div>
           
-          <div className="w-20 h-20 rounded-3xl bg-slate-900 border border-slate-800 p-2 overflow-hidden flex items-center justify-center shadow-2xl relative z-10">
+          <div className="relative w-24 h-24 rounded-3xl bg-slate-900 border border-slate-850 p-2.5 flex items-center justify-center shadow-2xl overflow-hidden z-10">
             <img 
               src={cleanLogo}
               alt="Corporate Logo"
               className="w-full h-full object-contain rounded-2xl"
               referrerPolicy="no-referrer"
               onError={(e) => {
-                // Fallback icon inside error
                 const target = e.target as HTMLImageElement;
-                target.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
+                target.src = fallbackLogo;
               }}
             />
           </div>
         </div>
 
-        {/* Dynamic App Typography */}
-        <div className="space-y-1.5 z-10">
-          <h1 className="text-3xl font-extrabold text-slate-100 font-display tracking-tight leading-none">
+        {/* Dynamic App Brand Block */}
+        <div className="space-y-2 z-10">
+          <h1 className="text-3xl font-bold text-slate-100 font-display tracking-tight leading-tight">
             {companyName || 'Internet Modules'}
           </h1>
-          <p className="text-xs text-indigo-400 font-medium tracking-wider uppercase font-sans">
+          <p className="text-[10px] text-indigo-400 font-bold tracking-[0.3em] uppercase leading-none pl-[0.3em]">
             Global ERP Register
           </p>
         </div>
       </div>
 
-      {/* Bottom status tracker & animated progress metrics */}
-      <div className="w-full max-w-xs space-y-4 pb-12 z-10">
-        <div className="flex flex-col space-y-2">
-          {/* Animated Track */}
-          <div className="w-full h-1 bg-slate-800/80 rounded-full overflow-hidden border border-slate-900/40 relative">
+      {/* Understated bottom loader and clean status feedback */}
+      <div className="w-full max-w-[210px] flex flex-col items-center space-y-4.5 z-10">
+        <div className="w-full">
+          {/* Extremely thin, elegant sleek status tracks */}
+          <div className="w-full h-[3px] bg-slate-900/90 rounded-full overflow-hidden relative">
             <div 
-              className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-all duration-300 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"
-              style={{ width: `${Math.min(progress, 100)}%` }}
+              className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300 rounded-full shadow-[0_0_12px_rgba(99,102,241,0.4)]"
+              style={{ width: `${progress}%` }}
             ></div>
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 px-0.5">
-            <span className="animate-pulse">ONLINE SYNCING</span>
-            <span>{Math.min(progress, 100)}%</span>
           </div>
         </div>
 
-        {/* Status Text with horizontal slide alignment */}
-        <div className="flex items-center gap-2 justify-center text-[10px] text-slate-400 font-mono text-center">
-          <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0 animate-bounce" />
-          <span className="truncate max-w-[240px] uppercase tracking-wide">{statusText}</span>
+        {/* Status Line with a spinning indicator */}
+        <div className="flex items-center gap-2 justify-center text-[10px] text-slate-500 font-mono tracking-wider min-h-[16px]">
+          <Loader2 className="w-3 h-3 text-indigo-400 animate-spin" />
+          <span className="uppercase text-[9px] font-bold text-slate-400">{statusText}</span>
         </div>
       </div>
     </div>

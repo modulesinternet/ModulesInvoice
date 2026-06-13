@@ -205,6 +205,26 @@ export const setupPushNotifications = async (
       }
     }
 
+    // Explicitly create high priority notification channel for Android (Crucial for background / locked screen delivery)
+    if (Capacitor.getPlatform() === 'android') {
+      try {
+        await PushNotifications.createChannel({
+          id: 'high_priority_notifications',
+          name: 'High Priority Alerts',
+          description: 'Emergency notifications and critical billing status alerts',
+          importance: 5, // IMPORTANCE_HIGH / MAX (pops up as heads-up notification and sounds immediately)
+          visibility: 1, // VISIBILITY_PUBLIC (explicitly makes details visible on secure/locked screens)
+          sound: 'custom_sound', // Play Custom raw chime if present, falls back automatically on OS defaults
+          vibration: true,
+          lights: true,
+          lightColor: '#3B82F6'
+        });
+        console.log("Successfully initialized native FCM 'high_priority_notifications' channel.");
+      } catch (channelErr) {
+        console.error("Failed to initialize custom notification channel:", channelErr);
+      }
+    }
+
     // Register with Apple / Google push services
     await PushNotifications.register();
 

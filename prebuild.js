@@ -2,6 +2,30 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import https from 'https';
+import dns from 'dns';
+import { URL } from 'url';
+
+// Helper to quickly check DNS resolution with a custom timeout of 500ms
+function checkDns(hostname) {
+  return new Promise((resolve) => {
+    if (!hostname || hostname === 'localhost') {
+      resolve(false);
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      resolve(false);
+    }, 500);
+
+    dns.lookup(hostname, (err) => {
+      clearTimeout(timeoutId);
+      if (err) {
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
+  });
+}
 
 // --- Phase 1: Build Number Auto-Increment ---
 const versionFilePath = path.join(process.cwd(), 'version.json');
@@ -23,7 +47,7 @@ console.log(`Prebuild auto-increment: Version v${versionData.version} (Build ${v
 
 // --- Phase 2: Live Firestore Configuration & Synchronization ---
 const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
-let projectId = 'reverberant-grammar-ptgzl';
+let projectId = 'imodules-de7bf';
 let databaseId = 'ai-studio-fd4d4c28-547e-4d9a-a6cd-f7c2e20eb217';
 let apiKey = '';
 
@@ -43,7 +67,11 @@ if (apiKey) {
   docUrl += `?key=${apiKey}`;
 }
 
-function fetchSettings() {
+async function fetchSettings() {
+  const isOnline = await checkDns('firestore.googleapis.com');
+  if (!isOnline) {
+    throw new Error('Firestore host is offline/unreachable (DNS fallback)');
+  }
   return new Promise((resolve, reject) => {
     const req = https.get(docUrl, { timeout: 1200 }, (res) => {
       let data = '';
@@ -209,9 +237,20 @@ async function syncAppDetails() {
           throw new Error("Invalid base64 payload format structure");
         }
       } else if (logoUrl) {
-        console.log(`Downloading corporate icon assets from ${logoUrl}...`);
-        await downloadImage(logoUrl, tempFile);
-        console.log("Icon download completed.");
+        let isOnline = false;
+        try {
+          const parsedUrl = new URL(logoUrl);
+          isOnline = await checkDns(parsedUrl.hostname);
+        } catch (_) {}
+
+        if (isOnline) {
+          console.log(`Downloading corporate icon assets from ${logoUrl}...`);
+          await downloadImage(logoUrl, tempFile);
+          console.log("Icon download completed.");
+        } else {
+          console.log(`[Offline / Sandbox Build] Skipping download of remote assets from: ${logoUrl}`);
+          throw new Error("Remote download bypassed because network DNS is unreachable.");
+        }
       } else {
         throw new Error("No valid logo URL or base64 data available");
       }

@@ -1004,6 +1004,106 @@ async function bootstrapFromFirestore() {
   }
 }
 
+async function forceTransferLocalCacheToFirestore() {
+  if (!db) {
+    console.warn("[Migration] No db available to transfer.");
+    return;
+  }
+  console.log("[Migration] BEGINNING FORCE TRANSFER OF DATABASE FROM local-db-cache.json TO FIRESTORE...");
+  try {
+    if (fs.existsSync(LOCAL_CACHE_PATH)) {
+      const raw = fs.readFileSync(LOCAL_CACHE_PATH, 'utf8');
+      const data = JSON.parse(raw);
+      
+      const collectionsToSync: { [key: string]: { listName: string, idKey: string } } = {
+        'clients': { listName: 'db_clients', idKey: 'id' },
+        'products': { listName: 'db_products', idKey: 'id' },
+        'invoices': { listName: 'db_invoices', idKey: 'id' },
+        'quotations': { listName: 'db_quotations', idKey: 'id' },
+        'payments': { listName: 'db_payments', idKey: 'id' },
+        'ledger': { listName: 'db_ledger', idKey: 'id' },
+        'cashbook': { listName: 'db_cashbook', idKey: 'id' },
+        'activityLogs': { listName: 'db_logs', idKey: 'id' },
+        'notifications': { listName: 'db_notifications', idKey: 'id' },
+        'users': { listName: 'db_users', idKey: 'userId' },
+      };
+
+      if (data.db_settings) {
+        console.log("[Migration] Copying businessSettings/global...");
+        await setDoc(doc(db, 'businessSettings', 'global'), data.db_settings);
+        db_settings = data.db_settings;
+      }
+      if (data.db_categories) {
+        console.log("[Migration] Copying businessSettings/categories...");
+        await setDoc(doc(db, 'businessSettings', 'categories'), { list: data.db_categories });
+        db_categories = data.db_categories;
+      }
+      if (data.db_roles) {
+        console.log("[Migration] Copying businessSettings/roles...");
+        await setDoc(doc(db, 'businessSettings', 'roles'), { list: data.db_roles });
+        db_roles = data.db_roles;
+      }
+      if (data.db_passwords) {
+        console.log("[Migration] Copying businessSettings/passwords...");
+        await setDoc(doc(db, 'businessSettings', 'passwords'), data.db_passwords);
+        db_passwords = data.db_passwords;
+      }
+
+      for (const [colName, colInfo] of Object.entries(collectionsToSync)) {
+        const items = data[colInfo.listName];
+        if (Array.isArray(items) && items.length > 0) {
+          console.log(`[Migration] Copying collection '${colName}' of size ${items.length}...`);
+          try {
+            const oldDocs = await getDocs(collection(db, colName));
+            if (!oldDocs.empty) {
+              const deleteBatch = writeBatch(db);
+              oldDocs.docs.forEach(oldD => {
+                deleteBatch.delete(oldD.ref);
+              });
+              await deleteBatch.commit();
+              console.log(`[Migration] Cleaned up ${oldDocs.size} old docs from Firestore collection '${colName}'.`);
+            }
+          } catch (delErr) {
+            console.warn(`[Migration] Warning: Could not clean up old docs in '${colName}':`, delErr);
+          }
+
+          const batchSize = 400;
+          for (let i = 0; i < items.length; i += batchSize) {
+            const batch = writeBatch(db);
+            const chunk = items.slice(i, i + batchSize);
+            for (const item of chunk) {
+              const docId = colInfo.idKey === 'id' ? item.id : (colInfo.idKey === 'userId' ? item.userId : item.tokenId);
+              if (docId) {
+                batch.set(doc(db, colName, docId), item);
+              }
+            }
+            await batch.commit();
+          }
+
+          if (colInfo.listName === 'db_clients') db_clients = items;
+          if (colInfo.listName === 'db_products') db_products = items;
+          if (colInfo.listName === 'db_invoices') db_invoices = items;
+          if (colInfo.listName === 'db_quotations') db_quotations = items;
+          if (colInfo.listName === 'db_payments') db_payments = items;
+          if (colInfo.listName === 'db_ledger') db_ledger = items;
+          if (colInfo.listName === 'db_cashbook') db_cashbook = items;
+          if (colInfo.listName === 'db_logs') db_logs = items;
+          if (colInfo.listName === 'db_notifications') db_notifications = items;
+          if (colInfo.listName === 'db_users') db_users = items;
+
+          console.log(`[Migration] Successfully uploaded ${items.length} records into Firestore collection '${colName}'.`);
+        }
+      }
+      console.log("[Migration] FORCE DATABASE TRANSFER COMPLETED SUCCESSFULLY.");
+    } else {
+      console.error("[Migration] local-db-cache.json not found!");
+    }
+  } catch (err) {
+    console.error("[Migration] Error during force transfer of local database cache:", err);
+    throw err;
+  }
+}
+
 // Track recent local memory writes to prevent async onSnapshot collection overwrites of unpropagated/lagging Firestore documents.
 interface RecentUpdate {
   timestamp: number;
@@ -1252,6 +1352,13 @@ function checkPermission(module: keyof RolePermissions['modules'], action: 'read
     // Auto-bypass for Admin roles and modulesinternet@gmail.com live admin account to prevent any operational lockout
     if (role.toLowerCase() === 'admin' || userEmail === 'modulesinternet@gmail.com') {
       return next();
+    }
+    
+    // STRICT ROLE-BASED ACCESS CONTROL MANDATE: Non-admin users are strictly forbidden from creating, updating, or deleting user accounts or changing system access permissions.
+    if ((module === 'users' || module === 'settings') && action !== 'read') {
+      return res.status(403).json({ 
+        error: `Access Denied: Only Administrator roles are authorized to perform system user maintenance or settings modifications.` 
+      });
     }
     
     const roleConfig = db_roles.find(r => r.role.trim().toLowerCase() === role.toLowerCase());
@@ -2582,6 +2689,37 @@ app.post('/api/settings', checkPermission('settings', 'write'), async (req: Requ
   } catch (err: any) {
     console.error("Error saving global corporate settings:", err);
     res.status(500).json({ error: `Settings update failed: ${err.message}` });
+  }
+});
+
+// Endpoint for manual/force synchronization of offline db cache to Firebase Firestore
+app.post('/api/transfer-cache', checkPermission('settings', 'write'), async (req: Request, res: Response) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: "Firebase Firestore is not initialized/accessible. Run in offline state first." });
+    }
+    
+    // Read the current configuration's projectId for display
+    let activeProj = "imodules-de7bf";
+    try {
+      const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+      if (fs.existsSync(firebaseConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+        if (config.projectId) activeProj = config.projectId;
+      }
+    } catch (_) {}
+
+    await forceTransferLocalCacheToFirestore();
+    
+    logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", `Transferred database cache to online Firestore project: ${activeProj}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Database synchronized successfully! All offline-cached configurations, clients, products, invoices, quotations, cashbooks, ledger balances, and activity logs have been uploaded to project: ${activeProj}` 
+    });
+  } catch (err: any) {
+    console.error("Database cache migration failed:", err);
+    res.status(500).json({ error: err.message || 'Database transfer failed' });
   }
 });
 

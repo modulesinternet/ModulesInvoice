@@ -1,20 +1,20 @@
 {
   "project_info": {
-    "project_number": "136984818838",
-    "project_id": "reverberant-grammar-ptgzl",
-    "storage_bucket": "reverberant-grammar-ptgzl.firebasestorage.app"
+    "project_number": "502890188008",
+    "project_id": "imodules-de7bf",
+    "storage_bucket": "imodules-de7bf.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:136984818838:android:560ca3a3ed6372433f7eb7",
+        "mobilesdk_app_id": "1:502890188008:android:560ca3a3ed6372433f7eb7",
         "android_client_info": {
           "package_name": "com.apex.erp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "136984818838-dlp1oruj0affij7u23vsvmas5ndge3vg.apps.googleusercontent.com",
+          "client_id": "502890188008-dlp1oruj0affij7u23vsvmas5ndge3vg.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.apex.erp",
@@ -22,20 +22,20 @@
           }
         },
         {
-          "client_id": "136984818838-mm749rnr962u5ld9p8kbre24kcui93nq.apps.googleusercontent.com",
+          "client_id": "502890188008-mm749rnr962u5ld9p8kbre24kcui93nq.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAbmKwqpoa6jTRN29rpj-VHlOwKvIgnE9A"
+          "current_key": "AIzaSyD_Set_JX6h6KvQjcCZ8Kj0-ES_hU-snfs"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "136984818838-mm749rnr962u5ld9p8kbre24kcui93nq.apps.googleusercontent.com",
+              "client_id": "502890188008-mm749rnr962u5ld9p8kbre24kcui93nq.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

@@ -10,7 +10,7 @@ To automate your deployments via GitHub Actions, your pipeline needs authenticat
 
 ### 🔑 1. `GCP_PROJECT_ID`
 * **What it is**: Your unique Firebase/Google Cloud Project Identifier.
-* **Your specific Project ID**: `reverberant-grammar-ptgzl`
+* **Your specific Project ID**: `imodules-de7bf`
 * **How to confirm it**: 
   1. Open the [Firebase Console](https://console.firebase.google.com/).
   2. Select your project.
@@ -25,7 +25,7 @@ To automate your deployments via GitHub Actions, your pipeline needs authenticat
   1. Go to the [Google AI Studio API Keys Page](https://aistudio.google.com/app/apikey).
   2. Log in with your Google account.
   3. Click **Create API Key**.
-  4. Select your Firebase project (`reverberant-grammar-ptgzl`) or create a general key.
+  4. Select your Firebase project (`imodules-de7bf`) or create a general key.
   5. Copy the generated string (starts with `AIzaSy...`).
 
 ---
@@ -80,7 +80,7 @@ Click **Continue**, then click **Done**.
 5. For each secret, enter the matching `Name` and paste the raw text inside `Secret`:
    * **Secret 1**:
      * **Name**: `GCP_PROJECT_ID`
-     * **Value**: `reverberant-grammar-ptgzl`
+     * **Value**: `imodules-de7bf`
    * **Secret 2**:
      * **Name**: `GEMINI_API_KEY`
      * **Value**: (Paste your long Gemini API Key)
@@ -211,7 +211,7 @@ If you have Node.js and the Firebase CLI installed on your computer, you can dep
    ```
 3. **Switch to your project**:
    ```bash
-   firebase use reverberant-grammar-ptgzl
+   firebase use imodules-de7bf
    ```
 4. **Compile and build local files**:
    ```bash

@@ -1,10 +1,10 @@
 {
-  "projectId": "reverberant-grammar-ptgzl",
-  "appId": "1:136984818838:web:8f57340b85f70cf53f7eb7",
-  "apiKey": "AIzaSyDx-16U5VXpjxGWcHx6H_vkC0T3YSVQyvk",
-  "authDomain": "reverberant-grammar-ptgzl.firebaseapp.com",
+  "projectId": "imodules-de7bf",
+  "appId": "1:502890188008:web:eb5e181160ad4750a3cd5d",
+  "apiKey": "AIzaSyD_Set_JX6h6KvQjcCZ8Kj0-ES_hU-snfs",
+  "authDomain": "imodules-de7bf.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-fd4d4c28-547e-4d9a-a6cd-f7c2e20eb217",
-  "storageBucket": "reverberant-grammar-ptgzl.firebasestorage.app",
-  "messagingSenderId": "136984818838",
+  "storageBucket": "imodules-de7bf.firebasestorage.app",
+  "messagingSenderId": "502890188008",
   "measurementId": ""
 }

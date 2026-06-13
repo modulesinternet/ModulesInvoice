@@ -46,6 +46,42 @@ export default function SettingsModule({
   const [testResult, setTestResult] = useState<{ success?: boolean; msg?: string; pingMs?: number } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Database migration engine states
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{ success?: boolean; msg?: string } | null>(null);
+
+  const handleMigrateCache = async () => {
+    if (isMigrating) return;
+    if (!window.confirm("CRITICAL ACTION: This will completely replace the online Firestore database of project 'imodules-de7bf' with your local-cached cache database (clearing any existing remote data to prevent duplicates). Are you sure you want to proceed and transfer?")) {
+      return;
+    }
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      const res = await api.transferCacheToCloud();
+      if (res && res.success) {
+        setMigrationResult({
+          success: true,
+          msg: res.message || "Database cache successfully uploaded to Cloud Firestore!"
+        });
+        alert("Success! All configurations, clients, and invoices have been migrated successfully.");
+        window.location.reload();
+      } else {
+        setMigrationResult({
+          success: false,
+          msg: (res as any)?.error || "Database transfer unsuccessful."
+        });
+      }
+    } catch (err: any) {
+      setMigrationResult({
+        success: false,
+        msg: err.message || "An unexpected error occurred during database migration."
+      });
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   const handleTestBackend = async () => {
     setIsTesting(true);
     setTestResult(null);
@@ -1022,6 +1058,9 @@ export default function SettingsModule({
               )}
             </div>
           </div>
+
+
+
           {/* Box 3: Stamp & Signatures */}
           <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">

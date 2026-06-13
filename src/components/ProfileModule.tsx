@@ -127,15 +127,24 @@ export default function ProfileModule({
             <h3 className="font-bold text-slate-800 text-base font-display">{name || 'Anonymous User'}</h3>
             <p className="text-xs text-slate-400 truncate tracking-wide">{email}</p>
             
-            <div className="pt-2 flex items-center justify-center gap-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 border border-indigo-150 text-indigo-700 uppercase tracking-wider">
-                Clearance: {currentUser.role}
-              </span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border capitalize ${
-                currentUser.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-150' : 'bg-slate-50 text-slate-650'
-              }`}>
-                {currentUser.status}
-              </span>
+            <div className="pt-2 flex flex-col items-center gap-1.5 justify-center">
+              <div className="flex items-center justify-center gap-1.5">
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 border border-indigo-150 text-indigo-700 uppercase tracking-wider ${
+                  currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com' ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' : ''
+                }`}>
+                  Clearance: {currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com' ? 'SYSTEM OWNER' : currentUser.role}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border capitalize ${
+                  currentUser.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-150' : 'bg-slate-50 text-slate-650'
+                }`}>
+                  {currentUser.status}
+                </span>
+              </div>
+              {currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com' && (
+                <span className="px-2.5 py-0.5 rounded text-[9px] font-bold bg-[#E0E7FF] border border-[#C7D2FE] text-[#4338CA] uppercase tracking-wider">
+                  🔐 FULL OWNER PRIVILEGE
+                </span>
+              )}
             </div>
           </div>
 
@@ -144,10 +153,12 @@ export default function ProfileModule({
               <Shield className="w-4.5 h-4.5 text-slate-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-[11px] font-bold text-slate-800">Clearance Lockout Bypasses</p>
-                <p className="text-[10px] text-slate-450 leading-relaxed font-sans">
-                  {currentUser.role === 'Admin' 
-                    ? 'Your admin permissions cannot be restricted. Full administrative bypass authorized.' 
-                    : 'Your module layout permissions are governed by role-based RBAC settings.'}
+                <p className="text-[10px] text-slate-450 leading-relaxed font-sans mt-0.5">
+                  {currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com'
+                    ? 'Owner-level authorization verified. You hold full execution permissions over project imodules-de7bf.'
+                    : currentUser.role === 'Admin' 
+                      ? 'Your admin permissions cannot be restricted. Full administrative bypass authorized.' 
+                      : 'Your module layout permissions are governed by role-based RBAC settings.'}
                 </p>
               </div>
             </div>
