@@ -63,6 +63,7 @@ import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
 import ProfileModule from './components/ProfileModule';
 import SplashAnimation from './components/SplashAnimation';
+import { motion } from 'motion/react';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile';
 
@@ -1493,7 +1494,13 @@ export default function App() {
 
   if (isSigningIn) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans text-white">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans text-white"
+      >
         {/* Ambient glowing radial lights */}
         <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-650/10 rounded-full blur-3xl"></div>
@@ -1540,18 +1547,28 @@ export default function App() {
             Powered by iModules Workspace • SSL Secured
           </p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      >
         {/* Subtle decorative background textures */}
         <div className="absolute top-0 left-0 w-96 h-96 bg-purple-200/40 rounded-full blur-3xl -translate-x-12 -translate-y-12"></div>
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl translate-x-12 translate-y-12"></div>
 
-        <div className="bg-white border border-slate-200 rounded-[32px] shadow-xl p-8 max-w-md w-full relative z-10 space-y-7 animate-fade-in">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.08, ease: "easeOut" }}
+          className="bg-white border border-slate-200 rounded-[32px] shadow-xl p-8 max-w-md w-full relative z-10 space-y-7"
+        >
           {/* Logo, Title */}
           <div className="text-center space-y-3.5">
             <div className="inline-flex items-center justify-center p-1 bg-slate-50 border border-slate-100 rounded-2xl shadow-xs">
@@ -1821,13 +1838,18 @@ export default function App() {
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
             <span>App Version: v{appVersion.version} (Build {appVersion.build})</span>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative"
+    >
       
       {/* PROFESSIONAL SYSTEM LOADERS - CENTERED CIRCULAR REFRESH OVERLAY TO PREVENT OLD DATA GLITCHES */}
       {fullScreenLoading && !dashboardMetrics && (
@@ -2051,7 +2073,7 @@ export default function App() {
       </aside>
 
       {/* MOBILE BAR TOP NAVIGATION */}
-      <div className="bg-white border-b border-[#E5E7EB] text-slate-900 p-3.5 flex items-center justify-between md:hidden no-print font-sans">
+      <div className="bg-white border-b border-[#E5E7EB] text-slate-900 px-4 pb-3.5 pt-[calc(14px+env(safe-area-inset-top,0px))] flex items-center justify-between md:hidden no-print font-sans sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -2445,7 +2467,7 @@ export default function App() {
         </header>
 
         {/* DYNAMIC COMPONENT PANEL CANVAS */}
-        <div className="p-6 md:p-8 pb-20 md:pb-8 flex-1 max-w-7xl w-full mx-auto" id="dynamic-element-stage">
+        <div className="p-6 md:p-8 pb-24 md:pb-8 flex-1 max-w-7xl w-full mx-auto" id="dynamic-element-stage">
           {loading && !dashboardMetrics ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
               <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
@@ -2630,7 +2652,7 @@ export default function App() {
 
       {/* MOBILE FRIENDLY BOTTOM PORTAL NAVIGATION */}
       {currentUser && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 z-40 flex items-center justify-around px-2 pb-safe shadow-lg no-print">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 min-h-[72px] pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2 bg-white border-t border-slate-200 z-40 flex items-center justify-around px-2 shadow-lg no-print">
           <button 
             onClick={() => {
               if (activeTab !== 'dashboard') setActiveTab('dashboard');
@@ -2689,6 +2711,6 @@ export default function App() {
           </button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
