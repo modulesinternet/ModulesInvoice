@@ -1429,6 +1429,59 @@ export const api = {
     return request<{ success: boolean; messageId?: string; previewUrl?: string; description?: string }>('/api/send-otp-email', 'POST', { email, otpCode });
   },
 
+  login: (email: string, password: string) => {
+    if (isLocalOnly) {
+      const savedUser = localStorage.getItem('current_user');
+      const emailLower = email.toLowerCase().trim();
+      const savedList = getLocalItem<UserProfile[]>('db_users', []);
+      const userMatched = savedList.find(u => u.email.toLowerCase() === emailLower) || (emailLower === 'modulesinternet@gmail.com' ? {
+        userId: "admin-modulesinternet",
+        email: "modulesinternet@gmail.com",
+        name: "Karan Sharma",
+        role: "Admin" as UserRole,
+        status: "active" as const
+      } : null);
+
+      if (!userMatched) {
+        return Promise.reject(new Error("User is not registered. Please contact your system Administrator."));
+      }
+
+      const passwords = getLocalItem<Record<string, string>>('user_passwords_store', {});
+      const correctPassword = passwords[emailLower] || (emailLower === "modulesinternet@gmail.com" ? "Admin@123" : null);
+
+      if (!correctPassword || password !== correctPassword) {
+        return Promise.reject(new Error("Incorrect password. Please try again."));
+      }
+
+      if (userMatched.status !== 'active') {
+        return Promise.reject(new Error("Access Denied: Your corporate account is currently inactive. Please contact your system Administrator."));
+      }
+
+      return Promise.resolve({ success: true, user: userMatched as UserProfile, role: userMatched.role });
+    }
+    return request<{ success: boolean; user: UserProfile; role: UserRole }>('/api/auth/login', 'POST', { email, password });
+  },
+
+  checkEmail: (email: string) => {
+    if (isLocalOnly) {
+      const emailLower = email.toLowerCase().trim();
+      const savedList = getLocalItem<UserProfile[]>('db_users', []);
+      const userMatched = savedList.find(u => u.email.toLowerCase() === emailLower) || (emailLower === 'modulesinternet@gmail.com' ? {
+        userId: "admin-modulesinternet",
+        email: "modulesinternet@gmail.com",
+        name: "Karan Sharma",
+        role: "Admin" as UserRole,
+        status: "active" as const
+      } : null);
+
+      if (!userMatched) {
+        return Promise.reject(new Error("Corporate profile not registered with this email address."));
+      }
+      return Promise.resolve({ success: true, user: userMatched as UserProfile });
+    }
+    return request<{ success: boolean; user: UserProfile }>('/api/auth/check-email', 'POST', { email });
+  },
+
   updateProfile: (profile: Partial<UserProfile> & { password?: string }) => {
     if (isLocalOnly) {
       const savedUser = localStorage.getItem('current_user');

@@ -261,6 +261,7 @@ interface InvoicesModuleProps {
   onUpdateInvoice?: (id: string, inv: Partial<Invoice>) => Promise<void>;
   onDeleteInvoice: (id: string) => Promise<void>;
   onMarkInvoiceRead?: (id: string) => Promise<void>;
+  onAddPayment?: (pay: any) => Promise<void>;
   businessSettings: any;
   canWrite?: boolean;
   canDelete?: boolean;
@@ -278,10 +279,80 @@ export default function InvoicesModule({
   onUpdateInvoice,
   onDeleteInvoice,
   onMarkInvoiceRead,
+  onAddPayment,
   businessSettings,
   canWrite = true,
   canDelete = true
 }: InvoicesModuleProps) {
+  // State for Settle Invoice modal dialog
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [settleInvoice, setSettleInvoice] = useState<Invoice | null>(null);
+  const [settleType, setSettleType] = useState<'full' | 'partial'>('full');
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleMode, setSettleMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
+  const [settleRef, setSettleRef] = useState('');
+  const [settleNotes, setSettleNotes] = useState('Payment matched and credited instantly.');
+  const [settleDate, setSettleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [settleSaving, setSettleSaving] = useState(false);
+
+  const handleOpenSettleModal = (inv: Invoice) => {
+    setSettleInvoice(inv);
+    setSettleType('full');
+    setSettleAmount(String(inv.dueAmount));
+    setSettleMode('UPI/Bank Transfer');
+    setSettleRef(`UPI-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`);
+    setSettleNotes(`Settlement credit for Invoice ${inv.invoiceNumber}`);
+    setSettleDate(new Date().toISOString().split('T')[0]);
+    setIsSettleModalOpen(true);
+  };
+
+  const handleSettleTypeChange = (type: 'full' | 'partial') => {
+    setSettleType(type);
+    if (type === 'full' && settleInvoice) {
+      setSettleAmount(String(settleInvoice.dueAmount));
+    }
+  };
+
+  const handleConfirmSettle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleInvoice || !onAddPayment) return;
+    
+    const amt = Number(settleAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert("Please specify a valid payment amount.");
+      return;
+    }
+    if (amt > settleInvoice.dueAmount) {
+      alert(`The settlement amount cannot exceed the remaining due amount of ${formatCurrency(settleInvoice.dueAmount)}`);
+      return;
+    }
+    if (!settleRef.trim()) {
+      alert("Please specify a transaction reference or UPI code.");
+      return;
+    }
+
+    try {
+      setSettleSaving(true);
+      await onAddPayment({
+        clientId: settleInvoice.clientId,
+        invoiceId: settleInvoice.id,
+        amount: amt,
+        paymentMode: settleMode,
+        referenceNum: settleRef.trim(),
+        notes: settleNotes.trim(),
+        paymentDate: settleDate,
+        clientName: settleInvoice.clientName,
+        invoiceNumber: settleInvoice.invoiceNumber
+      });
+      setIsSettleModalOpen(false);
+      setSettleInvoice(null);
+    } catch (err: any) {
+      alert(`Settlement failed: ${err.message || 'unknown error'}`);
+    } finally {
+      setSettleSaving(false);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('last_invoice_search_term') || '');
   const [statusFilter, setStatusFilter] = useState(() => localStorage.getItem('last_invoice_status_filter') || 'All');
   const [selectedInvoiceRaw, setSelectedInvoice] = useState<Invoice | null>(() => {
@@ -2284,6 +2355,15 @@ export default function InvoicesModule({
                         >
                           Review Bill
                         </button>
+                        {inv.status !== 'paid' && inv.dueAmount > 0 && canWrite && (
+                          <button 
+                            onClick={() => handleOpenSettleModal(inv)}
+                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm transition flex items-center gap-1 hover:scale-[1.02]"
+                            title="Settle Invoice Payment (Full/Partial)"
+                          >
+                            Settle
+                          </button>
+                        )}
                         {canWrite && (
                           <button
                             onClick={() => {
@@ -2692,6 +2772,173 @@ export default function InvoicesModule({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVOICE SETTLEMENT MODAL */}
+      {isSettleModalOpen && settleInvoice && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col animate-fade-in text-slate-800">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-100 block">Settle Invoice Payment</span>
+                <h3 className="font-bold text-base mt-0.5">Invoice Ref: {settleInvoice.invoiceNumber}</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsSettleModalOpen(false);
+                  setSettleInvoice(null);
+                }}
+                className="p-1 hover:bg-white/10 rounded-lg transition"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSettle}>
+              <div className="p-6 space-y-4">
+                {/* Invoice Stats Summary */}
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs">
+                  <div>
+                    <span className="text-slate-400 font-medium block">Corporate Client</span>
+                    <span className="font-bold text-slate-800 text-sm mt-0.5 block truncate">{settleInvoice.clientName}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-medium block">Total Bill Amount</span>
+                    <span className="font-bold text-slate-800 text-sm mt-0.5 block">{formatCurrency(settleInvoice.total)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <span className="text-slate-400 font-medium block">Already Credited</span>
+                    <span className="font-semibold text-emerald-600 block">{formatCurrency(settleInvoice.paidAmount || 0)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200/60">
+                    <span className="text-rose-500 font-medium block">Outstanding Balance</span>
+                    <span className="font-extrabold text-rose-600 block text-sm">{formatCurrency(settleInvoice.dueAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Settle Type Options */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSettleTypeChange('full')}
+                    className={`p-3 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                      settleType === 'full' 
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700 font-bold' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-xs">Full Settlement</span>
+                    <span className="text-[10px] font-normal opacity-85">Clear outstanding dues entirely</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSettleTypeChange('partial')}
+                    className={`p-3 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                      settleType === 'partial' 
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-700 font-bold' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-xs">Partial Settlement</span>
+                    <span className="text-[10px] font-normal opacity-85">Receive part payment block</span>
+                  </button>
+                </div>
+
+                {/* Amount Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Credit Amount (INR)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">₹</span>
+                    <input 
+                      type="number"
+                      required
+                      disabled={settleType === 'full'}
+                      min="1"
+                      max={settleInvoice.dueAmount}
+                      value={settleAmount}
+                      onChange={(e) => setSettleAmount(e.target.value)}
+                      className="w-full text-xs p-2.5 pl-7 border border-slate-200 rounded-xl bg-white font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-100/70"
+                    />
+                  </div>
+                </div>
+
+                {/* Mode, Date & Ref Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-400">Payment Channel</label>
+                    <select
+                      value={settleMode}
+                      onChange={(e) => setSettleMode(e.target.value as any)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    >
+                      <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
+                      <option value="Cash">Cash Ledger</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-400">Receipt Date</label>
+                    <input 
+                      type="date"
+                      required
+                      value={settleDate}
+                      onChange={(e) => setSettleDate(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Transaction Ref Number */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Reference Code / ID</label>
+                  <input 
+                    type="text"
+                    required
+                    value={settleRef}
+                    onChange={(e) => setSettleRef(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    placeholder="Enter UPI reference or Bank Txn ID"
+                  />
+                </div>
+
+                {/* Settlement Notes */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Internal Audit remarks</label>
+                  <textarea
+                    rows={2}
+                    value={settleNotes}
+                    onChange={(e) => setSettleNotes(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    placeholder="Provide transaction details"
+                  />
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 rounded-b-2xl">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsSettleModalOpen(false);
+                    setSettleInvoice(null);
+                  }}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={settleSaving}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/10 transition disabled:opacity-50"
+                >
+                  {settleSaving ? "Settling..." : "Confirm Settlement"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

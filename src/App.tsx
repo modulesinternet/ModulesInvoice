@@ -1384,40 +1384,30 @@ export default function App() {
     }
     
     try {
-      const emailLower = loginEmail.toLowerCase().trim();
-      let userMatched = loginUsersList.find(u => u.email.toLowerCase() === emailLower);
-      
-      if (!userMatched) {
-        showToast("User is not registered. Please contact your system Administrator.", "error");
-        return;
+      setLoading(true);
+      const res = await api.login(loginEmail, loginPassword);
+      if (res && res.success && res.user) {
+        const userMatched = res.user;
+        
+        // Force premium splash component with custom Starting-Verifying-Synchronizing-Opening boot sequence
+        setShowSplash(true);
+
+        // Persist login state immediately so that the authorized layout is mounted under the SplashAnimation overlay
+        localStorage.setItem('current_user', JSON.stringify(userMatched));
+        localStorage.setItem('active_role', userMatched.role);
+        setCurrentUser(userMatched);
+        setActiveRole(userMatched.role);
+        
+        showToast(`Access Granted: ${userMatched.name} (${userMatched.role})`, "success");
+        loadMasterData(true, true);
+      } else {
+        showToast("Authentication failed. Please verify credentials.", "error");
       }
-
-      const correctPassword = userPasswords[emailLower] || (emailLower === "modulesinternet@gmail.com" ? "Admin@123" : null);
-
-      if (!correctPassword || loginPassword !== correctPassword) {
-        showToast("Incorrect password. Please try again.", "error");
-        return;
-      }
-
-      if (userMatched.status !== 'active') {
-        showToast("Access Denied: Your corporate account is currently inactive. Please contact your system Administrator.", "error");
-        return;
-      }
-      
-      // Force premium splash component with custom Starting-Verifying-Synchronizing-Opening boot sequence
-      setShowSplash(true);
-
-      // Persist login state immediately so that the authorized layout is mounted under the SplashAnimation overlay
-      localStorage.setItem('current_user', JSON.stringify(userMatched));
-      localStorage.setItem('active_role', userMatched!.role);
-      setCurrentUser(userMatched as UserProfile);
-      setActiveRole(userMatched!.role);
-      
-      showToast(`Access Granted: ${userMatched!.name} (${userMatched!.role})`, "success");
-      loadMasterData(true, true);
     } catch (err: any) {
-      console.error("Firebase Authentication flow error:", err);
-      showToast("Authentication service error. Please try again later.", "error");
+      console.error("Authentication flow error:", err);
+      showToast(err.message || "Authentication service error. Please try again.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1427,19 +1417,21 @@ export default function App() {
       showToast("Specify corporate email address to receive recovery code.", "error");
       return;
     }
-    const userMatched = loginUsersList.find(u => u.email.toLowerCase() === forgotEmail.toLowerCase());
-    if (!userMatched) {
-      showToast("Corporate profile not registered with this email address.", "error");
-      return;
-    }
-
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(otpCode);
-    setLoginMode('otp');
-    setEmailSendingStatus('dispatching');
-    setEmailPreviewUrl(null);
 
     try {
+      setLoading(true);
+      const resCheck = await api.checkEmail(forgotEmail);
+      if (!resCheck || !resCheck.user) {
+        showToast("Corporate profile not registered with this email address.", "error");
+        return;
+      }
+      
+      const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+      setGeneratedOtp(otpCode);
+      setLoginMode('otp');
+      setEmailSendingStatus('dispatching');
+      setEmailPreviewUrl(null);
+
       showToast("Contacting secure SMTP delivery gateway...", "info");
       const res = await api.sendOtpEmail(forgotEmail, otpCode);
       if (res && res.success) {
@@ -1455,7 +1447,9 @@ export default function App() {
     } catch (err: any) {
       console.warn("SMTP failure:", err);
       setEmailSendingStatus('error');
-      showToast("Delivery gateway timeout. Using local simulation bypass.", "info");
+      showToast(err.message || "Delivery gateway timeout. Using local simulation bypass.", "info");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2633,6 +2627,7 @@ export default function App() {
                   onUpdateInvoice={handleUpdateInvoice}
                   onDeleteInvoice={handleDeleteInvoice}
                   onMarkInvoiceRead={handleMarkInvoiceRead}
+                  onAddPayment={handleAddPayment}
                   businessSettings={businessSettings}
                   canWrite={getModulePermissions('invoices').write}
                   canDelete={getModulePermissions('invoices').delete}
