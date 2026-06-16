@@ -78,8 +78,26 @@ const app = express();
 const PORT = 3000;
 
 // Set higher payload size limits to accept high-capacity company logo and signature images via Base64.
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '150mb' }));
+app.use(express.urlencoded({ limit: '150mb', extended: true }));
+
+// Express body-parser error-handling middleware to intercept 413 payload too large and other format errors, returning JSON instead of default HTML
+app.use((err: any, req: any, res: any, next: any) => {
+  if (err) {
+    console.error("[Express Middleware Catch]: Heavy payload parsing error:", err);
+    if (err.status === 413 || err.statusCode === 413) {
+      return res.status(413).json({ 
+        success: false, 
+        error: "File size exceeds the server's single-delivery limits (Max 100MB native binary buffer size)." 
+      });
+    }
+    return res.status(err.status || 400).json({ 
+      success: false, 
+      error: err.message || "Bad payload structure: Malformed JSON or Base64 stream." 
+    });
+  }
+  next();
+});
 
 // Enable Cross-Origin Resource Sharing (CORS) so that remote client nodes (like GitHub Pages or Capacitor APK) can securely sync with this central server
 app.use((req, res, next) => {
@@ -509,7 +527,7 @@ if (fs.existsSync(apkHistoryPath)) {
 }
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = true) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 
@@ -1266,28 +1284,32 @@ function registerBackendRealtimeListeners() {
   });
 
   onSnapshot(collection(db, 'invoices'), (snapshot) => {
-    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice));
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))
+                   .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_invoices = mergeRecentUpdates('invoices', list, 'id');
   }, (error) => {
     console.error("Backend invoice snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'quotations'), (snapshot) => {
-    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quotation))
+                   .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_quotations = mergeRecentUpdates('quotations', list, 'id');
   }, (error) => {
     console.error("Backend quotation snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'payments'), (snapshot) => {
-    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
+                   .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
     db_payments = mergeRecentUpdates('payments', list, 'id');
   }, (error) => {
     console.error("Backend payment snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'ledger'), (snapshot) => {
-    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry))
+                   .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_ledger = mergeRecentUpdates('ledger', list, 'id');
   }, (error) => {
     console.error("Backend ledger snapshot error:", error);
@@ -1295,14 +1317,16 @@ function registerBackendRealtimeListeners() {
 
   onSnapshot(collection(db, 'cashbook'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
-    const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'));
+    const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
+                         .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_cashbook = mergeRecentUpdates('cashbook', filtered, 'id');
   }, (error) => {
     console.error("Backend cashbook snapshot error:", error);
   });
 
   onSnapshot(collection(db, 'activityLogs'), (snapshot) => {
-    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
+    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog))
+                   .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     db_logs = mergeRecentUpdates('activityLogs', list, 'id');
   }, (error) => {
     console.error("Backend logs snapshot error:", error);
