@@ -256,6 +256,27 @@ export default function App() {
   });
 
   const [fullScreenLoading, setFullScreenLoading] = useState(false);
+  const [showNodeConfig, setShowNodeConfig] = useState(false);
+  const [customNodeUrl, setCustomNodeUrl] = useState(() => {
+    return localStorage.getItem('backend_api_url') || '';
+  });
+
+  const handleSaveNodeUrl = () => {
+    let url = customNodeUrl.trim();
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      showToast("URL must start with http:// or https://", "error");
+      return;
+    }
+    if (url) {
+      localStorage.setItem('backend_api_url', url);
+      showToast("Server Connection URL updated successfully!", "success");
+    } else {
+      localStorage.removeItem('backend_api_url');
+      showToast("Server target reset to default auto-detection.", "success");
+    }
+    setTimeout(() => window.location.reload(), 1200);
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setFullScreenLoading(false);
@@ -1772,6 +1793,73 @@ export default function App() {
           <div className="text-center pt-1.5 flex items-center justify-center gap-2 font-mono text-[10px] font-bold text-slate-400 select-none">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
             <span>App Version: v{appVersion.version} (Build {appVersion.build})</span>
+          </div>
+
+          {/* Mobile Server Connection Panel */}
+          <div className="pt-2.5 border-t border-slate-100 flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setShowNodeConfig(!showNodeConfig)}
+              className="text-[10px] uppercase font-mono tracking-wider font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer hover:underline"
+            >
+              ⚙ SERVER CONFIG ({customNodeUrl ? 'CUSTOM' : 'AUTO-DEV'})
+            </button>
+            {showNodeConfig && (
+              <div className="w-full mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col gap-2.5 text-left">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current Base Web API URL</span>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="e.g. https://ais-dev-..."
+                      value={customNodeUrl}
+                      onChange={(e) => setCustomNodeUrl(e.target.value)}
+                      className="flex-1 text-[11px] p-2 border border-slate-200 rounded-xl bg-white font-mono shadow-xs focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveNodeUrl}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-1.5 justify-center mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const devVal = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+                      setCustomNodeUrl(devVal);
+                      localStorage.setItem('backend_api_url', devVal);
+                      localStorage.setItem('capacitor_auto_fallback', 'dev');
+                      showToast("Target switched to Development Workspace Server Node.", "success");
+                      setTimeout(() => window.location.reload(), 1250);
+                    }}
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-[9.5px] font-bold text-slate-600 rounded-xl cursor-pointer text-center"
+                  >
+                    Use Dev Node
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const preVal = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+                      setCustomNodeUrl(preVal);
+                      localStorage.setItem('backend_api_url', preVal);
+                      localStorage.setItem('capacitor_auto_fallback', 'pre');
+                      showToast("Target switched to Shared Production Server Node.", "success");
+                      setTimeout(() => window.location.reload(), 1250);
+                    }}
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-[9.5px] font-bold text-slate-600 rounded-xl cursor-pointer text-center"
+                  >
+                    Use Prod Node
+                  </button>
+                </div>
+                <p className="text-[9px] leading-relaxed text-slate-400 mt-0.5">
+                  ✓ <b>TIP:</b> If opening the Android APK doesn't display any data collections or customer ledgers, tap <b>Use Dev Node</b> to route data sync requests directly to your current development container.
+                </p>
+              </div>
+            )}
           </div>
         </motion.div>
 

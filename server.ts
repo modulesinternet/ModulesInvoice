@@ -2852,9 +2852,9 @@ app.get('/api/apk/releases', (req: Request, res: Response) => {
 
 app.post('/api/apk/upload', async (req: Request, res: Response) => {
   try {
-    const { fileBase64, originalName, uploadedBy } = req.body;
-    if (!fileBase64) {
-      return res.status(400).json({ error: "Missing required parameter 'fileBase64'" });
+    const { fileBase64, originalName, uploadedBy, storageUrl } = req.body;
+    if (!fileBase64 && !storageUrl) {
+      return res.status(400).json({ error: "Missing required parameter 'fileBase64' or 'storageUrl'" });
     }
 
     let currentVersion = "1.1.2";
@@ -2899,11 +2899,23 @@ app.post('/api/apk/upload', async (req: Request, res: Response) => {
     const id = `apk-${Date.now()}-${newVersion}-${newBuild}`;
     const apkFilePath = path.join(uploadDir, `${id}.apk`);
 
-    let cleanBase64 = fileBase64;
-    if (cleanBase64.includes(',')) {
-      cleanBase64 = cleanBase64.split(',')[1];
+    let buffer: Buffer;
+    if (storageUrl) {
+      console.log(`[APK Sync]: Retrieving binary upload from firestore storage URL: ${storageUrl}`);
+      const downloadResponse = await fetch(storageUrl);
+      if (!downloadResponse.ok) {
+        throw new Error(`Failed to sync uploaded APK from cloud storage registry: ${downloadResponse.statusText}`);
+      }
+      const arrayBuffer = await downloadResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else {
+      let cleanBase64 = fileBase64;
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+      buffer = Buffer.from(cleanBase64, 'base64');
     }
-    const buffer = Buffer.from(cleanBase64, 'base64');
+
     fs.writeFileSync(apkFilePath, buffer);
     const sizeBytes = buffer.length;
 

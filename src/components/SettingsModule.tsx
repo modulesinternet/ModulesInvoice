@@ -26,6 +26,8 @@ import {
 import { BusinessSettings } from '../types';
 import SignaturePad from './SignaturePad';
 import { api } from '../services/api';
+import { storage } from '../services/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface SettingsModuleProps {
   settings: BusinessSettings;
@@ -74,7 +76,7 @@ export default function SettingsModule({
     }
   };
 
-  const handleApkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleApkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.name.endsWith('.apk')) {
@@ -87,33 +89,35 @@ export default function SettingsModule({
     setApkUploadSuccess('');
     setIsUploadingApk(true);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const fileBase64 = reader.result as string;
-        const uploadedBy = localStorage.getItem('current_user') 
-          ? JSON.parse(localStorage.getItem('current_user')!).name 
-          : "Administrator";
+    try {
+      const uploadedBy = localStorage.getItem('current_user') 
+        ? JSON.parse(localStorage.getItem('current_user')!).name 
+        : "Administrator";
 
-        const res = await api.uploadApk(fileBase64, file.name, uploadedBy) as any;
-        if (res.success) {
-          setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version} (Build ${res.release.build})!`);
-          fetchApkReleases();
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        } else {
-          setApkUploadError(res.error || "Failed to complete APK package processing.");
-        }
-      } catch (err: any) {
-        setApkUploadError(err.message || "An error occurred during file packaging.");
-      } finally {
-        setIsUploadingApk(false);
+      // 1. Upload to Firebase Cloud Storage (No Proxy Size Limit!)
+      const uniqueName = `apks/${Date.now()}-${file.name}`;
+      const fileRef = storageRef(storage, uniqueName);
+      
+      console.log("[APK Upload]: Uploading physical binary stream to modern Cloud Storage bucket:", uniqueName);
+      await uploadBytes(fileRef, file);
+      const downloadUrl = await getDownloadURL(fileRef);
+
+      // 2. Report metadata and storage sync to central server backend
+      console.log("[APK Upload]: Registering update version with central server API. Storage URL:", downloadUrl);
+      const res = await api.uploadApk('', file.name, uploadedBy, downloadUrl) as any;
+      if (res.success) {
+        setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version} (Build ${res.release.build})!`);
+        fetchApkReleases();
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } else {
+        setApkUploadError(res.error || "Failed to complete APK package processing.");
       }
-    };
-    reader.onerror = () => {
-      setApkUploadError("Failed to read the file local buffers.");
+    } catch (err: any) {
+      console.error("[APK Upload Error]:", err);
+      setApkUploadError(`Upload failed: ${err.message || "An error occurred during file packaging."}`);
+    } finally {
       setIsUploadingApk(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleMigrateCache = async () => {

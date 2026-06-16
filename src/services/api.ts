@@ -1749,7 +1749,7 @@ export const api = {
     return request<any[]>('/api/apk/releases');
   },
 
-  uploadApk: (fileBase64: string, originalName: string, uploadedBy: string) => {
+  uploadApk: (fileBase64: string, originalName: string, uploadedBy: string, storageUrl?: string) => {
     if (isLocalOnly) {
       const currentReleases = getLocalItem<any[]>('db_apk_releases', []);
       let baseVer = "1.1.2";
@@ -1775,14 +1775,14 @@ export const api = {
         fileName: `iModules (v${newVersion} Build ${newBuild}).apk`,
         uploadedAt: new Date().toISOString(),
         uploadedBy: uploadedBy || "Administrator",
-        sizeBytes: Math.round(fileBase64.length * 0.75)
+        sizeBytes: Math.round((fileBase64 || "").length * 0.75) || 5000000
       };
 
       const updated = [newRelease, ...currentReleases];
       setLocalItem('db_apk_releases', updated);
       return Promise.resolve({ success: true, release: newRelease });
     }
-    return request<{ success: boolean; release: any }>('/api/apk/upload', 'POST', { fileBase64, originalName, uploadedBy });
+    return request<{ success: boolean; release: any }>('/api/apk/upload', 'POST', { fileBase64, originalName, uploadedBy, storageUrl });
   },
 
   downloadApkUrl: (id: string) => {
