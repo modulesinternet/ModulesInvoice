@@ -1365,10 +1365,16 @@ export default function App() {
     try {
       const emailLower = loginEmail.toLowerCase().trim();
       let userMatched = loginUsersList.find(u => u.email.toLowerCase() === emailLower);
+      
+      if (!userMatched) {
+        showToast("User is not registered. Please contact your system Administrator.", "error");
+        return;
+      }
+
       const correctPassword = userPasswords[emailLower] || (emailLower === "modulesinternet@gmail.com" ? "Admin@123" : null);
 
-      if (!userMatched || !correctPassword || loginPassword !== correctPassword) {
-        showToast("Invalid username or password.", "error");
+      if (!correctPassword || loginPassword !== correctPassword) {
+        showToast("Incorrect password. Please try again.", "error");
         return;
       }
 
