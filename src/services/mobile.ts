@@ -214,7 +214,7 @@ export const setupPushNotifications = async (
           description: 'Emergency notifications and critical billing status alerts',
           importance: 5, // IMPORTANCE_HIGH / MAX (pops up as heads-up notification and sounds immediately)
           visibility: 1, // VISIBILITY_PUBLIC (explicitly makes details visible on secure/locked screens)
-          sound: 'custom_sound', // Play Custom raw chime if present, falls back automatically on OS defaults
+          sound: undefined, // Uses default system notification sound to secure reliable playback on all Android OS devices
           vibration: true,
           lights: true,
           lightColor: '#3B82F6'

@@ -214,6 +214,41 @@ function getHeaders(): HeadersInit {
   };
 }
 
+let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+
+if (typeof window !== 'undefined') {
+  if (window.location.hostname.includes('ais-dev')) {
+    activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+  } else {
+    // Quick background check to see if the active Dev Workspace is online and reachable from APK
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    
+    fetch('https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app/api/health', {
+      signal: controller.signal,
+      headers: { 'Cache-Control': 'no-cache' }
+    })
+    .then((res) => {
+      if (res.ok) {
+        console.log("Capacitor API Engine: Auto-detected active Development Workspace. Switched fallback target.");
+        activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+        localStorage.setItem('capacitor_auto_fallback', 'dev');
+      }
+    })
+    .catch(() => {
+      // Fallback stays as pre URL
+    })
+    .finally(() => {
+      clearTimeout(timeoutId);
+    });
+  }
+
+  const cachedPref = localStorage.getItem('capacitor_auto_fallback');
+  if (cachedPref === 'dev') {
+    activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+  }
+}
+
 function getApiUrl(url: string) {
   const savedUrl = localStorage.getItem('backend_api_url');
   if (savedUrl && savedUrl.trim() !== '') {
@@ -236,9 +271,7 @@ function getApiUrl(url: string) {
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
 
   // Intelligent fallback URL selector matching the current execution environment (dev vs pre/shared)
-  const fallbackUrl = (typeof window !== 'undefined' && window.location.hostname.includes('ais-dev'))
-    ? 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
-    : 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+  const fallbackUrl = activeCapacitorFallback;
 
   // If running inside Capacitor, or loaded from GitHub Pages / third-party server remotely,
   // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
@@ -1707,5 +1740,52 @@ export const api = {
       console.warn("FCM registration request failed:", err);
       return { success: false, message: err.message };
     }
+  },
+
+  getApkReleases: () => {
+    if (isLocalOnly) {
+      return Promise.resolve(getLocalItem<any[]>('db_apk_releases', []));
+    }
+    return request<any[]>('/api/apk/releases');
+  },
+
+  uploadApk: (fileBase64: string, originalName: string, uploadedBy: string) => {
+    if (isLocalOnly) {
+      const currentReleases = getLocalItem<any[]>('db_apk_releases', []);
+      let baseVer = "1.1.2";
+      let baseBuild = 28;
+      if (currentReleases.length > 0) {
+        const latest = currentReleases[0];
+        baseVer = latest.version;
+        baseBuild = parseInt(latest.build, 10) || 28;
+      }
+      const parts = baseVer.split('.');
+      if (parts.length === 3) {
+        parts[2] = String(Number(parts[2]) + 1);
+      } else {
+        parts.push('1');
+      }
+      const newVersion = parts.join('.');
+      const newBuild = String(baseBuild + 1);
+
+      const newRelease = {
+        id: `apk-${Date.now()}`,
+        version: newVersion,
+        build: newBuild,
+        fileName: `iModules (v${newVersion} Build ${newBuild}).apk`,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: uploadedBy || "Administrator",
+        sizeBytes: Math.round(fileBase64.length * 0.75)
+      };
+
+      const updated = [newRelease, ...currentReleases];
+      setLocalItem('db_apk_releases', updated);
+      return Promise.resolve({ success: true, release: newRelease });
+    }
+    return request<{ success: boolean; release: any }>('/api/apk/upload', 'POST', { fileBase64, originalName, uploadedBy });
+  },
+
+  downloadApkUrl: (id: string) => {
+    return getApiUrl(`/api/apk/download/${id}`);
   }
 };

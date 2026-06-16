@@ -81,11 +81,12 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Enable Cross-Origin Resource Sharing (CORS) so that remote client nodes (like GitHub Pages) can securely sync with this central server
+// Enable Cross-Origin Resource Sharing (CORS) so that remote client nodes (like GitHub Pages or Capacitor APK) can securely sync with this central server
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-active-role, x-user-email, x-user-name, x-user-id");
+  res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Expose-Headers", "*");
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -112,6 +113,7 @@ let db_logs = [ ...DEMO_LOGS ];
 let db_notifications = [ ...DEMO_NOTIFICATIONS ];
 let db_users = [ ...DEMO_USERS ];
 let db_fcm_tokens: any[] = [];
+let db_apk_releases: any[] = [];
 let db_passwords: { [email: string]: string } = {
   "modulesinternet@gmail.com": "Admin@123",
   "manager@demo.com": "manager123",
@@ -283,10 +285,41 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
     android: {
       priority: 'high' as const,
       notification: {
-        sound: 'custom_sound', // Play Custom wav sound configured in Android res/raw
-        channelId: 'high_priority_notifications', // Use the custom high-priority notification channel
-        visibility: 'public' as const, // Render details on lockscreen securely
+        sound: 'default', // Standard fallback sound ensures it works on all devices without raw resource errors
+        channelId: 'high_priority_notifications', // Use high-priority notification channel
+        visibility: 'public' as const, // Render details securely on lockscreen
+        notificationPriority: 'PRIORITY_HIGH' as const, // Show heads-up banner above general notifications
+        defaultSound: true, // Auto-play system sound
+        defaultVibrateTimings: true, // Auto-vibrate
+        defaultLightSettings: true, // Enable indicator LEDs
       }
+    },
+    apns: {
+      headers: {
+        'apns-priority': '10', // Wake device instantly from sleep state
+      },
+      payload: {
+        aps: {
+          alert: {
+            title,
+            body,
+          },
+          sound: 'default',
+          'content-available': 1, // Let background handlers receive payload
+        },
+      },
+    },
+    webpush: {
+      headers: {
+        Urgency: 'high',
+      },
+      notification: {
+        title,
+        body,
+        icon: '/assets/favicon.ico',
+        badge: '/assets/favicon.ico',
+        requireInteraction: true,
+      },
     },
     data: {
       ...extraData,
@@ -456,6 +489,24 @@ function loadStateFromLocalCache(force = false) {
 }
 
 testConnection();
+
+// Ensure uploads directory exists and load offline APK history cache safely
+try {
+  fs.mkdirSync(path.join(process.cwd(), 'uploads'), { recursive: true });
+} catch (err) {
+  console.error("Failed to create uploads directory:", err);
+}
+
+const apkHistoryPath = path.join(process.cwd(), 'uploads', 'apk-history.json');
+if (fs.existsSync(apkHistoryPath)) {
+  try {
+    const raw = fs.readFileSync(apkHistoryPath, 'utf8');
+    db_apk_releases = JSON.parse(raw);
+    console.log(`Loaded ${db_apk_releases.length} APK release records from local history.`);
+  } catch (err) {
+    console.error("Failed to load local APK history:", err);
+  }
+}
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
 async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
@@ -986,6 +1037,18 @@ async function bootstrapFromFirestore() {
         }
       } else {
         await withTimeout(setDoc(doc(db, 'businessSettings', 'passwords'), db_passwords), 25000).catch(e => null);
+      }
+
+      // Sync or retrieve the APK releases database
+      const apkDoc = await withTimeout(getDoc(doc(db, 'businessSettings', 'apkReleases')), 25000).catch(e => null);
+      if (apkDoc && apkDoc.exists()) {
+        const apkData = apkDoc.data();
+        if (apkData && Array.isArray(apkData.list)) {
+          db_apk_releases = apkData.list;
+          console.log(`Loaded ${db_apk_releases.length} APK release records from Cloud Firestore.`);
+        }
+      } else if (db_apk_releases.length > 0) {
+        await withTimeout(setDoc(doc(db, 'businessSettings', 'apkReleases'), { list: db_apk_releases }), 25000).catch(e => null);
       }
     }
 
@@ -2306,6 +2369,13 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
 
     await syncStateToFirestore('payments', oldP.id);
 
+    // Trigger FCM payment updated notification alert
+    sendFcmNotification(
+      "Payment Modified",
+      `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified.`,
+      { route: '/payments', paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
+    ).catch(err => console.error("FCM dispatch caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
     res.json(oldP);
   } else {
@@ -2749,6 +2819,121 @@ app.get('/api/public/invoice/*', (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: `Internal query failed: ${err.message}` });
   }
+});
+
+// APK Release and Download Management Routes
+app.get('/api/apk/releases', (req: Request, res: Response) => {
+  res.json(db_apk_releases);
+});
+
+app.post('/api/apk/upload', async (req: Request, res: Response) => {
+  try {
+    const { fileBase64, originalName, uploadedBy } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ error: "Missing required parameter 'fileBase64'" });
+    }
+
+    let currentVersion = "1.1.2";
+    let currentBuild = "28";
+    const versionFilePath = path.join(process.cwd(), 'version.json');
+    if (fs.existsSync(versionFilePath)) {
+      try {
+        const verData = JSON.parse(fs.readFileSync(versionFilePath, 'utf8'));
+        if (verData.version) currentVersion = verData.version;
+        if (verData.build) currentBuild = verData.build;
+      } catch (e) {
+        console.warn("Failed to parse existing version.json:", e);
+      }
+    }
+
+    const buildNum = parseInt(currentBuild, 10) || 28;
+    const newBuild = String(buildNum + 1);
+
+    const parts = currentVersion.split('.');
+    if (parts.length === 3) {
+      parts[2] = String((parseInt(parts[2], 10) || 0) + 1);
+    } else if (parts.length > 0) {
+      parts[parts.length - 1] = String((parseInt(parts[parts.length - 1], 10) || 0) + 1);
+    } else {
+      parts.push("1");
+    }
+    const newVersion = parts.join('.');
+
+    // Write updated version details back to disk
+    try {
+      fs.writeFileSync(versionFilePath, JSON.stringify({ version: newVersion, build: newBuild }, null, 2), 'utf8');
+      console.log(`[Version Control]: Automatically updated version.json to v${newVersion} (Build ${newBuild})`);
+    } catch (fsErr) {
+      console.error("Failed to commit version.json locally:", fsErr);
+    }
+
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const id = `apk-${Date.now()}-${newVersion}-${newBuild}`;
+    const apkFilePath = path.join(uploadDir, `${id}.apk`);
+
+    let cleanBase64 = fileBase64;
+    if (cleanBase64.includes(',')) {
+      cleanBase64 = cleanBase64.split(',')[1];
+    }
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    fs.writeFileSync(apkFilePath, buffer);
+    const sizeBytes = buffer.length;
+
+    const newRelease = {
+      id,
+      version: newVersion,
+      build: newBuild,
+      fileName: `iModules (v${newVersion} Build ${newBuild}).apk`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: uploadedBy || 'Administrator',
+      sizeBytes
+    };
+
+    db_apk_releases = [newRelease, ...db_apk_releases];
+
+    // Persist list locally to disk
+    try {
+      const historyPath = path.join(uploadDir, 'apk-history.json');
+      fs.writeFileSync(historyPath, JSON.stringify(db_apk_releases, null, 2), 'utf8');
+    } catch (histErr) {
+      console.error("Failed to write APK local history json:", histErr);
+    }
+
+    // Persist to Cloud Firestore
+    if (db) {
+      try {
+        await setDoc(doc(db, 'businessSettings', 'apkReleases'), { list: db_apk_releases });
+        console.log(`[Version Control]: Persisted APK releases list in Cloud Firestore.`);
+      } catch (e) {
+        console.error("Failed to save APK release metadata list in Firestore:", e);
+      }
+    }
+
+    logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", `Uploaded new APK release: v${newVersion} (Build ${newBuild})`);
+
+    res.json({ success: true, release: newRelease });
+  } catch (err: any) {
+    console.error("Error in APK upload parser:", err);
+    res.status(500).json({ error: err.message || "Failed to process APK upload" });
+  }
+});
+
+app.get('/api/apk/download/:id', (req: Request, res: Response) => {
+  const release = db_apk_releases.find(r => r.id === req.params.id);
+  if (!release) {
+    return res.status(404).json({ error: "APK Release not found" });
+  }
+  const filePath = path.join(process.cwd(), 'uploads', `${release.id}.apk`);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Physical APK file has been purged or does not exist on disk" });
+  }
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.setHeader('Content-Disposition', `attachment; filename="${release.fileName}"`);
+  res.sendFile(filePath);
 });
 
 app.get('/api/passwords', (req: Request, res: Response) => {

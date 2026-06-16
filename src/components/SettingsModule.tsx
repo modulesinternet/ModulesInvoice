@@ -50,6 +50,72 @@ export default function SettingsModule({
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<{ success?: boolean; msg?: string } | null>(null);
 
+  // APK Version Control and Release States
+  const [apkReleases, setApkReleases] = useState<any[]>([]);
+  const [isLoadingApks, setIsLoadingApks] = useState(false);
+  const [isUploadingApk, setIsUploadingApk] = useState(false);
+  const [apkUploadSuccess, setApkUploadSuccess] = useState('');
+  const [apkUploadError, setApkUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    fetchApkReleases();
+  }, []);
+
+  const fetchApkReleases = async () => {
+    setIsLoadingApks(true);
+    try {
+      const list = await api.getApkReleases();
+      setApkReleases(list || []);
+    } catch (err: any) {
+      console.error("Failed to load releases:", err);
+    } finally {
+      setIsLoadingApks(false);
+    }
+  };
+
+  const handleApkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.apk')) {
+      setApkUploadError("Invalid file type: Please select a valid Android package file (.apk)");
+      setApkUploadSuccess('');
+      return;
+    }
+
+    setApkUploadError('');
+    setApkUploadSuccess('');
+    setIsUploadingApk(true);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const fileBase64 = reader.result as string;
+        const uploadedBy = localStorage.getItem('current_user') 
+          ? JSON.parse(localStorage.getItem('current_user')!).name 
+          : "Administrator";
+
+        const res = await api.uploadApk(fileBase64, file.name, uploadedBy) as any;
+        if (res.success) {
+          setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version} (Build ${res.release.build})!`);
+          fetchApkReleases();
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        } else {
+          setApkUploadError(res.error || "Failed to complete APK package processing.");
+        }
+      } catch (err: any) {
+        setApkUploadError(err.message || "An error occurred during file packaging.");
+      } finally {
+        setIsUploadingApk(false);
+      }
+    };
+    reader.onerror = () => {
+      setApkUploadError("Failed to read the file local buffers.");
+      setIsUploadingApk(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleMigrateCache = async () => {
     if (isMigrating) return;
     if (!window.confirm("CRITICAL ACTION: This will completely replace the online Firestore database of project 'imodules-de7bf' with your local-cached cache database (clearing any existing remote data to prevent duplicates). Are you sure you want to proceed and transfer?")) {
@@ -985,6 +1051,130 @@ export default function SettingsModule({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Box 4: Android App Distribution Center */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <span className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded-md flex items-center justify-center font-bold">iM</span>
+              <span>Android APK Release Distribution</span>
+            </h3>
+
+            <p className="text-xs text-slate-505 text-slate-500 leading-normal">
+              Upload production-ready Android application files (.apk) to synchronize with client nodes instantly. Uploading an APK increments the active system minor patch level and build number automatically, and stores historical builds securely.
+            </p>
+
+            <div className="p-5 border border-slate-200 border-dashed rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden">
+              {isUploadingApk ? (
+                <div className="space-y-3 py-4 flex flex-col items-center">
+                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-indigo-700 font-sans">Compiling, Uploading, and Registering APK package...</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Decoding buffers & incrementing metadata registries</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer hover:underline"
+                    >
+                      Click to select production APK file
+                    </button>
+                    <p className="text-[10px] text-slate-444 text-slate-400 mt-1">Recommended size max 45MB • Auto version control sequence enabled</p>
+                  </div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleApkFileChange}
+                    accept=".apk"
+                    className="hidden"
+                  />
+                </>
+              )}
+            </div>
+
+            {apkUploadSuccess && (
+              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-2xl text-[11px] font-medium flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{apkUploadSuccess}</span>
+              </div>
+            )}
+
+            {apkUploadError && (
+              <div className="p-3 bg-rose-50 text-rose-805 text-rose-800 border border-rose-100 rounded-2xl text-[11px] font-medium">
+                <span>{apkUploadError}</span>
+              </div>
+            )}
+
+            {/* Version list in Settings */}
+            <div className="space-y-2.5 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Release Version History ({apkReleases.length})</span>
+                <button
+                  type="button"
+                  onClick={fetchApkReleases}
+                  disabled={isLoadingApks}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingApks ? 'animate-spin' : ''}`} />
+                  <span>Refresh Releases</span>
+                </button>
+              </div>
+
+              {apkReleases.length === 0 ? (
+                <div className="p-4 text-center border border-slate-100 rounded-2xl text-slate-400 text-xs font-medium bg-slate-50/25">
+                  No APK releases published yet. Upload your first build above!
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden bg-white max-h-[220px] overflow-y-auto">
+                  {apkReleases.map((release: any) => (
+                    <div key={release.id} className="p-3.5 hover:bg-slate-50 transition flex items-center justify-between text-xs gap-3">
+                      <div className="space-y-0.5 truncate">
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
+                          <span className="text-slate-900 truncate">v{release.version} (Build {release.build})</span>
+                          <span className="text-[8px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded font-mono uppercase">
+                            {Math.round((release.sizeBytes / (1024 * 1024)) * 10) / 10} MB
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono truncate">
+                          Uploaded on {new Date(release.uploadedAt).toLocaleDateString()} by {release.uploadedBy}
+                        </div>
+                      </div>
+                      <a
+                        href={api.downloadApkUrl(release.id)}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            const res = await fetch(api.downloadApkUrl(release.id));
+                            if (!res.ok) throw new Error();
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.setAttribute('download', release.fileName);
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.URL.revokeObjectURL(url);
+                          } catch (err) {
+                            window.open(api.downloadApkUrl(release.id), '_blank');
+                          }
+                        }}
+                        className="p-1 px-2.5 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold tracking-tight transition cursor-pointer self-center"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

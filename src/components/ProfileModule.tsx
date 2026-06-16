@@ -22,6 +22,26 @@ export default function ProfileModule({
   const [showPass, setShowPass] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // APK Version Control and Download States
+  const [apkReleases, setApkReleases] = useState<any[]>([]);
+  const [isLoadingApks, setIsLoadingApks] = useState(false);
+
+  React.useEffect(() => {
+    fetchApkReleases();
+  }, []);
+
+  const fetchApkReleases = async () => {
+    setIsLoadingApks(true);
+    try {
+      const list = await api.getApkReleases();
+      setApkReleases(list || []);
+    } catch (err: any) {
+      console.error("Failed to fetch APK releases in profile module:", err);
+    } finally {
+      setIsLoadingApks(false);
+    }
+  };
+
   // File reader for profile picture upload
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,6 +323,161 @@ export default function ProfileModule({
             </div>
           </form>
         </div>
+      </div>
+
+      {/* PROFESSIONAL GOOGLE PLAY STORE STYLE APK DISTRIBUTION CARD */}
+      <div className="bg-[#0F172A] border border-[#1E293B] rounded-3xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl space-y-6" id="play-store-apk-catalog">
+        {/* Subtle decorative glow */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10 border-b border-slate-800 pb-5">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700 shadow-md">
+              <div className="relative">
+                <Smartphone className="w-6 h-6 text-emerald-400" />
+                <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-emerald-500 text-[8px] text-slate-900 font-black rounded-full flex items-center justify-center font-mono animate-bounce">
+                  ↑
+                </span>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold font-sans tracking-tight text-white">Google Play Store</h3>
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 capitalize">
+                  Internal Hub
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-sans mt-0.5 leading-normal">Download official digital packages & track incremental patch updates instantly.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchApkReleases}
+              disabled={isLoadingApks}
+              className="p-2 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/40 rounded-xl transition text-slate-300 disabled:opacity-50 cursor-pointer self-start sm:self-center"
+              title="Refresh Version Registers"
+            >
+              <HelpCircle className={`w-4 h-4 ${isLoadingApks ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {apkReleases.length === 0 ? (
+          <div className="py-8 text-center text-slate-500 border border-slate-800 border-dashed rounded-2xl bg-slate-900/50 text-xs font-medium relative z-10">
+            No production-ready packages have been released yet. Admin can upload one in Business Settings!
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
+            {/* LATEST RELEASE DISPLAY BLOCK (PLAY STORE PRESENTATION PANEL) */}
+            <div className="lg:col-span-5 bg-slate-900/60 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4 shadow-inner">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold font-sans">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"></span>
+                  <span>LATEST PRODUCTION RELEASE</span>
+                </div>
+                
+                <div className="space-y-0.5">
+                  <h4 className="text-2xl font-black text-white tracking-tight">iModules App</h4>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Version v{apkReleases[0].version} (Build {apkReleases[0].build})
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-[10px] text-slate-400 font-mono pt-1">
+                  <div className="p-2 bg-slate-800/30 border border-slate-800 rounded-xl">
+                    <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Package Size</span>
+                    <span className="text-white font-bold">{Math.round((apkReleases[0].sizeBytes / (1024 * 1024)) * 10) / 10} MB</span>
+                  </div>
+                  <div className="p-2 bg-slate-800/30 border border-slate-800 rounded-xl">
+                    <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Published Date</span>
+                    <span className="text-white font-bold">{new Date(apkReleases[0].uploadedAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <a
+                  href={api.downloadApkUrl(apkReleases[0].id)}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      const res = await fetch(api.downloadApkUrl(apkReleases[0].id));
+                      if (!res.ok) throw new Error();
+                      const blob = await res.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.setAttribute('download', apkReleases[0].fileName);
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                      window.URL.revokeObjectURL(url);
+                    } catch (err) {
+                      window.open(api.downloadApkUrl(apkReleases[0].id), '_blank');
+                    }
+                  }}
+                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 font-sans tracking-tight text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 active:scale-[0.98] transition duration-150 cursor-pointer text-center"
+                >
+                  <Download className="w-4 h-4 text-slate-950" />
+                  <span>Download Latest APK</span>
+                </a>
+                <p className="text-[9px] text-slate-500 text-center uppercase font-bold tracking-widest leading-none mt-1">Verified secure • SHA-256 encrypted</p>
+              </div>
+            </div>
+
+            {/* VERSION LIST */}
+            <div className="lg:col-span-7 space-y-3 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ALL COMPILED ARCHIVE EDITIONS</span>
+                
+                <div className="border border-slate-800 divide-y divide-slate-800 rounded-2xl bg-slate-950/40 overflow-hidden max-h-[220px] overflow-y-auto">
+                  {apkReleases.map((release: any) => (
+                    <div key={release.id} className="p-3 hover:bg-slate-900/30 transition flex items-center justify-between text-xs gap-3">
+                      <div className="truncate">
+                        <div className="font-bold text-white flex items-center gap-2">
+                          <span>Version v{release.version}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[8px] bg-slate-800 border border-slate-700 text-slate-450 text-slate-400 font-medium font-mono">
+                            Build {release.build}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono truncate">
+                          Released {new Date(release.uploadedAt).toLocaleDateString()} • {Math.round((release.sizeBytes / (1024 * 1024)) * 10) / 10} MB
+                        </div>
+                      </div>
+                      
+                      <a
+                        href={api.downloadApkUrl(release.id)}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            const res = await fetch(api.downloadApkUrl(release.id));
+                            if (!res.ok) throw new Error();
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.setAttribute('download', release.fileName);
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.URL.revokeObjectURL(url);
+                          } catch (err) {
+                            window.open(api.downloadApkUrl(release.id), '_blank');
+                          }
+                        }}
+                        className="p-1.5 px-3 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-300 rounded-lg text-[10px] font-bold tracking-tight transition cursor-pointer shrink-0"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MOBILE APPLICATION MANAGEMENT PORTAL */}

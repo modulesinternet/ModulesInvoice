@@ -175,29 +175,29 @@ export default function Dashboard({
       </div>
 
       {/* Cashbook operating liquidity overview banner */}
-      <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden" id="liquidity-banner">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="px-2 py-0.5 rounded text-[10px] bg-indigo-500 text-white font-bold uppercase tracking-wider">operating ledger</div>
-            <span className="text-xs text-slate-400 font-mono">System ID: APX-LIQ-POOL</span>
+      <div className="bg-[#0B0F19] text-white rounded-3xl p-6 md:p-8 border border-slate-800 shadow-md flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6 relative overflow-hidden" id="liquidity-banner">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="px-2.5 py-1 rounded-lg text-[10px] bg-indigo-600 text-white font-bold uppercase tracking-wider font-sans">operating ledger</div>
+            <span className="text-xs text-slate-400 font-mono font-medium">System ID: iM-LIQ-POOL</span>
           </div>
-          <h2 className="text-lg font-bold font-display text-slate-100">Liquidity Distribution Accounts</h2>
-          <p className="text-xs text-slate-300 max-w-xl">This monitor tallies cash on-hand with bank-reconciled digital settlements computed from verified receipts.</p>
+          <h2 className="text-xl sm:text-2xl font-bold font-sans tracking-tight text-white">Liquidity Distribution Accounts</h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-xl font-normal leading-relaxed">This monitor tallies cash on-hand with bank-reconciled digital settlements computed from verified receipts.</p>
         </div>
-        <div className="flex gap-4 w-full md:w-auto shrink-0 justify-between md:justify-end">
-          <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/50 w-36 md:w-44 text-center">
-            <div className="flex items-center gap-1 justify-center text-slate-400 text-xs mb-1">
-              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto shrink-0 justify-start sm:justify-end">
+          <div className="bg-[#111827] p-5 rounded-2xl border border-slate-800/80 w-full sm:w-48 text-center flex flex-col justify-center shadow-md">
+            <div className="flex items-center gap-2 justify-center text-slate-300 text-xs font-semibold mb-2">
+              <Wallet className="w-4 h-4 text-emerald-400" />
               <span>Cash Register</span>
             </div>
-            <p className="text-lg font-bold font-mono text-slate-50">{formatCurrency(metrics.cashBalance)}</p>
+            <p className="text-xl font-bold font-mono text-white">{formatCurrency(metrics.cashBalance)}</p>
           </div>
-          <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/50 w-36 md:w-44 text-center">
-            <div className="flex items-center gap-1 justify-center text-slate-400 text-xs mb-1">
-              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+          <div className="bg-[#111827] p-5 rounded-2xl border border-slate-800/80 w-full sm:w-48 text-center flex flex-col justify-center shadow-md">
+            <div className="flex items-center gap-2 justify-center text-slate-300 text-xs font-semibold mb-2">
+              <Building2 className="w-4 h-4 text-blue-400" />
               <span>HDFC Current A/C</span>
             </div>
-            <p className="text-lg font-bold font-mono text-slate-50">{formatCurrency(metrics.bankBalance)}</p>
+            <p className="text-xl font-bold font-mono text-white">{formatCurrency(metrics.bankBalance)}</p>
           </div>
         </div>
       </div>

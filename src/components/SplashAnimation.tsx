@@ -10,7 +10,7 @@ interface SplashAnimationProps {
 
 export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('Verifying credentials...');
+  const [statusText, setStatusText] = useState('Starting');
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
@@ -28,10 +28,10 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
       });
     }, 120);
 
-    // Timed professional status messages matching milestones
-    const t1 = setTimeout(() => setStatusText('Synchronizing workspace settings...'), 600);
-    const t2 = setTimeout(() => setStatusText('Optimizing application interface...'), 1400);
-    const t3 = setTimeout(() => setStatusText('Starting session secure handshake...'), 2200);
+    // Timed professional status messages matching milestones exactly as requested
+    const t1 = setTimeout(() => setStatusText('Verifying'), 600);
+    const t2 = setTimeout(() => setStatusText('Synchronizing'), 1300);
+    const t3 = setTimeout(() => setStatusText('Opening'), 1900);
 
     // Initiate beautiful scale-and-fade exit after exactly 2.6s, completing the 3.0s load sequence
     const exitTimer = setTimeout(() => {
