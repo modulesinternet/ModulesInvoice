@@ -217,6 +217,14 @@ function getHeaders(): HeadersInit {
 let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
 
 function getApiUrl(url: string) {
+  // Support custom saved backend API URL override
+  try {
+    const savedUrl = localStorage.getItem('backend_api_url');
+    if (savedUrl && savedUrl.trim() !== '') {
+      return `${savedUrl.trim().replace(/\/+$/, '')}${url}`;
+    }
+  } catch (e) {}
+
   // Support VITE_BACKEND_API_URL environment configuration
   const metaEnv = (import.meta as any).env;
   if (metaEnv && metaEnv.VITE_BACKEND_API_URL && metaEnv.VITE_BACKEND_API_URL.trim() !== '') {
@@ -1773,11 +1781,16 @@ export const api = {
     }
   },
 
-  getApkReleases: () => {
+  getApkReleases: async () => {
     if (isLocalOnly) {
-      return Promise.resolve(getLocalItem<any[]>('db_apk_releases', []));
+      return getLocalItem<any[]>('db_apk_releases', []);
     }
-    return request<any[]>('/api/apk/releases');
+    try {
+      return await request<any[]>('/api/apk/releases');
+    } catch (err: any) {
+      console.warn("api.getApkReleases backend fetch failed, falling back to local storage:", err.message || err);
+      return getLocalItem<any[]>('db_apk_releases', []);
+    }
   },
 
   uploadApk: (fileBase64: string, originalName: string, uploadedBy: string, storageUrl?: string) => {
