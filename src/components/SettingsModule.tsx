@@ -28,6 +28,8 @@ import SignaturePad from './SignaturePad';
 import { api } from '../services/api';
 import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { SOUND_TONES, playSoundTone } from '../services/soundService';
+import { Volume2, Speaker, Smartphone, MessageSquare } from 'lucide-react';
 
 interface SettingsModuleProps {
   settings: BusinessSettings;
@@ -247,6 +249,10 @@ export default function SettingsModule({
   const [invoiceTheme, setInvoiceTheme] = useState<'navy' | 'minimal' | 'emerald'>(settings?.invoiceTheme || 'navy');
   const [moharSize, setMoharSize] = useState<number>(settings?.moharSize || 40);
   const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(settings?.defaultInvoiceNotes || '');
+  const [notificationSound, setNotificationSound] = useState(settings?.notificationSound || 'crystal');
+  const [voiceAnnounceEnabled, setVoiceAnnounceEnabled] = useState<boolean>(settings?.voiceAnnounceEnabled ?? true);
+  const [voiceAnnounceTemplate, setVoiceAnnounceTemplate] = useState(settings?.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
+  const [incomingCallAlertEnabled, setIncomingCallAlertEnabled] = useState<boolean>(settings?.incomingCallAlertEnabled ?? true);
 
   // Field/Section Level Visibility States
   const [showInvoiceGst, setShowInvoiceGst] = useState<boolean>(settings?.showInvoiceGst ?? true);
@@ -312,6 +318,10 @@ export default function SettingsModule({
       setShowInvoiceNotes(settings.showInvoiceNotes ?? true);
       setQrBesideMohar(settings.qrBesideMohar ?? false);
       setDefaultInvoiceNotes(settings.defaultInvoiceNotes || '');
+      setNotificationSound(settings.notificationSound || 'crystal');
+      setVoiceAnnounceEnabled(settings.voiceAnnounceEnabled ?? true);
+      setVoiceAnnounceTemplate(settings.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
+      setIncomingCallAlertEnabled(settings.incomingCallAlertEnabled ?? true);
     }
   }, [settings]);
 
@@ -512,7 +522,11 @@ export default function SettingsModule({
         showInvoiceSignature,
         showInvoiceNotes,
         qrBesideMohar,
-        defaultInvoiceNotes
+        defaultInvoiceNotes,
+        notificationSound,
+        voiceAnnounceEnabled,
+        voiceAnnounceTemplate,
+        incomingCallAlertEnabled
       };
 
       await onSaveSettings(payload);
@@ -1220,27 +1234,23 @@ export default function SettingsModule({
 
         {/* RIGHT COLUMN: ADDITIONAL & SIGNATURE */}
         <div className="space-y-6">
-          {/* Cloud Sync & Android Connectivity Diagnostic Console */}
+          {/* Cloud Sync & Android Connectivity Diagnostic Console (Direct pre-release default) */}
           <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-4">
             <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
               <Globe2 className="w-4 h-4 text-indigo-500 animate-pulse" />
-              <span>Cloud Server &amp; Android Sync</span>
+              <span>Cloud Server Connectivity</span>
             </h3>
 
             <p className="text-[11px] text-slate-500 leading-normal font-sans">
-              Verify real-time replication or switch the active server link for mobile connectivity.
+              Linked to the default production API server. Real-time data streams and double-entry synchronizer are secured under direct connection.
             </p>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               <div className="space-y-1">
-                <label className="text-[9px] font-bold text-slate-400 uppercase font-sans">Active Server API URL</label>
-                <input 
-                  type="url"
-                  placeholder="e.g. https://ais-dev-...run.app"
-                  value={backendUrl}
-                  onChange={(e) => setBackendUrlInput(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-[#E5E7EB] rounded-xl font-mono focus:border-indigo-500 focus:outline-none"
-                />
+                <span className="text-[9px] font-bold text-slate-400 uppercase font-sans">Active Server API URL</span>
+                <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl font-mono text-[10px] text-indigo-650 break-all font-semibold select-all">
+                  https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -1248,18 +1258,10 @@ export default function SettingsModule({
                   type="button"
                   onClick={handleTestBackend}
                   disabled={isTesting}
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-                  <span>{isTesting ? 'Verifying...' : 'Test & Save Link'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleClearOverride}
-                  className="px-3 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 transition rounded-xl text-[10px] font-bold cursor-pointer font-sans"
-                >
-                  Clear/Reset
+                  <span>{isTesting ? 'Verifying Link...' : 'Test Connection Status'}</span>
                 </button>
               </div>
 
@@ -1275,10 +1277,10 @@ export default function SettingsModule({
                     <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   )}
                   <div className="space-y-0.5">
-                    <p className="font-bold leading-none">{testResult.success ? 'Sync Connected' : 'Sync Error'}</p>
+                    <p className="font-bold leading-none">{testResult.success ? 'Sync Direct Connected' : 'Sync Offline'}</p>
                     <p className="text-[9px] leading-relaxed opacity-90">{testResult.msg}</p>
                     {testResult.pingMs !== undefined && (
-                      <p className="text-[8px] font-mono opacity-75">Latency response: {testResult.pingMs}ms</p>
+                      <p className="text-[8px] font-mono opacity-75">Response Latency: {testResult.pingMs}ms</p>
                     )}
                   </div>
                 </div>
@@ -1698,6 +1700,110 @@ export default function SettingsModule({
                     </label>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 5: Notification & Audio Alert Settings */}
+          <div className="bg-white rounded-3xl p-6 border border-[#E5E7EB] shadow-sm space-y-5" id="notification-settings-panel">
+            <h3 className="font-bold text-slate-900 text-sm font-display border-b border-[#E5E7EB] pb-3 flex items-center gap-2">
+              <Speaker className="w-4 h-4 text-indigo-500 font-bold" />
+              <span>Notification &amp; Sound Interface</span>
+            </h3>
+
+            <div className="space-y-4">
+              {/* Sound Select */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase font-sans tracking-wide">Default System Sound Tone</label>
+                <div className="flex gap-2">
+                  <select
+                    value={notificationSound}
+                    onChange={(e) => setNotificationSound(e.target.value)}
+                    className="flex-1 text-xs p-2.5 border border-[#E5E7EB] rounded-xl bg-slate-50 focus:border-indigo-500 focus:outline-none font-medium cursor-pointer"
+                  >
+                    {SOUND_TONES.map((tone) => (
+                      <option key={tone.id} value={tone.id}>
+                        {tone.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => playSoundTone(notificationSound)}
+                    className="px-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer text-xs font-bold font-sans border border-indigo-100"
+                    title="Preview selected tone"
+                  >
+                    <Volume2 className="w-4 h-4 shrink-0 animate-bounce" />
+                    <span>Preview</span>
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                  {SOUND_TONES.find(t => t.id === notificationSound)?.description || "Custom synthesizer wave tone for push and local notifications."}
+                </p>
+              </div>
+
+              {/* Incoming Call Layout (Android Overlay Switcher) */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer selection:bg-transparent">
+                  <input
+                    type="checkbox"
+                    checked={incomingCallAlertEnabled}
+                    onChange={(e) => setIncomingCallAlertEnabled(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-0 mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                      <Smartphone className="w-3.5 h-3.5 text-indigo-505 text-indigo-500" />
+                      <span>Incoming Call-Style Payment Alert</span>
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                      Triggers full-screen immersive HUD ring during high-priority payment receipts (works on mobile/desktop workspace).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Text-to-Speech Announcement Setting */}
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <label className="flex items-start gap-2.5 cursor-pointer selection:bg-transparent">
+                  <input
+                    type="checkbox"
+                    checked={voiceAnnounceEnabled}
+                    onChange={(e) => setVoiceAnnounceEnabled(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-0 mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Enable AI Voice Announcements</span>
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                      Synthesize speech (TTS) announcement of transaction variables when the incoming call alert is accepted.
+                    </p>
+                  </div>
+                </label>
+
+                {voiceAnnounceEnabled && (
+                  <div className="space-y-1.5 animate-fade-in pl-6">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TTS Announcement Template</label>
+                    <textarea
+                      rows={2}
+                      value={voiceAnnounceTemplate}
+                      onChange={(e) => setVoiceAnnounceTemplate(e.target.value)}
+                      placeholder="e.g. Payment of ₹{amount} received from {hotelName}."
+                      className="w-full text-xs p-2.5 border border-[#E5E7EB] rounded-xl font-sans focus:border-indigo-500 focus:outline-none leading-relaxed"
+                    />
+                    <div className="bg-indigo-50/50 p-2 border border-indigo-100/35 rounded-xl space-y-1">
+                      <span className="text-[8px] font-bold text-indigo-600 uppercase block font-sans">Dynamic replacement tags available:</span>
+                      <div className="grid grid-cols-2 gap-1 text-[8px] font-mono text-slate-500">
+                        <div><strong className="text-slate-700 font-bold">{'{amount}'}</strong> - Payment amount (₹)</div>
+                        <div><strong className="text-slate-700 font-bold">{'{hotelName}'}</strong> - Client firm name</div>
+                        <div><strong className="text-slate-700 font-bold">{'{paymentMode}'}</strong> - UPI/Cash/Card/Check</div>
+                        <div><strong className="text-slate-700 font-bold">{'{date}'}</strong> - Time/Date stamp</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

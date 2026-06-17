@@ -63,9 +63,11 @@ import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
 import ProfileModule from './components/ProfileModule';
 import SplashAnimation from './components/SplashAnimation';
+import NotificationsModule from './components/NotificationsModule';
+import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
 import { motion } from 'motion/react';
 
-type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile';
+type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications';
 
 export function computeLocalDashboardMetrics(
   clients: Client[],
@@ -244,6 +246,7 @@ export default function App() {
   const [logs, setLogs] = useState<ActivityLog[]>(() => getCachedItem('db_logs', []));
   const [notifications, setNotifications] = useState<Notification[]>(() => getCachedItem('db_notifications', []));
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
@@ -256,26 +259,6 @@ export default function App() {
   });
 
   const [fullScreenLoading, setFullScreenLoading] = useState(false);
-  const [showNodeConfig, setShowNodeConfig] = useState(false);
-  const [customNodeUrl, setCustomNodeUrl] = useState(() => {
-    return localStorage.getItem('backend_api_url') || '';
-  });
-
-  const handleSaveNodeUrl = () => {
-    let url = customNodeUrl.trim();
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      showToast("URL must start with http:// or https://", "error");
-      return;
-    }
-    if (url) {
-      localStorage.setItem('backend_api_url', url);
-      showToast("Server Connection URL updated successfully!", "success");
-    } else {
-      localStorage.removeItem('backend_api_url');
-      showToast("Server target reset to default auto-detection.", "success");
-    }
-    setTimeout(() => window.location.reload(), 1200);
-  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -895,12 +878,53 @@ export default function App() {
     }, 'activityLogs');
 
     const unsubNotifications = registerSafeSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+      const rawList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+      const list = rawList.filter(n => n.userId === currentUser.userId);
       setNotifications(prev => {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
         localStorage.setItem('db_notifications', nextStr);
         return list;
+      });
+
+      // Trigger high-priority alerts in real time for newly added unread notifications
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
+          const freshThreshold = Date.now() - 15000;
+          const isFresh = new Date(docData.createdAt).getTime() > freshThreshold;
+          
+          if (docData.userId === currentUser.userId && !docData.isRead && isFresh) {
+            // Play configured tone
+            const soundId = businessSettings?.notificationSound || 'crystal';
+            playSoundTone(soundId);
+
+            // Speak configured voice announcement template
+            if (businessSettings?.voiceAnnounceEnabled) {
+              const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+              const amtMatched = docData.message.match(/₹[\d,]+/);
+              const amount = amtMatched ? amtMatched[0] : "some amount";
+              
+              const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
+              const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+              
+              const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+              const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+
+              playVoiceAnnouncement(tmpl, {
+                amount,
+                hotelName,
+                paymentMode,
+                date: new Date(docData.createdAt).toLocaleDateString()
+              });
+            }
+
+            // Show incoming call alert if enabled for payments
+            if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
+              setShowIncomingCallAlert(docData);
+            }
+          }
+        }
       });
     }, 'notifications');
 
@@ -1537,15 +1561,7 @@ export default function App() {
             
             <div className="space-y-1">
               <h1 className="text-xl font-bold tracking-tight text-slate-900 font-display">
-                {(() => {
-                  if (companyNameText.includes('Modules')) {
-                    const parts = companyNameText.split(/(Modules)/g);
-                    return parts.map((part, i) => 
-                      part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
-                    );
-                  }
-                  return companyNameText;
-                })()}
+                Internet <span className="text-[#5B21FF]">Modules</span>
               </h1>
               <p className="text-xs text-indigo-600 font-sans font-semibold tracking-wide uppercase">
                 Accounts & Billing System
@@ -1789,72 +1805,7 @@ export default function App() {
             <span>App Version: v{appVersion.version} (Build {appVersion.build})</span>
           </div>
 
-          {/* Mobile Server Connection Panel */}
-          <div className="pt-2.5 border-t border-slate-100 flex flex-col items-center">
-            <button
-              type="button"
-              onClick={() => setShowNodeConfig(!showNodeConfig)}
-              className="text-[10px] uppercase font-mono tracking-wider font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer hover:underline"
-            >
-              ⚙ SERVER CONFIG ({customNodeUrl ? 'CUSTOM' : 'AUTO-DEV'})
-            </button>
-            {showNodeConfig && (
-              <div className="w-full mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col gap-2.5 text-left">
-                <div className="space-y-1">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current Base Web API URL</span>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="e.g. https://ais-dev-..."
-                      value={customNodeUrl}
-                      onChange={(e) => setCustomNodeUrl(e.target.value)}
-                      className="flex-1 text-[11px] p-2 border border-slate-200 rounded-xl bg-white font-mono shadow-xs focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSaveNodeUrl}
-                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 justify-center mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const devVal = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-                      setCustomNodeUrl(devVal);
-                      localStorage.setItem('backend_api_url', devVal);
-                      localStorage.setItem('capacitor_auto_fallback', 'dev');
-                      showToast("Target switched to Development Workspace Server Node.", "success");
-                      setTimeout(() => window.location.reload(), 1250);
-                    }}
-                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-[9.5px] font-bold text-slate-600 rounded-xl cursor-pointer text-center"
-                  >
-                    Use Dev Node
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const preVal = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-                      setCustomNodeUrl(preVal);
-                      localStorage.setItem('backend_api_url', preVal);
-                      localStorage.setItem('capacitor_auto_fallback', 'pre');
-                      showToast("Target switched to Shared Production Server Node.", "success");
-                      setTimeout(() => window.location.reload(), 1250);
-                    }}
-                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-[9.5px] font-bold text-slate-600 rounded-xl cursor-pointer text-center"
-                  >
-                    Use Prod Node
-                  </button>
-                </div>
-                <p className="text-[9px] leading-relaxed text-slate-400 mt-0.5">
-                  ✓ <b>TIP:</b> If opening the Android APK doesn't display any data collections or customer ledgers, tap <b>Use Dev Node</b> to route data sync requests directly to your current development container.
-                </p>
-              </div>
-            )}
-          </div>
+
         </motion.div>
 
         {/* TOAST PANEL WRAPPER ON LOGIN SCREEN */}
@@ -1997,7 +1948,7 @@ export default function App() {
         id="erp-sidebar"
       >
         {/* Upper Brand Info */}
-        <div className="p-5 border-b border-[#E5E7EB]">
+        <div className="p-5 pt-[calc(1.25rem+env(safe-area-inset-top,24px))] md:p-5 border-b border-[#E5E7EB]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {businessSettings?.logoUrl ? (
@@ -2176,8 +2127,8 @@ export default function App() {
 
         {/* Right action block: Notification block & Profile avatar */}
         <div className="flex items-center gap-2">
-          {/* Connection status indicator */}
-          <div className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 transition text-[10px] font-bold ${
+          {/* Connection status indicator (hidden on mobile to prevent header crowding) */}
+          <div className={`hidden md:flex px-2 py-1 rounded-lg border items-center gap-1.5 transition text-[10px] font-bold ${
             isConnected 
               ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
               : 'bg-rose-50 text-rose-700 border-rose-150 animate-pulse'
@@ -2236,7 +2187,7 @@ export default function App() {
                       No active network notices.
                     </div>
                   ) : (
-                    notifications.slice(0, notificationsPageSize).map((item) => (
+                    notifications.slice(0, 5).map((item) => (
                       <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
                         <div className="flex items-center gap-1.5 justify-between">
                           <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
@@ -2246,6 +2197,17 @@ export default function App() {
                       </div>
                     ))
                   )}
+                </div>
+                <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
+                  <button 
+                    onClick={() => {
+                      setActiveTab('notifications');
+                      setShowNotifications(false);
+                    }}
+                    className="w-full text-center py-2 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-105 active:scale-98 text-[10px] font-bold uppercase text-indigo-650 text-indigo-600 cursor-pointer transition"
+                  >
+                    View All Notifications
+                  </button>
                 </div>
               </div>
             )}
@@ -2462,7 +2424,7 @@ export default function App() {
                         No active network notices.
                       </div>
                     ) : (
-                      notifications.slice(0, notificationsPageSize).map((item) => (
+                      notifications.slice(0, 5).map((item) => (
                         <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
                           <div className="flex items-center gap-1.5 justify-between">
                             <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
@@ -2473,25 +2435,17 @@ export default function App() {
                       ))
                     )}
                   </div>
-                  {notifications.length > 5 && (
-                    <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
-                      {notificationsPageSize < notifications.length ? (
-                        <button 
-                          onClick={() => setNotificationsPageSize(prev => Math.min(prev + 5, notifications.length))}
-                          className="w-full text-center py-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-[10px] font-bold uppercase text-slate-600 cursor-pointer transition"
-                        >
-                          View More (+5)
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => setNotificationsPageSize(5)}
-                          className="w-full text-center py-1.5 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-[10px] font-bold uppercase text-slate-600 cursor-pointer transition"
-                        >
-                          Show Less
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
+                    <button 
+                      onClick={() => {
+                        setActiveTab('notifications');
+                        setShowNotifications(false);
+                      }}
+                      className="w-full text-center py-2 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-105 text-[10px] font-bold uppercase text-indigo-600 cursor-pointer transition"
+                    >
+                      View All Notifications
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2701,6 +2655,39 @@ export default function App() {
                   showToast={showToast}
                 />
               )}
+
+              {activeTab === 'notifications' && (
+                <NotificationsModule 
+                  notifications={notifications}
+                  onMarkRead={async (id) => {
+                    try {
+                      await api.markNotificationRead(id);
+                      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+                      showToast("Notification marked as read", "success");
+                    } catch (e: any) {
+                      showToast(`Action failed: ${e.message || e}`, "error");
+                    }
+                  }}
+                  onMarkAllRead={async () => {
+                    try {
+                      await api.markAllNotificationsRead();
+                      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                      showToast("All notifications marked as read", "success");
+                    } catch (e: any) {
+                      showToast(`Action failed: ${e.message || e}`, "error");
+                    }
+                  }}
+                  onDelete={async (id) => {
+                    try {
+                      await api.deleteNotification(id);
+                      setNotifications(prev => prev.filter(n => n.id !== id));
+                      showToast("Notification deleted successfully", "success");
+                    } catch (e: any) {
+                      showToast(`Action failed: ${e.message || e}`, "error");
+                    }
+                  }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -2723,14 +2710,14 @@ export default function App() {
           
           <button 
             onClick={() => {
-              if (activeTab !== 'products') setActiveTab('products');
+              if (activeTab !== 'payments') setActiveTab('payments');
             }}
             className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all ${
-              activeTab === 'products' ? 'text-indigo-600 scale-105' : 'text-slate-400'
+              activeTab === 'payments' ? 'text-indigo-600 scale-105' : 'text-slate-400'
             }`}
           >
-            <Package className="w-5 h-5" />
-            <span className="text-[10px] font-bold tracking-tight">Products</span>
+            <CreditCard className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight">Payments</span>
           </button>
 
           <button 
@@ -2765,6 +2752,88 @@ export default function App() {
             <Menu className="w-5 h-5 text-slate-500" />
             <span className="text-[10px] font-bold tracking-tight text-slate-500">More</span>
           </button>
+        </div>
+      )}
+
+      {showIncomingCallAlert && (
+        <div className="fixed inset-0 bg-[#0B0D19]/96 z-[9999] flex flex-col justify-between p-8 text-white font-sans animate-fade-in no-print overflow-hidden select-none">
+          {/* Pulsing wave background lines */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <span className="absolute w-[200px] h-[200px] border border-emerald-500 rounded-full animate-ping"></span>
+            <span className="absolute w-[400px] h-[400px] border border-indigo-500 rounded-full animate-ping delay-700"></span>
+            <span className="absolute w-[600px] h-[600px] border border-cyan-500 rounded-full animate-ping delay-1000"></span>
+          </div>
+
+          {/* Top header indicator */}
+          <div className="w-full flex flex-col items-center pt-8 space-y-2 z-10 text-center">
+            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+              🔔 HIGH-PRIORITY TRANSACTION DETECTED
+            </span>
+            <h2 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 font-mono">
+              iModules Secure Billing Network
+            </h2>
+          </div>
+
+          {/* Main content display details */}
+          <div className="w-full flex flex-col items-center space-y-7 z-10 text-center max-w-md mx-auto">
+            {/* Glowing ring checkmark */}
+            <div className="w-24 h-24 bg-gradient-to-br from-emerald-500/25 to-cyan-500/25 border-2 border-emerald-400/50 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)] animate-bounce">
+              <CheckCircle className="w-12 h-12 text-emerald-450 text-emerald-400" />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-slate-405 text-slate-400 text-xs font-semibold uppercase tracking-wider">Payments Entry Synced Successfully</p>
+              <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white font-display drop-shadow-[0_4px_12px_rgba(255,255,255,0.08)]">
+                {showIncomingCallAlert.message.match(/₹[\d,]+/)?.[0] || 'Payment Received'}
+              </h1>
+            </div>
+
+            <div className="w-full bg-white/[0.03] border border-white/[0.06] backdrop-blur-md rounded-3xl p-5 text-left space-y-3.5 shadow-xl">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Corporate Payee client</span>
+                <span className="text-sm font-bold text-slate-100 leading-snug">
+                  {showIncomingCallAlert.message.match(/from\s+([^\svia\.]+)/)?.[1]?.trim() || 'N/A'}
+                </span>
+              </div>
+              <div className="h-px bg-white/[0.06]" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Receipt Mode</span>
+                  <span className="text-xs font-bold text-indigo-300">
+                    ⚡ {showIncomingCallAlert.message.match(/via\s+([^\s\.]+)/)?.[1]?.trim() || 'Real-time'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Audit stamp</span>
+                  <span className="text-xs font-bold text-slate-100">
+                    {new Date(showIncomingCallAlert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sliding interactive buttons at bottom */}
+          <div className="w-full flex flex-col sm:flex-row items-center gap-4 max-w-sm mx-auto pb-8 z-10">
+            <button
+              onClick={() => {
+                setActiveTab('ledger');
+                setShowIncomingCallAlert(null);
+              }}
+              className="w-full py-4 bg-white text-[#0B0D19] hover:bg-slate-50 active:scale-98 font-bold text-xs rounded-2xl cursor-pointer shadow-xl transition flex items-center justify-center gap-2"
+            >
+              <BookOpen className="w-4 h-4 text-slate-700" />
+              <span>Go to Accounts Ledger</span>
+            </button>
+            
+            <button
+              onClick={() => setShowIncomingCallAlert(null)}
+              className="w-full py-3.5 text-xs bg-white/10 hover:bg-white/15 border border-white/10 active:scale-98 font-bold text-white rounded-2xl cursor-pointer transition text-center"
+            >
+              Dismiss Secure Alert
+            </button>
+          </div>
         </div>
       )}
 

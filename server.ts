@@ -128,7 +128,7 @@ let db_payments = [ ...DEMO_PAYMENTS ];
 let db_ledger = [ ...DEMO_LEDGER ];
 let db_cashbook = [ ...DEMO_CASHBOOK ];
 let db_logs = [ ...DEMO_LOGS ];
-let db_notifications = [ ...DEMO_NOTIFICATIONS ];
+let db_notifications: Notification[] = [];
 let db_users = [ ...DEMO_USERS ];
 let db_fcm_tokens: any[] = [];
 let db_apk_releases: any[] = [];
@@ -276,6 +276,10 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
 
   // Create standard logging line in local Activity Logs list for developer parity
   const logId = `notif-log-${Date.now()}`;
+  const store = requestContext.getStore();
+  const req = store?.req;
+  const userId = req ? (req.headers['x-user-id'] as string) : (extraData.userId || undefined);
+
   const notifType: "info" | "warning" | "success" = extraData.type === "warning" ? "warning" : (extraData.type === "success" ? "success" : "info");
   const newNotif: Notification = {
     id: logId,
@@ -283,7 +287,8 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
     message: body,
     isRead: false,
     type: notifType,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    userId: userId || undefined
   };
   db_notifications.unshift(newNotif);
   syncStateToFirestore('notifications', logId).catch(() => null);
@@ -981,7 +986,7 @@ async function bootstrapFromFirestore() {
     db_logs = await syncCollectionOnStartup('activityLogs', db_logs, DEMO_LOGS);
 
     // 12. Notifications
-    db_notifications = await syncCollectionOnStartup('notifications', db_notifications, DEMO_NOTIFICATIONS);
+    db_notifications = await syncCollectionOnStartup('notifications', db_notifications, []);
 
     // 13. Users
     db_users = await syncCollectionOnStartup('users', db_users, DEMO_USERS, 'userId');
@@ -2255,10 +2260,22 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     await syncStateToFirestore('cashbook', newCashbook.id);
 
     // Trigger FCM payment received notification alert
+    const amtStr = `₹${newPayment.amount.toLocaleString('en-IN')}`;
+    const formattedDate = new Date(newPayment.paymentDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    const formattedMsg = `${amtStr} Payment Received from ${newPayment.clientName} via ${newPayment.paymentMode}.`;
     sendFcmNotification(
       "Payment Received",
-      `₹${Number(newPayment.amount).toLocaleString()} received against Invoice #${newPayment.invoiceNumber || "N/A"}.`,
-      { route: '/payments', paymentId: newPayment.id, invoiceId: newPayment.invoiceId, tab: 'payments' }
+      formattedMsg,
+      { 
+        type: 'success', 
+        amount: String(newPayment.amount), 
+        clientName: newPayment.clientName, 
+        paymentMode: newPayment.paymentMode, 
+        paymentDate: newPayment.paymentDate || new Date().toISOString(),
+        paymentId: newPayment.id, 
+        invoiceId: newPayment.invoiceId || '',
+        tab: 'payments' 
+      }
     ).catch(err => console.error("FCM dispatch caught error:", err));
 
     logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
@@ -2728,7 +2745,19 @@ app.get('/api/logs', checkPermission('users', 'read'), (req: Request, res: Respo
 });
 
 app.get('/api/notifications', (req: Request, res: Response) => {
-  res.json(db_notifications);
+  const userId = req.headers['x-user-id'] as string;
+  const filtered = db_notifications.filter(n => n.userId === userId);
+  res.json(filtered);
+});
+
+app.put('/api/notifications/read-all', async (req: Request, res: Response) => {
+  const userId = req.headers['x-user-id'] as string;
+  const filtered = db_notifications.filter(n => n.userId === userId && !n.isRead);
+  for (const item of filtered) {
+    item.isRead = true;
+    await syncStateToFirestore('notifications', item.id);
+  }
+  res.json({ success: true, count: filtered.length });
 });
 
 app.put('/api/notifications/:id/read', async (req: Request, res: Response) => {
@@ -2738,6 +2767,22 @@ app.put('/api/notifications/:id/read', async (req: Request, res: Response) => {
     item.isRead = true;
     await syncStateToFirestore('notifications', id);
     res.json(item);
+  } else {
+    res.status(404).json({ error: "Notification not found" });
+  }
+});
+
+app.delete('/api/notifications/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const idx = db_notifications.findIndex(n => n.id === id);
+  if (idx !== -1) {
+    db_notifications.splice(idx, 1);
+    try {
+      await deleteDoc(doc(getFirestore(), 'notifications', id));
+    } catch (e) {
+      console.warn("Could not delete notification from Firestore directly:", e);
+    }
+    res.json({ success: true, id });
   } else {
     res.status(404).json({ error: "Notification not found" });
   }

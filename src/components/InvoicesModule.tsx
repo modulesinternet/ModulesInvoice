@@ -289,17 +289,33 @@ export default function InvoicesModule({
   const [settleInvoice, setSettleInvoice] = useState<Invoice | null>(null);
   const [settleType, setSettleType] = useState<'full' | 'partial'>('full');
   const [settleAmount, setSettleAmount] = useState('');
-  const [settleMode, setSettleMode] = useState<'UPI/Bank Transfer' | 'Cash' | 'Split (Cash + UPI)'>('UPI/Bank Transfer');
+  const [settleMode, setSettleMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
   const [settleRef, setSettleRef] = useState('');
   const [settleNotes, setSettleNotes] = useState('Payment matched and credited instantly.');
   const [settleDate, setSettleDate] = useState(new Date().toISOString().split('T')[0]);
   const [settleSaving, setSettleSaving] = useState(false);
 
-  // Split payment portions state
-  const [settleCashAmount, setSettleCashAmount] = useState('');
-  const [settleUpiAmount, setSettleUpiAmount] = useState('');
-  const [settleUpiRef, setSettleUpiRef] = useState('');
-  const [settleCashRef, setSettleCashRef] = useState('');
+  // Staged payments builder state for partial split mode
+  interface StagedPayment {
+    id: string;
+    amount: number;
+    paymentMode: 'UPI/Bank Transfer' | 'Cash';
+    referenceNum: string;
+  }
+  const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
+  const [partialInputAmount, setPartialInputAmount] = useState('');
+  const [partialInputMode, setPartialInputMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
+  const [partialInputRef, setPartialInputRef] = useState('');
+
+  const generateRefCode = (mode: 'UPI/Bank Transfer' | 'Cash', invoiceNum: string) => {
+    const rngRef = Math.floor(1000 + Math.random() * 9000).toString();
+    const cleanInv = invoiceNum.replace(/[^a-zA-Z0-9]/g, '');
+    if (mode === 'Cash') {
+      return `CSH-${cleanInv}-${rngRef}`;
+    } else {
+      return `UPI-${cleanInv}-${rngRef}`;
+    }
+  };
 
   const handleOpenSettleModal = (inv: Invoice) => {
     setSettleInvoice(inv);
@@ -311,12 +327,11 @@ export default function InvoicesModule({
     setSettleNotes(`Settlement credit for Invoice ${inv.invoiceNumber}`);
     setSettleDate(new Date().toISOString().split('T')[0]);
 
-    // Split defaults
-    const halfVal = Math.round((inv.dueAmount / 2) * 100) / 100;
-    setSettleCashAmount(String(halfVal));
-    setSettleUpiAmount(String(inv.dueAmount - halfVal));
-    setSettleUpiRef(`UPI-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${rngRef}`);
-    setSettleCashRef(`CASH-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${rngRef}`);
+    // Clear staged build parameters
+    setStagedPayments([]);
+    setPartialInputAmount('');
+    setPartialInputMode('UPI/Bank Transfer');
+    setPartialInputRef(generateRefCode('UPI/Bank Transfer', inv.invoiceNumber));
 
     setIsSettleModalOpen(true);
   };
@@ -324,123 +339,112 @@ export default function InvoicesModule({
   const handleSettleTypeChange = (type: 'full' | 'partial') => {
     setSettleType(type);
     if (settleInvoice) {
-      const targetAmt = type === 'full' ? settleInvoice.dueAmount : Math.round((settleInvoice.dueAmount / 2) * 100) / 100;
-      setSettleAmount(String(targetAmt));
-      recalculateSplitAmounts(targetAmt);
+      if (type === 'full') {
+        setSettleAmount(String(settleInvoice.dueAmount));
+      } else {
+        const remainingToStage = settleInvoice.dueAmount;
+        setPartialInputAmount(String(remainingToStage > 0 ? remainingToStage : ''));
+        setPartialInputRef(generateRefCode(partialInputMode, settleInvoice.invoiceNumber));
+      }
     }
   };
 
-  const handleSettleAmountChange = (val: string) => {
-    setSettleAmount(val);
-    const num = Number(val);
-    if (!isNaN(num) && num > 0) {
-      recalculateSplitAmounts(num);
+  const handlePartialModeChange = (mode: 'UPI/Bank Transfer' | 'Cash') => {
+    setPartialInputMode(mode);
+    if (settleInvoice) {
+      setPartialInputRef(generateRefCode(mode, settleInvoice.invoiceNumber));
     }
   };
 
-  const recalculateSplitAmounts = (totalAmt: number) => {
-    const halfVal = Math.round((totalAmt / 2) * 100) / 100;
-    setSettleCashAmount(String(halfVal));
-    setSettleUpiAmount(String(Math.round((totalAmt - halfVal) * 100) / 100));
+  const handleAddStagedPayment = () => {
+    if (!settleInvoice) return;
+    const amt = Number(partialInputAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert("Please specify a valid payment amount to stage.");
+      return;
+    }
+    const currentTotalStaged = stagedPayments.reduce((sum, p) => sum + p.amount, 0);
+    const maxAllowed = settleInvoice.dueAmount - currentTotalStaged;
+    if (amt > maxAllowed + 0.01) {
+      alert(`Staged payment amount (${formatCurrency(amt)}) cannot exceed maximum remaining balance (${formatCurrency(maxAllowed)}).`);
+      return;
+    }
+    if (!partialInputRef.trim()) {
+      alert("Please provide a valid transaction reference.");
+      return;
+    }
+
+    const newItem: StagedPayment = {
+      id: `stg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      amount: Math.round(amt * 100) / 100,
+      paymentMode: partialInputMode,
+      referenceNum: partialInputRef.trim()
+    };
+
+    const nextStaged = [...stagedPayments, newItem];
+    setStagedPayments(nextStaged);
+
+    // Dynamic next prepopulation
+    const nextTotalStaged = nextStaged.reduce((sum, p) => sum + p.amount, 0);
+    const nextRemaining = Math.max(0, settleInvoice.dueAmount - nextTotalStaged);
+    setPartialInputAmount(nextRemaining > 0 ? String(Math.round(nextRemaining * 100) / 100) : '');
+    
+    // Toggle the next mode to suggest split opposite channel for best convenience
+    const nextMode = partialInputMode === 'UPI/Bank Transfer' ? 'Cash' : 'UPI/Bank Transfer';
+    setPartialInputMode(nextMode);
+    setPartialInputRef(generateRefCode(nextMode, settleInvoice.invoiceNumber));
   };
 
-  const handleCashAmountChange = (val: string) => {
-    setSettleCashAmount(val);
-    const cashVal = Number(val);
-    const totalSettleVal = Number(settleAmount);
-    if (!isNaN(cashVal) && !isNaN(totalSettleVal)) {
-      const upiVal = Math.max(0, totalSettleVal - cashVal);
-      setSettleUpiAmount(String(Math.round(upiVal * 100) / 100));
-    }
-  };
+  const handleRemoveStagedPayment = (id: string) => {
+    if (!settleInvoice) return;
+    const nextStaged = stagedPayments.filter(p => p.id !== id);
+    setStagedPayments(nextStaged);
 
-  const handleUpiAmountChange = (val: string) => {
-    setSettleUpiAmount(val);
-    const upiVal = Number(val);
-    const totalSettleVal = Number(settleAmount);
-    if (!isNaN(upiVal) && !isNaN(totalSettleVal)) {
-      const cashVal = Math.max(0, totalSettleVal - upiVal);
-      setSettleCashAmount(String(Math.round(cashVal * 100) / 100));
-    }
+    const nextTotalStaged = nextStaged.reduce((sum, p) => sum + p.amount, 0);
+    const nextRemaining = Math.max(0, settleInvoice.dueAmount - nextTotalStaged);
+    setPartialInputAmount(nextRemaining > 0 ? String(Math.round(nextRemaining * 100) / 100) : '');
   };
 
   const handleConfirmSettle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settleInvoice || !onAddPayment) return;
-    
-    const amt = Number(settleAmount);
-    if (isNaN(amt) || amt <= 0) {
-      alert("Please specify a valid payment amount.");
-      return;
-    }
-    if (amt > settleInvoice.dueAmount) {
-      alert(`The settlement amount cannot exceed the remaining due amount of ${formatCurrency(settleInvoice.dueAmount)}`);
-      return;
-    }
 
     try {
       setSettleSaving(true);
 
-      if (settleMode === 'Split (Cash + UPI)') {
-        const cashAmt = Number(settleCashAmount);
-        const upiAmt = Number(settleUpiAmount);
-
-        if (isNaN(cashAmt) || cashAmt <= 0) {
-          alert("Please specify a valid Cash split portion amount.");
-          setSettleSaving(false);
-          return;
-        }
-        if (isNaN(upiAmt) || upiAmt <= 0) {
-          alert("Please specify a valid UPI split portion amount.");
-          setSettleSaving(false);
-          return;
-        }
-        
-        const sumDiff = Math.abs((cashAmt + upiAmt) - amt);
-        if (sumDiff > 0.05) {
-          alert(`Split totals (Cash: ${formatCurrency(cashAmt)} + UPI: ${formatCurrency(upiAmt)}) must sum exactly to Settle Amount ${formatCurrency(amt)} (difference of ${formatCurrency(sumDiff)} detected)`);
+      if (settleType === 'partial') {
+        if (stagedPayments.length === 0) {
+          alert("Please add at least one partial payment to the list before confirming settlement.");
           setSettleSaving(false);
           return;
         }
 
-        if (!settleCashRef.trim()) {
-          alert("Please declare Cash receipt reference.");
-          setSettleSaving(false);
-          return;
+        // Post all staged payments sequentially
+        for (const item of stagedPayments) {
+          await onAddPayment({
+            clientId: settleInvoice.clientId,
+            invoiceId: settleInvoice.id,
+            amount: item.amount,
+            paymentMode: item.paymentMode,
+            referenceNum: item.referenceNum,
+            notes: `${settleNotes.trim()} (Stage portion)`,
+            paymentDate: settleDate,
+            clientName: settleInvoice.clientName,
+            invoiceNumber: settleInvoice.invoiceNumber
+          });
         }
-        if (!settleUpiRef.trim()) {
-          alert("Please declare UPI Reference ID.");
-          setSettleSaving(false);
-          return;
-        }
-
-        // Post Cash receipt
-        await onAddPayment({
-          clientId: settleInvoice.clientId,
-          invoiceId: settleInvoice.id,
-          amount: cashAmt,
-          paymentMode: 'Cash',
-          referenceNum: settleCashRef.trim(),
-          notes: `${settleNotes.trim()} (Split portion: Cash)`,
-          paymentDate: settleDate,
-          clientName: settleInvoice.clientName,
-          invoiceNumber: settleInvoice.invoiceNumber
-        });
-
-        // Post UPI receipt
-        await onAddPayment({
-          clientId: settleInvoice.clientId,
-          invoiceId: settleInvoice.id,
-          amount: upiAmt,
-          paymentMode: 'UPI/Bank Transfer',
-          referenceNum: settleUpiRef.trim(),
-          notes: `${settleNotes.trim()} (Split portion: UPI/Bank)`,
-          paymentDate: settleDate,
-          clientName: settleInvoice.clientName,
-          invoiceNumber: settleInvoice.invoiceNumber
-        });
-
       } else {
+        const amt = Number(settleAmount);
+        if (isNaN(amt) || amt <= 0) {
+          alert("Please specify a valid payment amount.");
+          setSettleSaving(false);
+          return;
+        }
+        if (amt > settleInvoice.dueAmount) {
+          alert(`The settlement amount cannot exceed the remaining due amount of ${formatCurrency(settleInvoice.dueAmount)}`);
+          setSettleSaving(false);
+          return;
+        }
         if (!settleRef.trim()) {
           alert("Please specify a transaction reference or UPI code.");
           setSettleSaving(false);
@@ -2960,134 +2964,198 @@ export default function InvoicesModule({
                     }`}
                   >
                     <span className="text-xs">Partial Settlement</span>
-                    <span className="text-[10px] font-normal opacity-85">Receive part payment block</span>
+                    <span className="text-[10px] font-normal opacity-85">Stage multi-payment ledger slices</span>
                   </button>
                 </div>
 
-                {/* Amount Input */}
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Credit Amount (INR)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">₹</span>
-                    <input 
-                      type="number"
-                      required
-                      disabled={settleType === 'full'}
-                      min="1"
-                      max={settleInvoice.dueAmount}
-                      value={settleAmount}
-                      onChange={(e) => handleSettleAmountChange(e.target.value)}
-                      className="w-full text-xs p-2.5 pl-7 border border-slate-200 rounded-xl bg-white font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-100/70"
-                    />
-                  </div>
-                </div>
+                {/* DYNAMIC FORM SEGMENTS */}
+                {settleType === 'partial' ? (
+                  <div className="space-y-4">
+                    {/* CALCULATIONS RECAP */}
+                    {(() => {
+                      const totalStagedVal = stagedPayments.reduce((sum, p) => sum + p.amount, 0);
+                      const remainingDues = Math.max(0, settleInvoice.dueAmount - totalStagedVal);
+                      return (
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500">Invoice Outstanding:</span>
+                            <span className="font-bold text-slate-800">{formatCurrency(settleInvoice.dueAmount)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-emerald-700 font-semibold">Total Staged Payments:</span>
+                            <span className="font-extrabold text-emerald-700">+{formatCurrency(totalStagedVal)}</span>
+                          </div>
+                          <div className="border-t border-slate-200 pt-1.5 flex justify-between items-center text-xs">
+                            <span className="text-slate-500 font-semibold">Remaining (Pending) Balance:</span>
+                            <span className={`font-black ${remainingDues > 0 ? "text-amber-600" : "text-slate-500"}`}>
+                              {formatCurrency(remainingDues)}
+                            </span>
+                          </div>
 
-                {/* Mode, Date & Ref Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Payment Channel</label>
-                    <select
-                      value={settleMode}
-                      onChange={(e) => setSettleMode(e.target.value as any)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    >
-                      <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
-                      <option value="Cash">Cash Ledger</option>
-                      <option value="Split (Cash + UPI)">Split (Cash + UPI)</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Receipt Date</label>
-                    <input 
-                      type="date"
-                      required
-                      value={settleDate}
-                      onChange={(e) => setSettleDate(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                {/* DYNAMIC FORMS ACCORDING TO PAYMENT MODE */}
-                {settleMode === 'Split (Cash + UPI)' ? (
-                  <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/80 space-y-3">
-                    <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">Configure Split Settings (Auto-balancing enabled)</span>
-                    
-                    {/* Portion Amounts Grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold text-slate-500">Cash Portion (INR)</label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-2.5 text-slate-400 font-semibold text-xs">₹</span>
-                          <input 
-                            type="number"
-                            required
-                            min="0"
-                            max={settleAmount}
-                            value={settleCashAmount}
-                            onChange={(e) => handleCashAmountChange(e.target.value)}
-                            className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                          />
+                          {remainingDues > 0 && (
+                            <div className="mt-2 bg-amber-55 border border-amber-200 text-amber-800 text-[11px] p-2 rounded-lg flex items-center gap-1.5 font-semibold">
+                              <span>⚠️</span>
+                              <span>
+                                {formatCurrency(remainingDues)} pending balance will remain outstanding on the invoice after settlement.
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      );
+                    })()}
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold text-slate-500">UPI Portion (INR)</label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-2.5 text-slate-400 font-semibold text-xs">₹</span>
-                          <input 
-                            type="number"
-                            required
-                            min="0"
-                            max={settleAmount}
-                            value={settleUpiAmount}
-                            onChange={(e) => handleUpiAmountChange(e.target.value)}
-                            className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                          />
+                    {/* CURRENTLY STAGED PAYMENTS LIST */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold text-slate-400">Currently Staged Payments</label>
+                      {stagedPayments.length === 0 ? (
+                        <div className="border border-dashed border-slate-200 p-4 rounded-xl text-center text-[11px] text-slate-400 italic">
+                          No payments staged yet. Use the tool below to stage partial payments.
                         </div>
-                      </div>
+                      ) : (
+                        <div className="border border-slate-150 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
+                          {stagedPayments.map((p) => (
+                            <div key={p.id} className="bg-emerald-50/20 p-2.5 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-slate-800">{formatCurrency(p.amount)}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-white text-[9px] font-bold border border-slate-200 text-indigo-700 uppercase">{p.paymentMode === 'Cash' ? 'Cash' : 'UPI'}</span>
+                                <span className="font-mono text-[10px] text-slate-500 truncate max-w-[120px] bg-slate-100 px-1 py-0.5 rounded" title={p.referenceNum}>{p.referenceNum}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStagedPayment(p.id)}
+                                className="text-rose-500 hover:text-rose-700 text-[11px] font-semibold px-2 py-0.5 hover:bg-rose-50 rounded transition"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Reference Codes Grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold text-slate-500">Cash Receipt Ref</label>
-                        <input 
-                          type="text"
-                          required
-                          value={settleCashRef}
-                          onChange={(e) => setSettleCashRef(e.target.value)}
-                          className="w-full text-[11px] p-2 border border-slate-200 rounded-lg bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                          placeholder="CASH-Ref-XYZ"
-                        />
-                      </div>
+                    {/* ADD A STAGED PAYMENT FORM BLOCK */}
+                    {stagedPayments.reduce((sum, p) => sum + p.amount, 0) < settleInvoice.dueAmount && (
+                      <div className="bg-indigo-50/30 p-3.5 rounded-xl border border-indigo-100/50 space-y-3">
+                        <span className="text-[10px] font-bold text-indigo-700 uppercase block tracking-wider">Stage another partial payment</span>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500">Amount (INR)</label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-slate-400 font-semibold text-xs">₹</span>
+                              <input 
+                                type="number"
+                                min="0.01"
+                                step="any"
+                                value={partialInputAmount}
+                                onChange={(e) => setPartialInputAmount(e.target.value)}
+                                className="w-full text-xs p-1.5 pl-6 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold text-slate-500">UPI Transaction ID</label>
-                        <input 
-                          type="text"
-                          required
-                          value={settleUpiRef}
-                          onChange={(e) => setSettleUpiRef(e.target.value)}
-                          className="w-full text-[11px] p-2 border border-slate-200 rounded-lg bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                          placeholder="UPI-Ref-12345"
-                        />
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500">Payment Channel</label>
+                            <select
+                              value={partialInputMode}
+                              onChange={(e) => handlePartialModeChange(e.target.value as any)}
+                              className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                            >
+                              <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
+                              <option value="Cash">Cash Ledger</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-500">Transaction Reference Code / ID</label>
+                          <input 
+                            type="text"
+                            value={partialInputRef}
+                            onChange={(e) => setPartialInputRef(e.target.value)}
+                            className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                            placeholder="Enter reference ID"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddStagedPayment}
+                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg transition shadow-sm"
+                        >
+                          + Stage Payment to List
+                        </button>
                       </div>
+                    )}
+
+                    {/* Receipt Date Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-slate-400">Receipt Date</label>
+                      <input 
+                        type="date"
+                        required
+                        value={settleDate}
+                        onChange={(e) => setSettleDate(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
                     </div>
                   </div>
                 ) : (
-                  /* Standard Single Mode Transaction Ref */
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Reference Code / ID</label>
-                    <input 
-                      type="text"
-                      required
-                      value={settleRef}
-                      onChange={(e) => setSettleRef(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                      placeholder="Enter UPI reference or Bank Txn ID"
-                    />
+                  /* FULL SETTLEMENT FORM */
+                  <div className="space-y-4">
+                    {/* Amount Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Credit Amount (INR)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">₹</span>
+                        <input 
+                          type="number"
+                          required
+                          disabled
+                          value={settleAmount}
+                          className="w-full text-xs p-2.5 pl-7 border border-slate-200 rounded-xl bg-slate-50 font-mono font-bold text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Mode, Date & Ref Grid */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-400">Payment Channel</label>
+                        <select
+                          value={settleMode}
+                          onChange={(e) => setSettleMode(e.target.value as any)}
+                          className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        >
+                          <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
+                          <option value="Cash">Cash Ledger</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-400">Receipt Date</label>
+                        <input 
+                          type="date"
+                          required
+                          value={settleDate}
+                          onChange={(e) => setSettleDate(e.target.value)}
+                          className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Standard Single Mode Transaction Ref */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Reference Code / ID</label>
+                      <input 
+                        type="text"
+                        required
+                        value={settleRef}
+                        onChange={(e) => setSettleRef(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        placeholder="Enter UPI reference or Bank Txn ID"
+                      />
+                    </div>
                   </div>
                 )}
 

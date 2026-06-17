@@ -194,6 +194,10 @@ export interface BusinessSettings {
   showInvoiceNotes?: boolean;
   qrBesideMohar?: boolean;
   defaultInvoiceNotes?: string;
+  notificationSound?: string;
+  voiceAnnounceEnabled?: boolean;
+  voiceAnnounceTemplate?: string;
+  incomingCallAlertEnabled?: boolean;
 }
 
 export interface ActivityLog {
@@ -212,6 +216,7 @@ export interface Notification {
   type: "info" | "warning" | "success";
   isRead: boolean;
   createdAt: string;
+  userId?: string;
 }
 
 export interface RoleModulePermission {

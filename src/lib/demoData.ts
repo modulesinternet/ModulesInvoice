@@ -41,7 +41,11 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   showInvoiceSignature: true,
   showInvoiceNotes: true,
   qrBesideMohar: false,
-  defaultInvoiceNotes: "Humble warning: Please quote our invoice serial number in all bank payouts."
+  defaultInvoiceNotes: "Humble warning: Please quote our invoice serial number in all bank payouts.",
+  notificationSound: "crystal",
+  voiceAnnounceEnabled: true,
+  voiceAnnounceTemplate: "Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.",
+  incomingCallAlertEnabled: true
 };
 
 export const DEMO_USERS: UserProfile[] = [

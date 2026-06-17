@@ -125,7 +125,7 @@ function initLocalStorageDb() {
     localStorage.setItem('db_logs', JSON.stringify(DEMO_LOGS));
   }
   if (!localStorage.getItem('db_notifications')) {
-    localStorage.setItem('db_notifications', JSON.stringify(DEMO_NOTIFICATIONS));
+    localStorage.setItem('db_notifications', JSON.stringify([]));
   }
   if (!localStorage.getItem('db_users')) {
     localStorage.setItem('db_users', JSON.stringify(DEMO_USERS));
@@ -216,46 +216,7 @@ function getHeaders(): HeadersInit {
 
 let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
 
-if (typeof window !== 'undefined') {
-  if (window.location.hostname.includes('ais-dev')) {
-    activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-  } else {
-    // Quick background check to see if the active Dev Workspace is online and reachable from APK
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1800);
-    
-    fetch('https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app/api/health', {
-      signal: controller.signal,
-      headers: { 'Cache-Control': 'no-cache' }
-    })
-    .then((res) => {
-      if (res.ok) {
-        console.log("Capacitor API Engine: Auto-detected active Development Workspace. Switched fallback target.");
-        activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-        localStorage.setItem('capacitor_auto_fallback', 'dev');
-      }
-    })
-    .catch(() => {
-      // Fallback stays as pre URL
-    })
-    .finally(() => {
-      clearTimeout(timeoutId);
-    });
-  }
-
-  const cachedPref = localStorage.getItem('capacitor_auto_fallback');
-  if (cachedPref === 'dev') {
-    activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-  }
-}
-
 function getApiUrl(url: string) {
-  const savedUrl = localStorage.getItem('backend_api_url');
-  if (savedUrl && savedUrl.trim() !== '') {
-    const base = savedUrl.trim().replace(/\/+$/, '');
-    return `${base}${url}`;
-  }
-
   // Support VITE_BACKEND_API_URL environment configuration
   const metaEnv = (import.meta as any).env;
   if (metaEnv && metaEnv.VITE_BACKEND_API_URL && metaEnv.VITE_BACKEND_API_URL.trim() !== '') {
@@ -270,11 +231,9 @@ function getApiUrl(url: string) {
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
 
-  // Intelligent fallback URL selector matching the current execution environment (dev vs pre/shared)
-  const fallbackUrl = activeCapacitorFallback;
+  // Direct connect default server URL - no manual configuration or overrides.
+  const fallbackUrl = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
 
-  // If running inside Capacitor, or loaded from GitHub Pages / third-party server remotely,
-  // we proxy all operations to our main live backend for complete, synchronous Firebase database parity.
   const base = (isCapacitor || (!isCloudRun && !isLocalhost))
     ? fallbackUrl
     : '';
@@ -1602,6 +1561,25 @@ export const api = {
       return Promise.reject(new Error("Notification not found"));
     }
     return request<Notification>(`/api/notifications/${id}/read`, 'PUT');
+  },
+
+  markAllNotificationsRead: () => {
+    if (isLocalOnly) {
+      const list = getLocalItem<Notification[]>('db_notifications', []).map(n => ({ ...n, isRead: true }));
+      setLocalItem('db_notifications', list);
+      return Promise.resolve({ success: true, count: list.length });
+    }
+    return request<{ success: boolean; count: number }>('/api/notifications/read-all', 'PUT');
+  },
+
+  deleteNotification: (id: string) => {
+    if (isLocalOnly) {
+      const list = getLocalItem<Notification[]>('db_notifications', []);
+      const filtered = list.filter(n => n.id !== id);
+      setLocalItem('db_notifications', filtered);
+      return Promise.resolve({ success: true, id });
+    }
+    return request<{ success: boolean; id: string }>(`/api/notifications/${id}`, 'DELETE');
   },
 
   // 13. RBAC Control Matrix
