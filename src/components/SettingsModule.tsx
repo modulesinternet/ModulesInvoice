@@ -76,6 +76,15 @@ export default function SettingsModule({
     }
   };
 
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleApkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -94,23 +103,47 @@ export default function SettingsModule({
         ? JSON.parse(localStorage.getItem('current_user')!).name 
         : "Administrator";
 
-      // 1. Upload to Firebase Cloud Storage (No Proxy Size Limit!)
-      const uniqueName = `apks/${Date.now()}-${file.name}`;
-      const fileRef = storageRef(storage, uniqueName);
-      
-      console.log("[APK Upload]: Uploading physical binary stream to modern Cloud Storage bucket:", uniqueName);
-      await uploadBytes(fileRef, file);
-      const downloadUrl = await getDownloadURL(fileRef);
+      let downloadUrl = "";
+      let uploadSuccessful = false;
 
-      // 2. Report metadata and storage sync to central server backend
-      console.log("[APK Upload]: Registering update version with central server API. Storage URL:", downloadUrl);
-      const res = await api.uploadApk('', file.name, uploadedBy, downloadUrl) as any;
-      if (res.success) {
+      // 1. Try uploading to Firebase Cloud Storage (Modern Cloud Bucket)
+      try {
+        const uniqueName = `apks/${Date.now()}-${file.name}`;
+        const fileRef = storageRef(storage, uniqueName);
+        
+        console.log("[APK Upload]: Attempting physical binary stream upload to Cloud Storage bucket:", uniqueName);
+        // Set a timeout of 10s for Firebase Storage upload to prevent infinite spinner if Firebase Storage is inactive
+        const uploadPromise = uploadBytes(fileRef, file);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Cloud Storage connection timed out.")), 12000)
+        );
+        
+        await Promise.race([uploadPromise, timeoutPromise]);
+        downloadUrl = await getDownloadURL(fileRef);
+        uploadSuccessful = true;
+      } catch (storageErr: any) {
+        console.warn("[APK Upload Warning]: Firebase Cloud Storage uploading is unavailable. Routing via secure server bypass:", storageErr);
+      }
+
+      let res: any;
+      if (uploadSuccessful && downloadUrl) {
+        // 2. Report metadata and storage sync to central server backend
+        console.log("[APK Upload]: Registering update version with central server API. Storage URL:", downloadUrl);
+        res = await api.uploadApk('', file.name, uploadedBy, downloadUrl);
+      } else {
+        // If Cloud Storage failed or is not enabled, fallback to converting file to Base64 and uploading direct to the Express backend
+        console.log("[APK Upload]: Converting APK binary stream to Base64 format for direct payload transmission...");
+        const fileBase64 = await readFileAsBase64(file);
+        console.log("[APK Upload]: Submitting direct Base64 container stream to central server backend...");
+        res = await api.uploadApk(fileBase64, file.name, uploadedBy);
+      }
+
+      if (res && res.success) {
         setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version} (Build ${res.release.build})!`);
         fetchApkReleases();
         if (fileInputRef.current) fileInputRef.current.value = '';
       } else {
-        setApkUploadError(res.error || "Failed to complete APK package processing.");
+        setApkUploadError(res?.error || "Failed to complete APK package processing.");
       }
     } catch (err: any) {
       console.error("[APK Upload Error]:", err);
