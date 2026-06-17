@@ -289,27 +289,78 @@ export default function InvoicesModule({
   const [settleInvoice, setSettleInvoice] = useState<Invoice | null>(null);
   const [settleType, setSettleType] = useState<'full' | 'partial'>('full');
   const [settleAmount, setSettleAmount] = useState('');
-  const [settleMode, setSettleMode] = useState<'UPI/Bank Transfer' | 'Cash'>('UPI/Bank Transfer');
+  const [settleMode, setSettleMode] = useState<'UPI/Bank Transfer' | 'Cash' | 'Split (Cash + UPI)'>('UPI/Bank Transfer');
   const [settleRef, setSettleRef] = useState('');
   const [settleNotes, setSettleNotes] = useState('Payment matched and credited instantly.');
   const [settleDate, setSettleDate] = useState(new Date().toISOString().split('T')[0]);
   const [settleSaving, setSettleSaving] = useState(false);
+
+  // Split payment portions state
+  const [settleCashAmount, setSettleCashAmount] = useState('');
+  const [settleUpiAmount, setSettleUpiAmount] = useState('');
+  const [settleUpiRef, setSettleUpiRef] = useState('');
+  const [settleCashRef, setSettleCashRef] = useState('');
 
   const handleOpenSettleModal = (inv: Invoice) => {
     setSettleInvoice(inv);
     setSettleType('full');
     setSettleAmount(String(inv.dueAmount));
     setSettleMode('UPI/Bank Transfer');
-    setSettleRef(`UPI-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`);
+    const rngRef = Date.now().toString().slice(-4);
+    setSettleRef(`UPI-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${rngRef}`);
     setSettleNotes(`Settlement credit for Invoice ${inv.invoiceNumber}`);
     setSettleDate(new Date().toISOString().split('T')[0]);
+
+    // Split defaults
+    const halfVal = Math.round((inv.dueAmount / 2) * 100) / 100;
+    setSettleCashAmount(String(halfVal));
+    setSettleUpiAmount(String(inv.dueAmount - halfVal));
+    setSettleUpiRef(`UPI-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${rngRef}`);
+    setSettleCashRef(`CASH-SETTLE-${inv.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '')}-${rngRef}`);
+
     setIsSettleModalOpen(true);
   };
 
   const handleSettleTypeChange = (type: 'full' | 'partial') => {
     setSettleType(type);
-    if (type === 'full' && settleInvoice) {
-      setSettleAmount(String(settleInvoice.dueAmount));
+    if (settleInvoice) {
+      const targetAmt = type === 'full' ? settleInvoice.dueAmount : Math.round((settleInvoice.dueAmount / 2) * 100) / 100;
+      setSettleAmount(String(targetAmt));
+      recalculateSplitAmounts(targetAmt);
+    }
+  };
+
+  const handleSettleAmountChange = (val: string) => {
+    setSettleAmount(val);
+    const num = Number(val);
+    if (!isNaN(num) && num > 0) {
+      recalculateSplitAmounts(num);
+    }
+  };
+
+  const recalculateSplitAmounts = (totalAmt: number) => {
+    const halfVal = Math.round((totalAmt / 2) * 100) / 100;
+    setSettleCashAmount(String(halfVal));
+    setSettleUpiAmount(String(Math.round((totalAmt - halfVal) * 100) / 100));
+  };
+
+  const handleCashAmountChange = (val: string) => {
+    setSettleCashAmount(val);
+    const cashVal = Number(val);
+    const totalSettleVal = Number(settleAmount);
+    if (!isNaN(cashVal) && !isNaN(totalSettleVal)) {
+      const upiVal = Math.max(0, totalSettleVal - cashVal);
+      setSettleUpiAmount(String(Math.round(upiVal * 100) / 100));
+    }
+  };
+
+  const handleUpiAmountChange = (val: string) => {
+    setSettleUpiAmount(val);
+    const upiVal = Number(val);
+    const totalSettleVal = Number(settleAmount);
+    if (!isNaN(upiVal) && !isNaN(totalSettleVal)) {
+      const cashVal = Math.max(0, totalSettleVal - upiVal);
+      setSettleCashAmount(String(Math.round(cashVal * 100) / 100));
     }
   };
 
@@ -326,24 +377,89 @@ export default function InvoicesModule({
       alert(`The settlement amount cannot exceed the remaining due amount of ${formatCurrency(settleInvoice.dueAmount)}`);
       return;
     }
-    if (!settleRef.trim()) {
-      alert("Please specify a transaction reference or UPI code.");
-      return;
-    }
 
     try {
       setSettleSaving(true);
-      await onAddPayment({
-        clientId: settleInvoice.clientId,
-        invoiceId: settleInvoice.id,
-        amount: amt,
-        paymentMode: settleMode,
-        referenceNum: settleRef.trim(),
-        notes: settleNotes.trim(),
-        paymentDate: settleDate,
-        clientName: settleInvoice.clientName,
-        invoiceNumber: settleInvoice.invoiceNumber
-      });
+
+      if (settleMode === 'Split (Cash + UPI)') {
+        const cashAmt = Number(settleCashAmount);
+        const upiAmt = Number(settleUpiAmount);
+
+        if (isNaN(cashAmt) || cashAmt <= 0) {
+          alert("Please specify a valid Cash split portion amount.");
+          setSettleSaving(false);
+          return;
+        }
+        if (isNaN(upiAmt) || upiAmt <= 0) {
+          alert("Please specify a valid UPI split portion amount.");
+          setSettleSaving(false);
+          return;
+        }
+        
+        const sumDiff = Math.abs((cashAmt + upiAmt) - amt);
+        if (sumDiff > 0.05) {
+          alert(`Split totals (Cash: ${formatCurrency(cashAmt)} + UPI: ${formatCurrency(upiAmt)}) must sum exactly to Settle Amount ${formatCurrency(amt)} (difference of ${formatCurrency(sumDiff)} detected)`);
+          setSettleSaving(false);
+          return;
+        }
+
+        if (!settleCashRef.trim()) {
+          alert("Please declare Cash receipt reference.");
+          setSettleSaving(false);
+          return;
+        }
+        if (!settleUpiRef.trim()) {
+          alert("Please declare UPI Reference ID.");
+          setSettleSaving(false);
+          return;
+        }
+
+        // Post Cash receipt
+        await onAddPayment({
+          clientId: settleInvoice.clientId,
+          invoiceId: settleInvoice.id,
+          amount: cashAmt,
+          paymentMode: 'Cash',
+          referenceNum: settleCashRef.trim(),
+          notes: `${settleNotes.trim()} (Split portion: Cash)`,
+          paymentDate: settleDate,
+          clientName: settleInvoice.clientName,
+          invoiceNumber: settleInvoice.invoiceNumber
+        });
+
+        // Post UPI receipt
+        await onAddPayment({
+          clientId: settleInvoice.clientId,
+          invoiceId: settleInvoice.id,
+          amount: upiAmt,
+          paymentMode: 'UPI/Bank Transfer',
+          referenceNum: settleUpiRef.trim(),
+          notes: `${settleNotes.trim()} (Split portion: UPI/Bank)`,
+          paymentDate: settleDate,
+          clientName: settleInvoice.clientName,
+          invoiceNumber: settleInvoice.invoiceNumber
+        });
+
+      } else {
+        if (!settleRef.trim()) {
+          alert("Please specify a transaction reference or UPI code.");
+          setSettleSaving(false);
+          return;
+        }
+
+        await onAddPayment({
+          clientId: settleInvoice.clientId,
+          invoiceId: settleInvoice.id,
+          amount: amt,
+          paymentMode: settleMode,
+          referenceNum: settleRef.trim(),
+          notes: settleNotes.trim(),
+          paymentDate: settleDate,
+          clientName: settleInvoice.clientName,
+          invoiceNumber: settleInvoice.invoiceNumber
+        });
+      }
+
       setIsSettleModalOpen(false);
       setSettleInvoice(null);
     } catch (err: any) {
@@ -2860,7 +2976,7 @@ export default function InvoicesModule({
                       min="1"
                       max={settleInvoice.dueAmount}
                       value={settleAmount}
-                      onChange={(e) => setSettleAmount(e.target.value)}
+                      onChange={(e) => handleSettleAmountChange(e.target.value)}
                       className="w-full text-xs p-2.5 pl-7 border border-slate-200 rounded-xl bg-white font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-100/70"
                     />
                   </div>
@@ -2877,6 +2993,7 @@ export default function InvoicesModule({
                     >
                       <option value="UPI/Bank Transfer">UPI / Bank Transfer</option>
                       <option value="Cash">Cash Ledger</option>
+                      <option value="Split (Cash + UPI)">Split (Cash + UPI)</option>
                     </select>
                   </div>
 
@@ -2892,18 +3009,87 @@ export default function InvoicesModule({
                   </div>
                 </div>
 
-                {/* Transaction Ref Number */}
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Reference Code / ID</label>
-                  <input 
-                    type="text"
-                    required
-                    value={settleRef}
-                    onChange={(e) => setSettleRef(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    placeholder="Enter UPI reference or Bank Txn ID"
-                  />
-                </div>
+                {/* DYNAMIC FORMS ACCORDING TO PAYMENT MODE */}
+                {settleMode === 'Split (Cash + UPI)' ? (
+                  <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/80 space-y-3">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">Configure Split Settings (Auto-balancing enabled)</span>
+                    
+                    {/* Portion Amounts Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500">Cash Portion (INR)</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-2.5 text-slate-400 font-semibold text-xs">₹</span>
+                          <input 
+                            type="number"
+                            required
+                            min="0"
+                            max={settleAmount}
+                            value={settleCashAmount}
+                            onChange={(e) => handleCashAmountChange(e.target.value)}
+                            className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500">UPI Portion (INR)</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-2.5 text-slate-400 font-semibold text-xs">₹</span>
+                          <input 
+                            type="number"
+                            required
+                            min="0"
+                            max={settleAmount}
+                            value={settleUpiAmount}
+                            onChange={(e) => handleUpiAmountChange(e.target.value)}
+                            className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Reference Codes Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500">Cash Receipt Ref</label>
+                        <input 
+                          type="text"
+                          required
+                          value={settleCashRef}
+                          onChange={(e) => setSettleCashRef(e.target.value)}
+                          className="w-full text-[11px] p-2 border border-slate-200 rounded-lg bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          placeholder="CASH-Ref-XYZ"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500">UPI Transaction ID</label>
+                        <input 
+                          type="text"
+                          required
+                          value={settleUpiRef}
+                          onChange={(e) => setSettleUpiRef(e.target.value)}
+                          className="w-full text-[11px] p-2 border border-slate-200 rounded-lg bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          placeholder="UPI-Ref-12345"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Single Mode Transaction Ref */
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-400">Transaction Reference Code / ID</label>
+                    <input 
+                      type="text"
+                      required
+                      value={settleRef}
+                      onChange={(e) => setSettleRef(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      placeholder="Enter UPI reference or Bank Txn ID"
+                    />
+                  </div>
+                )}
 
                 {/* Settlement Notes */}
                 <div className="space-y-1">
