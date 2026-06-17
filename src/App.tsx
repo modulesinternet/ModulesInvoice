@@ -1933,7 +1933,7 @@ export default function App() {
       {/* BACKGROUND BACKDROP FOR MOBILE DRAWER */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden pointer-events-auto transition-opacity duration-300 no-print"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-45 md:hidden pointer-events-auto transition-opacity duration-300 no-print"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -2299,7 +2299,7 @@ export default function App() {
       {/* MASTER SCROLLABLE COMPONENT PANEL CONTAINER */}
       <main className="flex-1 flex flex-col overflow-y-auto min-h-0">
         {/* Top Operational Status Bar */}
-        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-10 animate-fade-in gap-4">
+        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-30 animate-fade-in gap-4">
           <div className="flex items-center gap-4 flex-1 max-w-md">
             {/* High-visibility toggle for desktop */}
             <button 
