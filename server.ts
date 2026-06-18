@@ -103,8 +103,8 @@ app.use((err: any, req: any, res: any, next: any) => {
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "*");
-  res.header("Access-Control-Expose-Headers", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-user-email, x-user-name, x-user-id");
+  res.header("Access-Control-Expose-Headers", "x-user-role, x-user-email, x-user-name, x-user-id");
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -274,25 +274,6 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
     return;
   }
 
-  // Create standard logging line in local Activity Logs list for developer parity
-  const logId = `notif-log-${Date.now()}`;
-  const store = requestContext.getStore();
-  const req = store?.req;
-  const userId = req ? (req.headers['x-user-id'] as string) : (extraData.userId || undefined);
-
-  const notifType: "info" | "warning" | "success" = extraData.type === "warning" ? "warning" : (extraData.type === "success" ? "success" : "info");
-  const newNotif: Notification = {
-    id: logId,
-    title,
-    message: body,
-    isRead: false,
-    type: notifType,
-    createdAt: new Date().toISOString(),
-    userId: userId || undefined
-  };
-  db_notifications.unshift(newNotif);
-  syncStateToFirestore('notifications', logId).catch(() => null);
-
   if (!isFcmSupported) {
     console.log(`[FCM SIMULATED DELIVERY] Simulated multicast delivery to ${tokens.length} device(s) complete.`);
     return;
@@ -371,6 +352,71 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
         }
       }
     }
+  }
+}
+
+// Centralized enterprise business action notification broadcaster (delivers real-time Firestore synchronization next to high-priority push packets)
+async function triggerBusinessNotification(
+  req: Request,
+  title: string,
+  message: string,
+  type: "info" | "warning" | "success",
+  moduleName: string,
+  extraData: Record<string, string> = {}
+) {
+  const performerName = (req.headers['x-user-name'] as string) || 'Karan Sharma';
+  const fullMessage = `${message} (by ${performerName})`;
+
+  // Multicast high priority FCM broadcast to all registered endpoints
+  await sendFcmNotification(title, fullMessage, {
+    ...extraData,
+    route: `/${moduleName}`,
+    tab: moduleName,
+  }).catch(err => {
+    console.warn("[FCM BROADCAST ERROR] FCM payload transmission bypass:", err.message);
+  });
+
+  // Create real-time synced notification collection copies for all valid enterprise user accounts
+  const timestamp = new Date().toISOString();
+  if (db_users && db_users.length > 0) {
+    for (const u of db_users) {
+      if (!u.userId) {
+        console.warn("[NOTIFICATION SYNC WARNING] User record skipped due to missing primary key.");
+        continue;
+      }
+      const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const userNotif: Notification = {
+        id: notifId,
+        title,
+        message: fullMessage,
+        type,
+        isRead: false,
+        createdAt: timestamp,
+        userId: u.userId,
+        performedBy: performerName,
+        module: moduleName
+      };
+      db_notifications.unshift(userNotif);
+      await syncStateToFirestore('notifications', notifId, false).catch(err => {
+        console.error(`[NOTIFICATION SYNC FAILED] Could not commit notification ${notifId} replica context:`, err.message);
+      });
+    }
+  } else {
+    // Standard system logging safety fallback
+    const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    const systemNotif: Notification = {
+      id: notifId,
+      title,
+      message: fullMessage,
+      type,
+      isRead: false,
+      createdAt: timestamp,
+      userId: 'demo-admin',
+      performedBy: performerName,
+      module: moduleName
+    };
+    db_notifications.unshift(systemNotif);
+    await syncStateToFirestore('notifications', notifId, false).catch(() => null);
   }
 }
 
@@ -532,7 +578,7 @@ if (fs.existsSync(apkHistoryPath)) {
 }
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = true) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 
@@ -1438,8 +1484,16 @@ bootstrapFromFirestore();
 function checkPermission(module: keyof RolePermissions['modules'], action: 'read' | 'write' | 'delete') {
   return (req: Request, res: Response, next: any) => {
     const roleHeader = (req.headers['x-user-role'] as string || '').trim();
-    const role: UserRole = (roleHeader || 'Admin') as UserRole;
+    let role: UserRole = (roleHeader || 'Admin') as UserRole;
     const userEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
+    
+    // Dynamic fallback: Look up teammate role in db_users by email if headers are missing or mismatched
+    if (userEmail) {
+      const match = db_users.find(u => u.email && u.email.trim().toLowerCase() === userEmail);
+      if (match && match.role) {
+        role = match.role as UserRole;
+      }
+    }
     
     // Auto-bypass for Admin roles and modulesinternet@gmail.com live admin account to prevent any operational lockout
     if (role.toLowerCase() === 'admin' || userEmail === 'modulesinternet@gmail.com') {
@@ -1680,6 +1734,16 @@ app.post('/api/clients', checkPermission('clients', 'write'), async (req: Reques
   db_clients.unshift(newClient);
   await syncStateToFirestore('clients', newClient.id);
   
+  // Trigger centralized master business notification broadcast
+  await triggerBusinessNotification(
+    req,
+    "Client Created",
+    `Client directory profile for "${newClient.name}" has been registered`,
+    "success",
+    "clients",
+    { clientId: newClient.id, tab: 'clients' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
+  
   logUserActivity("demo-admin", "Karan Sharma", "CLIENT_CREATE", `Registered new client: ${newClient.name}`);
   res.status(201).json(newClient);
 });
@@ -1690,6 +1754,17 @@ app.put('/api/clients/:id', checkPermission('clients', 'write'), async (req: Req
   if (index !== -1) {
     db_clients[index] = { ...db_clients[index], ...req.body };
     await syncStateToFirestore('clients', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Client Updated",
+      `Client profile for "${db_clients[index].name}" has been modified`,
+      "info",
+      "clients",
+      { clientId: id, tab: 'clients' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_UPDATE", `Updated client profile: ${db_clients[index].name}`);
     res.json(db_clients[index]);
   } else {
@@ -1704,6 +1779,17 @@ app.delete('/api/clients/:id', checkPermission('clients', 'delete'), async (req:
     const deletedName = db_clients[index].name;
     db_clients.splice(index, 1);
     await syncStateToFirestore('clients', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Client Deleted",
+      `Client "${deletedName}" has been permanently removed from databases`,
+      "warning",
+      "clients",
+      { tab: 'clients' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_DELETE", `Removed client database row: ${deletedName}`);
     res.json({ success: true, message: "Client deleted successfully" });
   } else {
@@ -1731,6 +1817,17 @@ app.post('/api/products', checkPermission('products', 'write'), async (req: Requ
   };
   db_products.unshift(newProduct);
   await syncStateToFirestore('products', newProduct.id);
+
+  // Trigger centralized master business notification broadcast
+  await triggerBusinessNotification(
+    req,
+    "Product Created",
+    `Catalogue item "${newProduct.name}" has been registered`,
+    "success",
+    "products",
+    { productId: newProduct.id, tab: 'products' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
+
   logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_CREATE", `Added catalogue work item: ${newProduct.name} at GST ${newProduct.gstPercent}%`);
   res.status(201).json(newProduct);
 });
@@ -1741,6 +1838,17 @@ app.put('/api/products/:id', checkPermission('products', 'write'), async (req: R
   if (index !== -1) {
     db_products[index] = { ...db_products[index], ...req.body };
     await syncStateToFirestore('products', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Product Updated",
+      `Catalogue item details for "${db_products[index].name}" has been modified`,
+      "info",
+      "products",
+      { productId: id, tab: 'products' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_UPDATE", `Updated catalogue item details: ${db_products[index].name}`);
     res.json(db_products[index]);
   } else {
@@ -1755,6 +1863,17 @@ app.delete('/api/products/:id', checkPermission('products', 'delete'), async (re
     const deletedName = db_products[index].name;
     db_products.splice(index, 1);
     await syncStateToFirestore('products', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Product Deleted",
+      `Catalogue item "${deletedName}" has been deleted`,
+      "warning",
+      "products",
+      { tab: 'products' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_DELETE", `Removed catalogue item: ${deletedName}`);
     res.json({ success: true, message: "Product deleted" });
   } else {
@@ -1896,12 +2015,15 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
   await syncStateToFirestore('invoices', newInvoice.id);
   await syncStateToFirestore('ledger', newLedger.id);
 
-  // Trigger FCM push notification alert
-  sendFcmNotification(
-    "New Invoice Created",
-    `Invoice #${newInvoice.invoiceNumber} for ₹${Number(newInvoice.total).toLocaleString()} has been generated.`,
-    { route: '/invoices', invoiceId: newInvoice.id, tab: 'invoices' }
-  ).catch(err => console.error("FCM dispatch caught error:", err));
+  // Trigger centralized master business notification broadcast
+  await triggerBusinessNotification(
+    req,
+    "Invoice Created",
+    `Invoice #${newInvoice.invoiceNumber} for ₹${Number(newInvoice.total).toLocaleString()} has been generated`,
+    "success",
+    "invoices",
+    { invoiceId: newInvoice.id, route: '/invoices', tab: 'invoices' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
 
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
@@ -1946,12 +2068,15 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
     
     await syncStateToFirestore('invoices', id);
 
-    // Trigger FCM push notification alert
-    sendFcmNotification(
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
       "Invoice Updated",
-      `Invoice #${db_invoices[index].invoiceNumber} has been modified.`,
-      { route: '/invoices', invoiceId: id, tab: 'invoices' }
-    ).catch(err => console.error("FCM dispatch caught error:", err));
+      `Invoice #${db_invoices[index].invoiceNumber} has been modified`,
+      "info",
+      "invoices",
+      { invoiceId: id, route: '/invoices', tab: 'invoices' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
 
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
     res.json(db_invoices[index]);
@@ -2019,6 +2144,16 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), async (re
       await syncStateToFirestore('clients', inv.clientId);
     }
     
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Invoice Deleted",
+      `Invoice #${inv.invoiceNumber} for ₹${Number(inv.total).toLocaleString()} has been permanently deleted`,
+      "warning",
+      "invoices",
+      { tab: 'invoices' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber} and updated ledger ties`);
     res.json({ success: true });
   } else {
@@ -2052,6 +2187,17 @@ app.post('/api/quotations', checkPermission('quotations', 'write'), async (req: 
 
   db_quotations.unshift(newQuotation);
   await syncStateToFirestore('quotations', newQuotation.id);
+
+  // Trigger centralized master business notification broadcast
+  await triggerBusinessNotification(
+    req,
+    "Quotation Created",
+    `Estimate proposal ${newQuotation.quotationNumber} for ${newQuotation.clientName} has been created`,
+    "success",
+    "quotations",
+    { quotationId: newQuotation.id, tab: 'quotations' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
+
   logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CREATE", `Prepared estimate ${newQuotation.quotationNumber} for ${newQuotation.clientName}`);
   res.status(201).json(newQuotation);
 });
@@ -2062,6 +2208,17 @@ app.put('/api/quotations/:id', checkPermission('quotations', 'write'), async (re
   if (index !== -1) {
     db_quotations[index] = { ...db_quotations[index], ...req.body };
     await syncStateToFirestore('quotations', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Quotation Updated",
+      `Estimate proposal status for ${db_quotations[index].quotationNumber} updated to ${db_quotations[index].status}`,
+      "info",
+      "quotations",
+      { quotationId: id, tab: 'quotations' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_UPDATE", `Updated estimate status: ${db_quotations[index].quotationNumber} -> ${db_quotations[index].status}`);
     res.json(db_quotations[index]);
   } else {
@@ -2076,6 +2233,17 @@ app.delete('/api/quotations/:id', checkPermission('quotations', 'delete'), async
     const qNumber = db_quotations[index].quotationNumber;
     db_quotations.splice(index, 1);
     await syncStateToFirestore('quotations', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Quotation Deleted",
+      `Estimate proposal ${qNumber} has been deleted`,
+      "warning",
+      "quotations",
+      { tab: 'quotations' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_DELETE", `Deleted quotation estimate: ${qNumber}`);
     res.json({ success: true });
   } else {
@@ -2147,6 +2315,16 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
     await syncStateToFirestore('quotations', id);
     await syncStateToFirestore('ledger', newLedger.id);
 
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Invoice Created",
+      `Invoice #${invoiceNum} for ₹${Number(convertedInvoice.total).toLocaleString()} has been converted from Estimate ${q.quotationNumber}`,
+      "success",
+      "invoices",
+      { invoiceId, route: '/invoices', tab: 'invoices' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CONVERT", `Authorized proposal ${q.quotationNumber} conversion into invoice ${invoiceNum}`);
     res.json({ success: true, invoice: convertedInvoice });
   } else {
@@ -2165,7 +2343,9 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     const payId = `pay-${Date.now()}`;
     const amountPaid = Number(data.amount || 0);
 
-    const newPayment: Payment = {
+    const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+
+    const newPayment: Payment & { createdBy?: string } = {
       id: payId,
       invoiceId: data.invoiceId,
       invoiceNumber: data.invoiceNumber || "",
@@ -2176,7 +2356,8 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
       paymentMode: data.paymentMode || "UPI",
       referenceNum: data.referenceNum || `REF-${Date.now()}`,
       remarks: data.remarks || "No comments",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      createdBy: performerName
     };
 
     db_payments.unshift(newPayment);
@@ -2259,26 +2440,26 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     await syncStateToFirestore('ledger', newLedger.id);
     await syncStateToFirestore('cashbook', newCashbook.id);
 
-    // Trigger FCM payment received notification alert
+    // Trigger centralized master business notification broadcast
     const amtStr = `₹${newPayment.amount.toLocaleString('en-IN')}`;
-    const formattedDate = new Date(newPayment.paymentDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-    const formattedMsg = `${amtStr} Payment Received from ${newPayment.clientName} via ${newPayment.paymentMode}.`;
-    sendFcmNotification(
-      "Payment Received",
+    const formattedMsg = `${amtStr} Payment Received from ${newPayment.clientName} via ${newPayment.paymentMode} (Recorded by ${performerName})`;
+    await triggerBusinessNotification(
+      req,
+      "Payment Created",
       formattedMsg,
+      "success",
+      "payments",
       { 
-        type: 'success', 
         amount: String(newPayment.amount), 
         clientName: newPayment.clientName, 
         paymentMode: newPayment.paymentMode, 
-        paymentDate: newPayment.paymentDate || new Date().toISOString(),
         paymentId: newPayment.id, 
         invoiceId: newPayment.invoiceId || '',
         tab: 'payments' 
       }
-    ).catch(err => console.error("FCM dispatch caught error:", err));
+    ).catch(err => console.error("Notification trigger caught error:", err));
 
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
+    logUserActivity(req, "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName} (Recorded by ${performerName}). Double-entry synchronizer successful.`);
     res.status(201).json(newPayment);
   } catch (err: any) {
     console.error("Critical payment log execution failed: ", err);
@@ -2410,14 +2591,20 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
 
     await syncStateToFirestore('payments', oldP.id);
 
-    // Trigger FCM payment updated notification alert
-    sendFcmNotification(
-      "Payment Modified",
-      `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified.`,
-      { route: '/payments', paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
-    ).catch(err => console.error("FCM dispatch caught error:", err));
+    const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+    (oldP as any).updatedBy = performerName;
 
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Payment Updated",
+      `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified by ${performerName}`,
+      "info",
+      "payments",
+      { paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
+    logUserActivity(req, "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName} (Updated by ${performerName}). Double-entry log updated.`);
     res.json(oldP);
   } else {
     res.status(404).json({ error: "Payment not found" });
@@ -2466,7 +2653,19 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
 
     await syncStateToFirestore('payments', id);
 
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName}`);
+    const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Payment Deleted",
+      `Payment of ₹${Number(p.amount).toLocaleString()} from ${p.clientName} has been permanently deleted by ${performerName}`,
+      "warning",
+      "payments",
+      { tab: 'payments' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
+    logUserActivity(req, "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName} (Deleted by ${performerName})`);
     res.json({ success: true });
   } else {
     res.status(404).json({ error: "Payment not found" });
@@ -2544,15 +2743,17 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Requ
   db_cashbook.unshift(newEntry);
   await syncStateToFirestore('cashbook', newEntry.id);
 
-  // Trigger FCM cashbook transaction notification alert (Payment Given)
-  if (newEntry.type === 'expense') {
-    const payModeLabel = newEntry.paymentMode || "Cash";
-    sendFcmNotification(
-      "Payment Given",
-      `₹${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} payment recorded.`,
-      { route: '/cashbook', cashbookId: newEntry.id, tab: 'cashbook' }
-    ).catch(err => console.error("FCM dispatch caught error:", err));
-  }
+  // Trigger centralized master business notification broadcast
+  const payModeLabel = newEntry.paymentMode || "Cash";
+  const cashbookTitle = newEntry.type === 'expense' ? "Cashbook Expense Created" : "Cashbook Transaction Created";
+  await triggerBusinessNotification(
+    req,
+    "Cashbook Created",
+    `₹${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} transaction (${newEntry.description}) has been recorded`,
+    newEntry.type === 'expense' ? "warning" : "success",
+    "cashbook",
+    { cashbookId: newEntry.id, tab: 'cashbook' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
 
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
@@ -2570,6 +2771,17 @@ app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), async (req: R
   if (index !== -1) {
     db_cashbook[index] = { ...db_cashbook[index], ...data };
     await syncStateToFirestore('cashbook', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Cashbook Updated",
+      `Cashbook entry (${db_cashbook[index].description}) modified to ₹${Number(db_cashbook[index].amount).toLocaleString()}`,
+      "info",
+      "cashbook",
+      { cashbookId: id, tab: 'cashbook' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_UPDATE", `Updated manual transactional log: ${db_cashbook[index].description}`);
     res.json(db_cashbook[index]);
   } else {
@@ -2584,6 +2796,17 @@ app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), async (re
     const item = db_cashbook[index];
     db_cashbook.splice(index, 1);
     await syncStateToFirestore('cashbook', id);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "Cashbook Deleted",
+      `Cashbook entry (${item.description}) of ₹${Number(item.amount).toLocaleString()} has been permanently deleted`,
+      "warning",
+      "cashbook",
+      { tab: 'cashbook' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_DELETE", `Deleted transactional log: ${item.description}`);
     res.json({ success: true });
   } else {
@@ -2623,6 +2846,17 @@ app.post('/api/users', checkPermission('users', 'write'), async (req: Request, r
   }
 
   await syncStateToFirestore('users', newUser.userId);
+
+  // Trigger centralized master business notification broadcast
+  await triggerBusinessNotification(
+    req,
+    "User Profile Created",
+    `Teammate profile "${newUser.name}" was successfully onboarded as ${newUser.role}`,
+    "success",
+    "users",
+    { userId: newUser.userId, tab: 'users' }
+  ).catch(err => console.error("Notification trigger caught error:", err));
+
   logUserActivity("demo-admin", "Karan Sharma", "USER_CREATE", `Onboarded teammate ${newUser.name} as ${newUser.role}`);
   res.status(201).json(newUser);
 });
@@ -2665,6 +2899,17 @@ app.put('/api/users/:userId', checkPermission('users', 'write'), async (req: Req
     }
 
     await syncStateToFirestore('users', userId);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "User Profile Updated",
+      `Teammate profile detail for "${db_users[index].name}" has been modified`,
+      "info",
+      "users",
+      { userId: userId, tab: 'users' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "USER_UPDATE", `Updated teammate Operator: ${db_users[index].name}`);
     res.json(db_users[index]);
   } else {
@@ -2732,6 +2977,17 @@ app.delete('/api/users/:userId', checkPermission('users', 'delete'), async (req:
     const name = db_users[index].name;
     db_users.splice(index, 1);
     await syncStateToFirestore('users', userId);
+
+    // Trigger centralized master business notification broadcast
+    await triggerBusinessNotification(
+      req,
+      "User Profile Deleted",
+      `Teammate profile "${name}" has been permanently removed`,
+      "warning",
+      "users",
+      { tab: 'users' }
+    ).catch(err => console.error("Notification trigger caught error:", err));
+
     logUserActivity("demo-admin", "Karan Sharma", "USER_DELETE", `Revoked teammate clearance for: ${name}`);
     res.json({ success: true });
   } else {
@@ -2742,6 +2998,15 @@ app.delete('/api/users/:userId', checkPermission('users', 'delete'), async (req:
 // 10. Audit logs & notifications
 app.get('/api/logs', checkPermission('users', 'read'), (req: Request, res: Response) => {
   res.json(db_logs);
+});
+
+app.post('/api/logs', async (req: Request, res: Response) => {
+  const { action, details } = req.body;
+  const userId = (req.headers['x-user-id'] as string) || 'demo-admin';
+  const userName = (req.headers['x-user-name'] as string) || 'Karan Sharma';
+
+  logUserActivity(userId, userName, action || 'GENERAL_ACTIVITY', details || '');
+  res.json({ success: true });
 });
 
 app.get('/api/notifications', (req: Request, res: Response) => {
@@ -2777,11 +3042,7 @@ app.delete('/api/notifications/:id', async (req: Request, res: Response) => {
   const idx = db_notifications.findIndex(n => n.id === id);
   if (idx !== -1) {
     db_notifications.splice(idx, 1);
-    try {
-      await deleteDoc(doc(getFirestore(), 'notifications', id));
-    } catch (e) {
-      console.warn("Could not delete notification from Firestore directly:", e);
-    }
+    await syncStateToFirestore('notifications', id);
     res.json({ success: true, id });
   } else {
     res.status(404).json({ error: "Notification not found" });

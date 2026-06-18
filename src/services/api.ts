@@ -1590,6 +1590,14 @@ export const api = {
     return request<ActivityLog[]>('/api/logs');
   },
 
+  createLog: (actionType: string, description: string) => {
+    if (isLocalOnly) {
+      logLocalActivity(actionType, description);
+      return Promise.resolve({ success: true });
+    }
+    return request<{ success: boolean }>('/api/logs', 'POST', { action: actionType, details: description });
+  },
+
   getNotifications: () => {
     if (isLocalOnly) {
       return Promise.resolve(getLocalItem<Notification[]>('db_notifications', []));

@@ -160,11 +160,11 @@ export default function AndroidIncomingCallScreen({
         {/* Secure APK Status */}
         <div className="flex items-center gap-1.5 bg-black/25 text-[#128C7E] px-3.5 py-1.5 rounded-full border border-[#128C7E]/30 mb-8 animate-pulse text-[10px] font-bold tracking-widest uppercase">
           <Shield className="w-3.5 h-3.5" />
-          <span>WhatsApp Secure Video & Voice</span>
+          <span>Secure Enterprise Video & Voice</span>
         </div>
         
         <p className="text-xs tracking-widest text-slate-400 uppercase font-bold mb-1">
-          WhatsApp Real-time Call
+          VoIP Real-time Call
         </p>
         
         {/* Caller Name Formatted Elegantly */}

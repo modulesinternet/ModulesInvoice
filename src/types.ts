@@ -218,6 +218,8 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
   userId?: string;
+  performedBy?: string;
+  module?: string;
 }
 
 export interface RoleModulePermission {

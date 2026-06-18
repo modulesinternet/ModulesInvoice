@@ -281,6 +281,27 @@ export default function Dashboard({
         </div>
       </div>
 
+      {/* Realtime Call Workflow Quick-Link Banner */}
+      <div className="bg-gradient-to-r from-emerald-50 to-[#EEFDF1] border border-emerald-200/80 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4 text-center md:text-left">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+            <RefreshCw className="w-5 h-5 animate-spin" style={{ animationDuration: '6s' }} />
+          </div>
+          <div>
+            <h4 className="font-bold text-slate-800 text-sm">Real-time Call Workflow Pipe Online</h4>
+            <p className="text-xs text-slate-500 mt-0.5">
+              The Enterprise VoIP full-screen call page triggers automatically on Android builds when custom billing collections sync.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => onNavigate('workflow')}
+          className="px-4 py-2.5 bg-[#10B981] hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer whitespace-nowrap"
+        >
+          View Calling History & Simulation
+        </button>
+      </div>
+
       {/* RECENT INVOICES & TOP CLIENTS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="dashboard-lists">
         {/* Recent Invoices Raised */}

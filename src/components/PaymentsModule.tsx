@@ -328,7 +328,15 @@ export default function PaymentsModule({
                   </span>
                 </td>
                 <td className="py-4 px-5 text-right font-mono font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
-                <td className="py-4 px-5 text-slate-400 italic font-medium">{p.remarks}</td>
+                <td className="py-4 px-5 text-slate-400 italic font-medium">
+                  <div>{p.remarks}</div>
+                  {((p as any).createdBy || (p as any).updatedBy) && (
+                    <div className="text-[9px] text-slate-500 not-italic mt-1 font-sans font-semibold tracking-tight">
+                      {(p as any).createdBy && <span>Recorded by: {(p as any).createdBy}</span>}
+                      {(p as any).updatedBy && <span className="ml-1 text-slate-400">({(p as any).updatedBy} edited)</span>}
+                    </div>
+                  )}
+                </td>
                 <td className="py-4 px-5 text-center">
                   {canWrite ? (
                     <div className="inline-flex items-center gap-1.5">

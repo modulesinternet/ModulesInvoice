@@ -65,7 +65,7 @@ export default function NotificationsModule({
     
     const matchesStatus = 
       statusFilter === 'all' || 
-      (statusFilter === 'unreads' && !n.isRead) ||
+      (statusFilter === 'unread' && !n.isRead) ||
       (statusFilter === 'read' && n.isRead);
 
     return matchesSearch && matchesType && matchesStatus;

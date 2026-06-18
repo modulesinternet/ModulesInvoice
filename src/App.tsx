@@ -29,7 +29,9 @@ import {
   CheckCircle,
   Phone,
   PhoneOff,
-  Volume2
+  Volume2,
+  Workflow,
+  GitCompare
 } from 'lucide-react';
 import { api } from './services/api';
 import versionData from '../version.json';
@@ -69,10 +71,11 @@ import ProfileModule from './components/ProfileModule';
 import AndroidIncomingCallScreen from './components/AndroidIncomingCallScreen';
 import SplashAnimation from './components/SplashAnimation';
 import NotificationsModule from './components/NotificationsModule';
+import WorkflowModule from './components/WorkflowModule';
 import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
 import { motion } from 'motion/react';
 
-type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications';
+type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications' | 'workflow';
 
 export function computeLocalDashboardMetrics(
   clients: Client[],
@@ -253,6 +256,16 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
+  const triggerIncomingCall = (pay: Payment) => {
+    const isAndroid = Capacitor.getPlatform() === 'android';
+    if (!isAndroid) {
+      showToast("Simulation note: Call screens are restricted to Android app builds.", "info");
+      return;
+    }
+    const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
+    api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName} via ${pay.paymentMode}.`).catch(() => {});
+    setAndroidIncomingCall(pay);
+  };
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
@@ -369,8 +382,8 @@ export default function App() {
   }, [currentUser]);
 
   // Enhanced Login Engine parameters
-  const [loginEmail, setLoginEmail] = useState('modulesinternet@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('Admin@123');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginMode, setLoginMode] = useState<'signin' | 'forgot' | 'otp' | 'reset'>('signin');
   const [forgotEmail, setForgotEmail] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
@@ -820,7 +833,7 @@ export default function App() {
               if (!prevPay) {
                 // New payment created!
                 if (isAndroid) {
-                  setAndroidIncomingCall(currPay);
+                  triggerIncomingCall(currPay);
                 } else {
                   const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
                   triggerLocalNotification(
@@ -838,7 +851,7 @@ export default function App() {
 
                 if (amountChanged || clientChanged || modeChanged || refChanged || remarksChanged) {
                   if (isAndroid) {
-                    setAndroidIncomingCall(currPay);
+                    triggerIncomingCall(currPay);
                   }
                 }
               }
@@ -2045,6 +2058,7 @@ export default function App() {
             { id: 'cashbook', label: 'Cashbook', icon: Wallet },
             { id: 'clients', label: 'Client Registry', icon: Users },
             { id: 'users', label: 'Team Access', icon: UserCheck },
+            { id: 'workflow', label: 'Workflow Logs', icon: Workflow },
             { id: 'settings', label: 'Business Settings', icon: Settings },
           ].filter(item => hasReadPermission(item.id as TabType)).map((item) => {
             const Icon = item.icon;
@@ -2201,10 +2215,14 @@ export default function App() {
                   <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
                   {notifications.some(n => !n.isRead) && (
                     <button 
-                      onClick={() => {
-                        const updated = notifications.map(n => ({ ...n, isRead: true }));
-                        setNotifications(updated);
-                        showToast("Assigned read clearance to logs", "success");
+                      onClick={async () => {
+                        try {
+                          await api.markAllNotificationsRead();
+                          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                          showToast("Assigned read clearance to logs", "success");
+                        } catch (e: any) {
+                          showToast(`Clearance failed: ${e.message || e}`, "error");
+                        }
                       }}
                       className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
                     >
@@ -2436,18 +2454,22 @@ export default function App() {
                 <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left animate-fade-in divide-y divide-slate-100 font-sans">
                   <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-slate-100">
                     <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
-                    {notifications.some(n => !n.isRead) && (
-                      <button 
-                        onClick={() => {
-                          const updated = notifications.map(n => ({ ...n, isRead: true }));
-                          setNotifications(updated);
+                  {notifications.some(n => !n.isRead) && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await api.markAllNotificationsRead();
+                          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
                           showToast("Assigned read clearance to logs", "success");
-                        }}
-                        className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
-                      >
-                        Clear Unread
-                      </button>
-                    )}
+                        } catch (e: any) {
+                          showToast(`Clearance failed: ${e.message || e}`, "error");
+                        }
+                      }}
+                      className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
+                    >
+                      Clear Unread
+                    </button>
+                  )}
                   </div>
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                     {notifications.length === 0 ? (
@@ -2719,6 +2741,17 @@ export default function App() {
                   }}
                 />
               )}
+
+              {activeTab === 'workflow' && (
+                <WorkflowModule 
+                  logs={logs}
+                  payments={payments}
+                  onTriggerDemoCall={(mockPay) => {
+                    triggerIncomingCall(mockPay as Payment);
+                  }}
+                  canWrite={getModulePermissions('payments').write}
+                />
+              )}
             </div>
           )}
         </div>
@@ -2873,10 +2906,46 @@ export default function App() {
           payment={androidIncomingCall}
           settings={businessSettings}
           onAccept={() => {
+            const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(androidIncomingCall.amount);
+            api.createLog('CALL_ACCEPTED', `Operator accepted VoIP Call notification for payment of ${formattedAmt} received from ${androidIncomingCall.clientName || 'N/A'} via ${androidIncomingCall.paymentMode}.`).catch(() => {});
+            
+            // Speak accepted TTS Announcement
+            if (window.speechSynthesis) {
+              try {
+                window.speechSynthesis.cancel();
+                const tmpl = businessSettings?.voiceAnnounceTemplate || "Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.";
+                const formattedAmtNoSymbol = new Intl.NumberFormat('en-IN').format(androidIncomingCall.amount);
+                let textToSpeak = tmpl
+                  .replace(/{amount}/g, formattedAmtNoSymbol)
+                  .replace(/{hotelName}/g, androidIncomingCall.clientName || '')
+                  .replace(/{paymentMode}/g, androidIncomingCall.paymentMode || '')
+                  .replace(/{date}/g, new Date(androidIncomingCall.paymentDate || Date.now()).toLocaleDateString());
+                
+                textToSpeak = textToSpeak.replace(/{|}/g, '').trim();
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                
+                // Find natural English speech voice
+                const voices = window.speechSynthesis.getVoices();
+                const targetVoice = voices.find(v => 
+                  v.lang.startsWith('en') && 
+                  (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft'))
+                );
+                if (targetVoice) utterance.voice = targetVoice;
+                
+                utterance.volume = 1.0;
+                utterance.rate = 0.95;
+                window.speechSynthesis.speak(utterance);
+              } catch (ttsErr) {
+                console.error("Speech synthesis failed: ", ttsErr);
+              }
+            }
+
             setActiveTab('payments');
             setAndroidIncomingCall(null);
           }}
           onDecline={() => {
+            const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(androidIncomingCall.amount);
+            api.createLog('CALL_DECLINED', `Operator declined VoIP Call notification for payment of ${formattedAmt} received from ${androidIncomingCall.clientName || 'N/A'} via ${androidIncomingCall.paymentMode}.`).catch(() => {});
             setAndroidIncomingCall(null);
           }}
         />
