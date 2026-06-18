@@ -31,6 +31,22 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { SOUND_TONES, playSoundTone } from '../services/soundService';
 import { Volume2, Speaker, Smartphone, MessageSquare } from 'lucide-react';
 
+const formatReleaseDateTime = (isoString?: string) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const showHours = hours % 12 || 12;
+  const timeStr = `${String(showHours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+  return `${day}-${month}-${year} ${timeStr}`;
+};
+
 interface SettingsModuleProps {
   settings: BusinessSettings;
   onSaveSettings: (settings: Partial<BusinessSettings>) => Promise<void>;
@@ -141,7 +157,7 @@ export default function SettingsModule({
       }
 
       if (res && res.success) {
-        setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version} (Build ${res.release.build})!`);
+        setApkUploadSuccess(`Successfully uploaded release: Version v${res.release.version}!`);
         fetchApkReleases();
         if (fileInputRef.current) fileInputRef.current.value = '';
       } else {
@@ -1191,13 +1207,13 @@ export default function SettingsModule({
                     <div key={release.id} className="p-3.5 hover:bg-slate-50 transition flex items-center justify-between text-xs gap-3">
                       <div className="space-y-0.5 truncate">
                         <div className="font-bold text-slate-800 flex items-center gap-2">
-                          <span className="text-slate-900 truncate">v{release.version} (Build {release.build})</span>
+                          <span className="text-slate-900 truncate">v{release.version}</span>
                           <span className="text-[8px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded font-mono uppercase">
                             {Math.round((release.sizeBytes / (1024 * 1024)) * 10) / 10} MB
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono truncate">
-                          Uploaded on {new Date(release.uploadedAt).toLocaleDateString()} by {release.uploadedBy}
+                          Uploaded on {formatReleaseDateTime(release.uploadedAt)} by {release.uploadedBy}
                         </div>
                       </div>
                       <a

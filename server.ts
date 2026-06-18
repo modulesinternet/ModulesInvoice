@@ -2895,6 +2895,21 @@ app.get('/api/apk/releases', (req: Request, res: Response) => {
   res.json(db_apk_releases);
 });
 
+app.get('/api/version', (req: Request, res: Response) => {
+  if (db_apk_releases && db_apk_releases.length > 0) {
+    const latest = db_apk_releases[0];
+    return res.json({ version: latest.version, build: latest.build });
+  }
+  const versionFilePath = path.join(process.cwd(), 'version.json');
+  if (fs.existsSync(versionFilePath)) {
+    try {
+      const verData = JSON.parse(fs.readFileSync(versionFilePath, 'utf8'));
+      return res.json(verData);
+    } catch (e) {}
+  }
+  res.json({ version: '1.1.2', build: '18' });
+});
+
 app.post('/api/apk/upload', async (req: Request, res: Response) => {
   try {
     const { fileBase64, originalName, uploadedBy, storageUrl } = req.body;
@@ -2904,14 +2919,25 @@ app.post('/api/apk/upload', async (req: Request, res: Response) => {
 
     let currentVersion = "1.1.2";
     let currentBuild = "28";
-    const versionFilePath = path.join(process.cwd(), 'version.json');
-    if (fs.existsSync(versionFilePath)) {
-      try {
-        const verData = JSON.parse(fs.readFileSync(versionFilePath, 'utf8'));
-        if (verData.version) currentVersion = verData.version;
-        if (verData.build) currentBuild = verData.build;
-      } catch (e) {
-        console.warn("Failed to parse existing version.json:", e);
+
+    if (db_apk_releases && db_apk_releases.length > 0) {
+      const latestObj = db_apk_releases[0];
+      if (latestObj && latestObj.version) {
+        currentVersion = latestObj.version;
+      }
+      if (latestObj && latestObj.build) {
+        currentBuild = latestObj.build;
+      }
+    } else {
+      const versionFilePath = path.join(process.cwd(), 'version.json');
+      if (fs.existsSync(versionFilePath)) {
+        try {
+          const verData = JSON.parse(fs.readFileSync(versionFilePath, 'utf8'));
+          if (verData.version) currentVersion = verData.version;
+          if (verData.build) currentBuild = verData.build;
+        } catch (e) {
+          console.warn("Failed to parse existing version.json:", e);
+        }
       }
     }
 
@@ -2930,6 +2956,7 @@ app.post('/api/apk/upload', async (req: Request, res: Response) => {
 
     // Write updated version details back to disk
     try {
+      const versionFilePath = path.join(process.cwd(), 'version.json');
       fs.writeFileSync(versionFilePath, JSON.stringify({ version: newVersion, build: newBuild }, null, 2), 'utf8');
       console.log(`[Version Control]: Automatically updated version.json to v${newVersion} (Build ${newBuild})`);
     } catch (fsErr) {

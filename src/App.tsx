@@ -563,6 +563,10 @@ export default function App() {
       localStorage.setItem('db_categories', JSON.stringify(categoriesFinal));
       localStorage.setItem('last_batch_sync_time', Date.now().toString());
 
+      api.getLiveVersion().then(v => {
+        if (v) setAppVersion(v);
+      }).catch(() => null);
+
       // Auto-synchronize currentUser with latest profile to prevent stale names/roles/avatars loaded from localStorage on page refresh
       if (currentUser) {
         const latestProfile = usersFinal.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
@@ -1802,7 +1806,7 @@ export default function App() {
 
           <div className="text-center pt-1.5 flex items-center justify-center gap-2 font-mono text-[10px] font-bold text-slate-400 select-none">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span>App Version: v{appVersion.version} (Build {appVersion.build})</span>
+            <span>App Version: v{appVersion.version}</span>
           </div>
 
 
@@ -2082,7 +2086,7 @@ export default function App() {
             </button>
             <div className="text-center pt-1 flex items-center justify-center gap-1.5 font-mono text-[9px] text-slate-400 select-none border-t border-slate-100">
               <span className="w-1 w-1 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span>v{appVersion.version} (Build {appVersion.build})</span>
+              <span>v{appVersion.version}</span>
             </div>
           </div>
         )}

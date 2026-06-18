@@ -3,6 +3,22 @@ import { User, Phone, Mail, Lock, Camera, Save, Shield, HelpCircle, Eye, EyeOff,
 import { UserProfile } from '../types';
 import { api } from '../services/api';
 
+const formatReleaseDateTime = (isoString?: string) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const showHours = hours % 12 || 12;
+  const timeStr = `${String(showHours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+  return `${day}-${month}-${year} ${timeStr}`;
+};
+
 interface ProfileModuleProps {
   currentUser: UserProfile;
   onUpdateCurrentUser: (updated: UserProfile) => void;
@@ -381,7 +397,7 @@ export default function ProfileModule({
                 <div className="space-y-0.5">
                   <h4 className="text-2xl font-black text-white tracking-tight">iModules App</h4>
                   <p className="text-xs text-slate-400 font-mono">
-                    Version v{apkReleases[0].version} (Build {apkReleases[0].build})
+                    Version v{apkReleases[0].version}
                   </p>
                 </div>
 
@@ -391,8 +407,8 @@ export default function ProfileModule({
                     <span className="text-white font-bold">{Math.round((apkReleases[0].sizeBytes / (1024 * 1024)) * 10) / 10} MB</span>
                   </div>
                   <div className="p-2 bg-slate-800/30 border border-slate-800 rounded-xl">
-                    <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Published Date</span>
-                    <span className="text-white font-bold">{new Date(apkReleases[0].uploadedAt).toLocaleDateString()}</span>
+                    <span className="block text-slate-500 text-[8px] uppercase font-bold tracking-wider mb-0.5">Published Date & Time</span>
+                    <span className="text-white font-bold">{formatReleaseDateTime(apkReleases[0].uploadedAt)}</span>
                   </div>
                 </div>
               </div>
@@ -438,12 +454,9 @@ export default function ProfileModule({
                       <div className="truncate">
                         <div className="font-bold text-white flex items-center gap-2">
                           <span>Version v{release.version}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[8px] bg-slate-800 border border-slate-700 text-slate-450 text-slate-400 font-medium font-mono">
-                            Build {release.build}
-                          </span>
                         </div>
                         <div className="text-[10px] text-slate-500 mt-0.5 font-mono truncate">
-                          Released {new Date(release.uploadedAt).toLocaleDateString()} • {Math.round((release.sizeBytes / (1024 * 1024)) * 10) / 10} MB
+                          Released {formatReleaseDateTime(release.uploadedAt)} • {Math.round((release.sizeBytes / (1024 * 1024)) * 10) / 10} MB
                         </div>
                       </div>
                       

@@ -1829,6 +1829,21 @@ export const api = {
     return request<{ success: boolean; release: any }>('/api/apk/upload', 'POST', { fileBase64, originalName, uploadedBy, storageUrl });
   },
 
+  getLiveVersion: async () => {
+    if (isLocalOnly) {
+      const currentReleases = getLocalItem<any[]>('db_apk_releases', []);
+      if (currentReleases.length > 0) {
+        return { version: currentReleases[0].version, build: currentReleases[0].build };
+      }
+      return { version: '1.1.2', build: '18' };
+    }
+    try {
+      return await request<{ version: string; build: string }>('/api/version');
+    } catch (err) {
+      return { version: '1.1.2', build: '18' };
+    }
+  },
+
   downloadApkUrl: (id: string) => {
     return getApiUrl(`/api/apk/download/${id}`);
   }
