@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { 
   FileText, 
   Users, 
@@ -25,7 +26,10 @@ import {
   Search,
   AlertCircle,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Phone,
+  PhoneOff,
+  Volume2
 } from 'lucide-react';
 import { api } from './services/api';
 import versionData from '../version.json';
@@ -62,6 +66,7 @@ import UsersModule from './components/UsersModule';
 import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
 import ProfileModule from './components/ProfileModule';
+import AndroidIncomingCallScreen from './components/AndroidIncomingCallScreen';
 import SplashAnimation from './components/SplashAnimation';
 import NotificationsModule from './components/NotificationsModule';
 import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
@@ -247,6 +252,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>(() => getCachedItem('db_notifications', []));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
+  const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
@@ -363,8 +369,8 @@ export default function App() {
   }, [currentUser]);
 
   // Enhanced Login Engine parameters
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginEmail, setLoginEmail] = useState('modulesinternet@gmail.com');
+  const [loginPassword, setLoginPassword] = useState('Admin@123');
   const [loginMode, setLoginMode] = useState<'signin' | 'forgot' | 'otp' | 'reset'>('signin');
   const [forgotEmail, setForgotEmail] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
@@ -803,18 +809,39 @@ export default function App() {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
 
-        // Trigger local notification for new payments added (real-time/multicast overlay)
+        // Trigger local notification / WhatsApp APK call screen for new or updated payments
         try {
           if (prev && prev.length > 0) {
-            const prevIds = new Set(prev.map(p => p.id));
-            const newPayments = list.filter(p => !prevIds.has(p.id));
+            const prevMap = new Map<string, Payment>(prev.map(p => [p.id, p]));
+            const isAndroid = Capacitor.getPlatform() === 'android';
 
-            newPayments.forEach(pay => {
-              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
-              triggerLocalNotification(
-                "💰 Payment Received",
-                `Received ${formattedAmt} from ${pay.clientName} against Invoice #${pay.invoiceNumber || 'N/A'}.`
-              );
+            list.forEach(currPay => {
+              const prevPay = prevMap.get(currPay.id);
+              if (!prevPay) {
+                // New payment created!
+                if (isAndroid) {
+                  setAndroidIncomingCall(currPay);
+                } else {
+                  const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
+                  triggerLocalNotification(
+                    "💰 Payment Received",
+                    `Received ${formattedAmt} from ${currPay.clientName} against Invoice #${currPay.invoiceNumber || 'N/A'}.`
+                  );
+                }
+              } else {
+                // Existing payment updated!
+                const amountChanged = currPay.amount !== prevPay.amount;
+                const clientChanged = currPay.clientName !== prevPay.clientName;
+                const modeChanged = currPay.paymentMode !== prevPay.paymentMode;
+                const refChanged = currPay.referenceNum !== prevPay.referenceNum;
+                const remarksChanged = currPay.remarks !== prevPay.remarks;
+
+                if (amountChanged || clientChanged || modeChanged || refChanged || remarksChanged) {
+                  if (isAndroid) {
+                    setAndroidIncomingCall(currPay);
+                  }
+                }
+              }
             });
           }
         } catch (e) {
@@ -923,8 +950,8 @@ export default function App() {
               });
             }
 
-            // Show incoming call alert if enabled for payments
-            if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
+            // Show incoming call alert if enabled for payments (bypass on Android APK which uses WhatsApp Call Screen)
+            if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success' && Capacitor.getPlatform() !== 'android') {
               setShowIncomingCallAlert(docData);
             }
           }
@@ -2839,6 +2866,20 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {androidIncomingCall && (
+        <AndroidIncomingCallScreen
+          payment={androidIncomingCall}
+          settings={businessSettings}
+          onAccept={() => {
+            setActiveTab('payments');
+            setAndroidIncomingCall(null);
+          }}
+          onDecline={() => {
+            setAndroidIncomingCall(null);
+          }}
+        />
       )}
 
       {showSplash && (

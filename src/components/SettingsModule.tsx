@@ -269,6 +269,7 @@ export default function SettingsModule({
   const [voiceAnnounceEnabled, setVoiceAnnounceEnabled] = useState<boolean>(settings?.voiceAnnounceEnabled ?? true);
   const [voiceAnnounceTemplate, setVoiceAnnounceTemplate] = useState(settings?.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
   const [incomingCallAlertEnabled, setIncomingCallAlertEnabled] = useState<boolean>(settings?.incomingCallAlertEnabled ?? true);
+  const [ttsCallerName, setTtsCallerName] = useState(settings?.ttsCallerName || 'Karan Sharma');
 
   // Field/Section Level Visibility States
   const [showInvoiceGst, setShowInvoiceGst] = useState<boolean>(settings?.showInvoiceGst ?? true);
@@ -338,6 +339,7 @@ export default function SettingsModule({
       setVoiceAnnounceEnabled(settings.voiceAnnounceEnabled ?? true);
       setVoiceAnnounceTemplate(settings.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
       setIncomingCallAlertEnabled(settings.incomingCallAlertEnabled ?? true);
+      setTtsCallerName(settings.ttsCallerName || 'Karan Sharma');
     }
   }, [settings]);
 
@@ -542,7 +544,8 @@ export default function SettingsModule({
         notificationSound,
         voiceAnnounceEnabled,
         voiceAnnounceTemplate,
-        incomingCallAlertEnabled
+        incomingCallAlertEnabled,
+        ttsCallerName
       };
 
       await onSaveSettings(payload);
@@ -1801,6 +1804,16 @@ export default function SettingsModule({
 
                 {voiceAnnounceEnabled && (
                   <div className="space-y-1.5 animate-fade-in pl-6">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Incoming Caller Name (for android call screen)</label>
+                      <input
+                        type="text"
+                        value={ttsCallerName}
+                        onChange={(e) => setTtsCallerName(e.target.value)}
+                        placeholder="e.g. Karan Sharma"
+                        className="w-full text-xs p-2.5 border border-[#E5E7EB] rounded-xl font-sans focus:border-indigo-500 focus:outline-none mb-1.5"
+                      />
+                    </div>
                     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TTS Announcement Template</label>
                     <textarea
                       rows={2}

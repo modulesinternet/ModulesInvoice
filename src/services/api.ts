@@ -214,12 +214,54 @@ function getHeaders(): HeadersInit {
   };
 }
 
-let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+let activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+
+// Dynamic multi-host prober to identify the currently active server node at runtime
+async function probeActiveApiUrl() {
+  try {
+    const cached = localStorage.getItem('detected_api_base');
+    if (cached && cached.trim() !== '') {
+      activeCapacitorFallback = cached.trim();
+    }
+  } catch (_) {}
+
+  const candidates = [
+    'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app',
+    'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${candidate}/api/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        activeCapacitorFallback = candidate;
+        try {
+          localStorage.setItem('detected_api_base', candidate);
+        } catch (_) {}
+        console.log(`[API PROBE] Successfully synchronized with central backend: ${candidate}`);
+        break;
+      }
+    } catch (e) {
+      console.warn(`[API PROBE] Candidate endpoint ${candidate} was unreachable.`);
+    }
+  }
+}
+
+// Fire async probing immediately on startup
+if (typeof window !== 'undefined') {
+  probeActiveApiUrl();
+}
 
 function getApiUrl(url: string) {
   // Support custom saved backend API URL override
   try {
-    const savedUrl = localStorage.getItem('backend_api_url');
+    const savedUrl = localStorage.getItem('backend_api_url') || localStorage.getItem('detected_api_base');
     if (savedUrl && savedUrl.trim() !== '') {
       return `${savedUrl.trim().replace(/\/+$/, '')}${url}`;
     }
@@ -239,11 +281,9 @@ function getApiUrl(url: string) {
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
 
-  // Direct connect default server URL - no manual configuration or overrides.
-  const fallbackUrl = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-
+  // Direct connect default server URL - prioritizing activeCapacitorFallback on native/external views
   const base = (isCapacitor || (!isCloudRun && !isLocalhost))
-    ? fallbackUrl
+    ? activeCapacitorFallback
     : '';
   return `${base}${url}`;
 }

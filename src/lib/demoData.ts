@@ -45,7 +45,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   notificationSound: "crystal",
   voiceAnnounceEnabled: true,
   voiceAnnounceTemplate: "Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.",
-  incomingCallAlertEnabled: true
+  incomingCallAlertEnabled: true,
+  ttsCallerName: "Karan Sharma"
 };
 
 export const DEMO_USERS: UserProfile[] = [

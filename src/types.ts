@@ -198,6 +198,7 @@ export interface BusinessSettings {
   voiceAnnounceEnabled?: boolean;
   voiceAnnounceTemplate?: string;
   incomingCallAlertEnabled?: boolean;
+  ttsCallerName?: string;
 }
 
 export interface ActivityLog {
