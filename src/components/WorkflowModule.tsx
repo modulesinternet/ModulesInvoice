@@ -73,7 +73,7 @@ export default function WorkflowModule({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-[#5B21FF] to-[#8C62FF] text-white p-6 rounded-3xl shadow-lg">
         <div>
           <span className="text-xs bg-white/20 text-white font-bold tracking-widest px-3 py-1 rounded-full uppercase">
-            Apex Realtime Pipeline
+            iModules Realtime Pipeline
           </span>
           <h1 className="text-2xl font-black font-display tracking-tight mt-2.5">
             Real-time VoIP & Enterprise Calling Workflow

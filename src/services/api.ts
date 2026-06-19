@@ -259,10 +259,10 @@ if (typeof window !== 'undefined') {
 }
 
 function getApiUrl(url: string) {
-  // Support custom saved backend API URL override
+  // Support custom saved backend API URL override - must be secure absolute URL
   try {
     const savedUrl = localStorage.getItem('backend_api_url') || localStorage.getItem('detected_api_base');
-    if (savedUrl && savedUrl.trim() !== '') {
+    if (savedUrl && savedUrl.trim() !== '' && (savedUrl.trim().startsWith('http://') || savedUrl.trim().startsWith('https://'))) {
       return `${savedUrl.trim().replace(/\/+$/, '')}${url}`;
     }
   } catch (e) {}
@@ -288,7 +288,7 @@ function getApiUrl(url: string) {
   return `${base}${url}`;
 }
 
-// REST fetch request helper
+// REST fetch request helper with robust error catcher and HTML response detection to avoid generic parser crashes
 async function request<T>(url: string, method: string = 'GET', body?: any): Promise<T> {
   const headers = getHeaders();
   const config: RequestInit = {
@@ -305,16 +305,39 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
     targetUrl = `${targetUrl}${separator}t=${Date.now()}`;
   }
 
-  const response = await fetch(getApiUrl(targetUrl), config);
+  const finalUrl = getApiUrl(targetUrl);
+  const response = await fetch(finalUrl, config);
+  
   if (!response.ok) {
-    let errMsg = `Request failed: ${response.statusText}`;
+    let errMsg = `Request failed: ${response.statusText} (${response.status})`;
     try {
-      const errJson = await response.json();
-      errMsg = errJson.error || errJson.message || errMsg;
+      const errText = await response.text();
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.error || errJson.message || errMsg;
+      } catch (_) {
+        if (errText.trim().startsWith('<')) {
+          errMsg = `Backend returned system webpage error page. Verify your backend service health. (HTTP ${response.status})`;
+        } else if (errText.trim().length > 0) {
+          errMsg = errText;
+        }
+      }
     } catch (_) {}
     throw new Error(errMsg);
   }
-  return response.json() as Promise<T>;
+  
+  // Safely parse JSON to avoid "Failed to execute 'json' on 'Response' (or unexpected token <)"
+  const responseText = await response.text();
+  try {
+    return JSON.parse(responseText) as T;
+  } catch (jsonErr: any) {
+    console.error(`[API ERROR] Non-JSON payload received from '${finalUrl}':`, responseText.substring(0, 500));
+    if (responseText.trim().startsWith('<')) {
+      throw new Error(`The server has responded with an HTML page instead of JSON data. This usually indicates a routing issue or that the endpoint does not exist. (API target: ${finalUrl})`);
+    } else {
+      throw new Error(`Invalid data format. Expected JSON structure but received: "${responseText.substring(0, 80)}..."`);
+    }
+  }
 }
 
 export const api = {
@@ -1804,7 +1827,13 @@ export const api = {
       if (!res.ok) {
         throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       }
-      const data = await res.json();
+      const responseText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (_) {
+        throw new Error("Backend returned a non-JSON response. (Expected health status, but received HTML or plaintext).");
+      }
       return { success: true, data };
     } catch (err: any) {
       if (backupUrl) {
