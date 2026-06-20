@@ -2153,31 +2153,6 @@ export default function App() {
           <div className="p-4 mt-auto border-t border-[#E5E7EB] space-y-2.5">
             <button 
               onClick={() => {
-                setActiveTab('profile');
-                if (window.innerWidth < 768) {
-                  setIsSidebarOpen(false);
-                }
-              }}
-              className="w-full text-left p-3 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB] transition-all group focus:outline-none cursor-pointer text-left font-sans block"
-              title="Click to Edit Your Security Profile"
-            >
-              <div className="flex items-center gap-2.5 w-full">
-                {currentUser.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" alt="Avatar upload" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-slate-200 shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0 font-sans">
-                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                )}
-                <div className="flex-1 overflow-hidden text-left">
-                  <p className="text-xs font-bold truncate text-slate-850 group-hover:text-indigo-900">{currentUser.name}</p>
-                  <p className="text-[10px] text-slate-450 truncate mt-0.5 leading-none uppercase font-mono tracking-wider">Clearance Profile</p>
-                </div>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => {
                 localStorage.removeItem('current_user');
                 setCurrentUser(null);
                 showToast("Logged out successfully from portal session", "info");
