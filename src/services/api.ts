@@ -28,6 +28,8 @@ import {
   DEMO_USERS 
 } from '../lib/demoData';
 
+import { Capacitor } from '@capacitor/core';
+
 const DEFAULT_ROLES: RolePermissions[] = [
   {
     role: "Admin",
@@ -282,11 +284,14 @@ function getApiUrl(url: string) {
     return `${metaEnv.VITE_BACKEND_API_URL.trim().replace(/\/+$/, '')}${url}`;
   }
 
-  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' || 
+  const isCapacitor = Capacitor.isNativePlatform() || 
+                      typeof (window as any).Capacitor !== 'undefined' || 
                       window.location.protocol === 'capacitor:' || 
                       window.location.origin.startsWith('capacitor://') ||
                       navigator.userAgent.includes('Capacitor') ||
-                      (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001');
+                      (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001') ||
+                      (window.location.hostname === 'localhost' && window.location.port === ''); // native scheme https://localhost on newer platforms
+  
   const isCloudRun = window.location.hostname.includes('run.app');
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
 
@@ -313,10 +318,17 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
   }
 
   const finalUrl = getApiUrl(targetUrl);
-  const response = await fetch(finalUrl, config);
+  
+  let response;
+  try {
+    response = await fetch(finalUrl, config);
+  } catch (err: any) {
+    console.error(`[API Network Exception] Connection failed when hitting: ${finalUrl}`, err);
+    throw new Error(`Device network / server offline. Failed to establish connection with security portal backend: ${finalUrl}. Error: ${err.message || err}`);
+  }
   
   if (!response.ok) {
-    let errMsg = `Request failed: ${response.statusText} (${response.status})`;
+    let errMsg = `Request failed: ${response.statusText} (${response.status}) when hitting ${finalUrl}`;
     try {
       const errText = await response.text();
       try {
@@ -324,9 +336,9 @@ async function request<T>(url: string, method: string = 'GET', body?: any): Prom
         errMsg = errJson.error || errJson.message || errMsg;
       } catch (_) {
         if (errText.trim().startsWith('<')) {
-          errMsg = `Backend returned system webpage error page. Verify your backend service health. (HTTP ${response.status})`;
+          errMsg = `Backend returned system webpage error page. Verify your backend service health. (HTTP ${response.status} at ${finalUrl})`;
         } else if (errText.trim().length > 0) {
-          errMsg = errText;
+          errMsg = `${errText} (${response.status})`;
         }
       }
     } catch (_) {}

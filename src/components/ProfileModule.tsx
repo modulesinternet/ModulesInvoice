@@ -23,12 +23,14 @@ interface ProfileModuleProps {
   currentUser: UserProfile;
   onUpdateCurrentUser: (updated: UserProfile) => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
+  onLogout?: () => void;
 }
 
 export default function ProfileModule({
   currentUser,
   onUpdateCurrentUser,
-  showToast
+  showToast,
+  onLogout
 }: ProfileModuleProps) {
   const [name, setName] = useState(currentUser.name || '');
   const [email, setEmail] = useState(currentUser.email || '');
@@ -327,11 +329,21 @@ export default function ProfileModule({
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="p-3 text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-150 active:scale-95 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition select-none cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Logout Securely</span>
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={isSaving}
-                className="p-3 bg-[#5B21FF] hover:bg-[#4A1AD3] active:scale-95 text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-lg hover:shadow-indigo-200 disabled:opacity-50 transition select-none cursor-pointer"
+                className="p-3 bg-[#5B21FF] hover:bg-[#4A1AD3] active:scale-95 text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-lg hover:shadow-indigo-200 disabled:opacity-50 transition select-none cursor-pointer ml-auto"
               >
                 <Save className="w-4 h-4" />
                 <span>{isSaving ? "Saving details..." : "Save Profile Details"}</span>

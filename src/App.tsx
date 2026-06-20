@@ -2147,27 +2147,6 @@ export default function App() {
             );
           })}
         </nav>
-
-        {/* Footer info bar & Logout button */}
-        {isSidebarOpen && currentUser && (
-          <div className="p-4 mt-auto border-t border-[#E5E7EB] space-y-2.5">
-            <button 
-              onClick={() => {
-                localStorage.removeItem('current_user');
-                setCurrentUser(null);
-                showToast("Logged out successfully from portal session", "info");
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-rose-50 text-rose-600 hover:bg-rose-100/70 border border-rose-100 rounded-xl text-xs font-bold transition select-none cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout Securely</span>
-            </button>
-            <div className="text-center pt-1 flex items-center justify-center gap-1.5 font-mono text-[9px] text-slate-400 select-none border-t border-slate-100">
-              <span className="w-1 w-1 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span>v{appVersion.version}</span>
-            </div>
-          </div>
-        )}
       </aside>
 
       {/* MOBILE BAR TOP NAVIGATION */}
@@ -2768,6 +2747,11 @@ export default function App() {
                     loadMasterData();
                   }}
                   showToast={showToast}
+                  onLogout={() => {
+                    localStorage.removeItem('current_user');
+                    setCurrentUser(null);
+                    showToast("Logged out successfully from portal session", "info");
+                  }}
                 />
               )}
 
