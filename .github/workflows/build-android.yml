@@ -14,10 +14,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK 17 (Required for Gradle build)
+      - name: Setup Java JDK 21 (Required for Gradle build)
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'zulu'
 
       - name: Setup Node.js Environment
