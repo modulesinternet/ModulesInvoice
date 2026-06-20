@@ -216,74 +216,7 @@ function getHeaders(): HeadersInit {
   };
 }
 
-let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
-
-// Dynamic multi-host prober to identify the currently active server node at runtime
-async function probeActiveApiUrl() {
-  try {
-    const cached = localStorage.getItem('detected_api_base');
-    if (cached && cached.trim() !== '') {
-      activeCapacitorFallback = cached.trim();
-    }
-  } catch (_) {}
-
-  const candidates = [
-    'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app',
-    'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${candidate}/api/health`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const text = await res.text();
-        // Parse JSON to verify that it is actually returning JSON and has a valid status,
-        // rather than an HTML page or routing error.
-        const parsed = JSON.parse(text);
-        if (parsed && (parsed.status === 'ok' || parsed.success === true)) {
-          activeCapacitorFallback = candidate;
-          try {
-            localStorage.setItem('detected_api_base', candidate);
-          } catch (_) {}
-          console.log(`[API PROBE] Successfully synchronized with central backend: ${candidate}`);
-          break;
-        }
-      }
-    } catch (e) {
-      console.warn(`[API PROBE] Candidate endpoint ${candidate} was unreachable or didn't respond with valid JSON.`);
-    }
-  }
-}
-
-// Fire async probing immediately on startup
-if (typeof window !== 'undefined') {
-  probeActiveApiUrl();
-}
-
 function getApiUrl(url: string) {
-  // Support custom saved backend API URL override - must be secure absolute URL
-  try {
-    const savedUrl = localStorage.getItem('backend_api_url') || localStorage.getItem('detected_api_base');
-    if (savedUrl && savedUrl.trim() !== '' && (savedUrl.trim().startsWith('http://') || savedUrl.trim().startsWith('https://'))) {
-      return `${savedUrl.trim().replace(/\/+$/, '')}${url}`;
-    }
-  } catch (e) {}
-
-  // Support VITE_BACKEND_API_URL environment configuration
-  const metaEnv = (import.meta as any).env;
-  if (metaEnv && metaEnv.VITE_BACKEND_API_URL && metaEnv.VITE_BACKEND_API_URL.trim() !== '') {
-    return `${metaEnv.VITE_BACKEND_API_URL.trim().replace(/\/+$/, '')}${url}`;
-  }
-
   const isCapacitor = Capacitor.isNativePlatform() || 
                       typeof (window as any).Capacitor !== 'undefined' || 
                       window.location.protocol === 'capacitor:' || 
@@ -292,12 +225,13 @@ function getApiUrl(url: string) {
                       (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001') ||
                       (window.location.hostname === 'localhost' && window.location.port === ''); // native scheme https://localhost on newer platforms
   
-  const isCloudRun = window.location.hostname.includes('run.app');
-  const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
+  // Directly point all native/external connections specifically to the direct pre-production central database
+  if (isCapacitor) {
+    return `https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app${url}`;
+  }
 
-  // Direct connect default server URL - prioritizing activeCapacitorFallback on native/external views
-  const base = isCapacitor ? activeCapacitorFallback : '';
-  return `${base}${url}`;
+  // Otherwise, use relative URLs (which matches the host domain) to prevent CORS issues
+  return `${url}`;
 }
 
 // REST fetch request helper with robust error catcher and HTML response detection to avoid generic parser crashes
@@ -1799,7 +1733,7 @@ export const api = {
   },
 
   getSavedBackendUrl: () => {
-    return localStorage.getItem('backend_api_url') || '';
+    return '';
   },
   getDefaultBackendUrl: () => {
     return 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
@@ -1808,15 +1742,7 @@ export const api = {
     return getApiUrl('');
   },
   setBackendUrl: (url: string) => {
-    if (!url || url.trim() === '') {
-      localStorage.removeItem('backend_api_url');
-    } else {
-      let clean = url.trim();
-      if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
-        clean = `https://${clean}`;
-      }
-      localStorage.setItem('backend_api_url', clean);
-    }
+    // No-op to respect user intent: do not support manual options
   },
   testHealth: async (urlOverride?: string) => {
     const backupUrl = localStorage.getItem('backend_api_url');

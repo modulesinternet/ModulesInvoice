@@ -53,6 +53,12 @@ jobs:
       - name: Compile and Build Android APK
         run: |
           cd android
+          # Self-healing check for corrupted gradle-wrapper.jar (common with Git line ending issues)
+          if ! jar tf gradle/wrapper/gradle-wrapper.jar >/dev/null 2>&1; then
+            echo "⚠️ gradle-wrapper.jar is invalid, corrupt or missing. Overwriting with fresh official binary..."
+            curl -sSL --retry 3 -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.14.3/gradle/wrapper/gradle-wrapper.jar || \
+            curl -sSL --retry 3 -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.12.0/gradle/wrapper/gradle-wrapper.jar
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug
 
