@@ -2163,12 +2163,10 @@ export default function App() {
             >
               <div className="flex items-center gap-2.5 w-full">
                 {currentUser.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" alt="Avatar upload" />
-                ) : businessSettings?.logoUrl ? (
-                  <img src={businessSettings.logoUrl} className="w-9 h-9 rounded-full object-contain shadow-sm shrink-0 border border-slate-200 bg-white" alt="Active logo" />
+                  <img src={currentUser.avatarUrl} className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0 border border-slate-200" alt="Avatar upload" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-white overflow-hidden shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0">
-                    {currentUser.name.charAt(0).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full bg-[#5B21FF] border border-slate-200 shadow-sm flex items-center justify-center text-white font-bold text-xs shrink-0 font-sans">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                   </div>
                 )}
                 <div className="flex-1 overflow-hidden text-left">
@@ -2599,15 +2597,15 @@ export default function App() {
                 className="flex items-center gap-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 py-1 px-2.5 rounded-xl shadow-xs transition duration-150 group cursor-pointer focus:outline-none"
                 title="View & Edit Your Security Profile"
               >
-                {currentUser.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} className="w-6.5 h-6.5 rounded-lg object-cover shrink-0 border border-slate-200" alt="Avatar upload" />
-                ) : businessSettings?.logoUrl ? (
-                  <img src={businessSettings.logoUrl} className="w-6.5 h-6.5 rounded-lg object-contain shrink-0 bg-white border border-slate-200" alt="Avatar logo" />
-                ) : (
-                  <div className="w-6.5 h-6.5 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 font-mono shrink-0 transition">
-                    {currentUser.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center shrink-0 border border-slate-200">
+                  {currentUser.avatarUrl ? (
+                    <img src={currentUser.avatarUrl} className="w-full h-full object-cover" alt="User Avatar" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full bg-[#5B21FF] text-white flex items-center justify-center font-bold font-sans text-[11px]">
+                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                  )}
+                </div>
                 <div className="hidden sm:flex flex-col text-left font-sans">
                   <span className="text-[11px] font-bold text-slate-800 group-hover:text-indigo-900 leading-none">{currentUser.name}</span>
                   <span className="text-[8.5px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">Settings Clearance</span>
