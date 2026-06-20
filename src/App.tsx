@@ -279,6 +279,62 @@ export default function App() {
 
   const [fullScreenLoading, setFullScreenLoading] = useState(false);
 
+  // Pull-to-refresh mechanism for mobile/Android view to trigger loadMasterData
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const touchStartY = useRef<number | null>(null);
+  const mainRef = useRef<HTMLDivElement | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!mainRef.current) return;
+    // Only trigger pull-to-refresh if we are scrolled to the very top (scrollTop === 0)
+    if (mainRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null || !isPulling || !mainRef.current) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - touchStartY.current;
+
+    if (diff > 0 && mainRef.current.scrollTop === 0) {
+      // Elastic/resistance mapping for pull down (capped at 80px)
+      const resistanceVal = Math.min(diff * 0.45, 80);
+      setPullDistance(resistanceVal);
+      // Prevent browser default pull-to-refresh behaviors in nested views
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    } else {
+      setPullDistance(0);
+      setIsPulling(false);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    touchStartY.current = null;
+    setIsPulling(false);
+    
+    if (pullDistance >= 60) {
+      setIsRefreshing(true);
+      setPullDistance(40); // hold at 40px during active refreshing state
+      try {
+        await loadMasterData(true, true);
+        showToast("Synchronized central backend registers", "success");
+      } catch (err: any) {
+        showToast(`Sync failed: ${err.message || err}`, "error");
+      } finally {
+        setIsRefreshing(false);
+        setPullDistance(0);
+      }
+    } else {
+      setPullDistance(0);
+    }
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setFullScreenLoading(false);
@@ -2096,7 +2152,12 @@ export default function App() {
         {isSidebarOpen && currentUser && (
           <div className="p-4 mt-auto border-t border-[#E5E7EB] space-y-2.5">
             <button 
-              onClick={() => setActiveTab('profile')}
+              onClick={() => {
+                setActiveTab('profile');
+                if (window.innerWidth < 768) {
+                  setIsSidebarOpen(false);
+                }
+              }}
               className="w-full text-left p-3 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 rounded-2xl flex items-center gap-2.5 border border-[#E5E7EB] transition-all group focus:outline-none cursor-pointer text-left font-sans block"
               title="Click to Edit Your Security Profile"
             >
@@ -2266,14 +2327,20 @@ export default function App() {
           </div>
 
           {/* Professional badge avatar on right edge of mobile top header */}
-          {businessSettings && (
-            <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500 overflow-hidden shrink-0">
-              {businessSettings.logoUrl ? (
-                <img src={businessSettings.logoUrl} className="w-full h-full object-contain" alt="Profile" />
+          {currentUser && (
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className="w-8 h-8 rounded-full flex items-center justify-center border border-[#E5E7EB] text-[10px] font-bold font-mono text-slate-500 overflow-hidden shrink-0 hover:opacity-85 active:scale-95 transition focus:outline-none cursor-pointer"
+              title="View Security Clearance Profile"
+            >
+              {currentUser.avatarUrl ? (
+                <img src={currentUser.avatarUrl} className="w-full h-full object-cover" alt="User Avatar" referrerPolicy="no-referrer" />
               ) : (
-                companyInitials
+                <div className="w-full h-full bg-[#5B21FF] text-white flex items-center justify-center font-bold font-sans text-[11px]">
+                  {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
               )}
-            </div>
+            </button>
           )}
         </div>
       </div>
@@ -2349,7 +2416,26 @@ export default function App() {
       )}
 
       {/* MASTER SCROLLABLE COMPONENT PANEL CONTAINER */}
-      <main className="flex-1 flex flex-col overflow-y-auto min-h-0">
+      <main 
+        ref={mainRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 flex flex-col overflow-y-auto min-h-0 relative select-none"
+      >
+        {/* Pull to Refresh Indicator (Mobile Only) */}
+        {isMobileDevice() && (pullDistance > 0 || isRefreshing) && (
+          <div 
+            className="w-full flex items-center justify-center bg-indigo-50/40 border-b border-indigo-100/40 min-h-0 overflow-hidden no-print shrink-0 transition-all duration-75"
+            style={{ height: `${pullDistance}px`, opacity: pullDistance > 10 ? 1 : 0 }}
+          >
+            <div className="flex items-center gap-2 text-indigo-700 font-sans font-bold text-[11px] uppercase tracking-wider py-1.5 select-none">
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshing ? 'animate-spin' : ''}`} style={{ transform: isRefreshing ? undefined : `rotate(${pullDistance * 4.5}deg)` }} />
+              <span>{isRefreshing ? 'Syncing registered data...' : pullDistance >= 60 ? 'Release to refresh' : 'Pull down to refresh'}</span>
+            </div>
+          </div>
+        )}
+
         {/* Top Operational Status Bar */}
         <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-40 animate-fade-in gap-4">
           <div className="flex items-center gap-4 flex-1 max-w-md">
