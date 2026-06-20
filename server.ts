@@ -2468,207 +2468,217 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
 });
 
 app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const data = req.body;
-  const pIndex = db_payments.findIndex(pay => pay.id === id);
-  if (pIndex !== -1) {
-    const oldP = db_payments[pIndex];
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const pIndex = db_payments.findIndex(pay => pay.id === id);
+    if (pIndex !== -1) {
+      const oldP = db_payments[pIndex];
 
-    // 1. Revert Old values
-    const oldAmount = oldP.amount;
-    const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
-    if (oldInvIndex !== -1) {
-      const inv = db_invoices[oldInvIndex];
-      inv.paidAmount = Math.max(0, inv.paidAmount - oldAmount);
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      await syncStateToFirestore('invoices', inv.id);
-    }
+      // 1. Revert Old values
+      const oldAmount = Number(oldP.amount || 0);
+      const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+      if (oldInvIndex !== -1) {
+        const inv = db_invoices[oldInvIndex];
+        inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - oldAmount);
+        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
+        inv.status = inv.dueAmount === Number(inv.total || 0) ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+        await syncStateToFirestore('invoices', inv.id);
+      }
 
-    const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
-    if (oldClientIndex !== -1) {
-      db_clients[oldClientIndex].outstandingBalance = db_clients[oldClientIndex].outstandingBalance + oldAmount;
-      await syncStateToFirestore('clients', db_clients[oldClientIndex].id);
-    }
+      const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+      if (oldClientIndex !== -1) {
+        db_clients[oldClientIndex].outstandingBalance = Number(db_clients[oldClientIndex].outstandingBalance || 0) + oldAmount;
+        await syncStateToFirestore('clients', db_clients[oldClientIndex].id);
+      }
 
-    // Apply edits
-    const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
-    const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
+      // Apply edits
+      const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
+      const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
 
-    oldP.amount = Number(data.amount ?? oldP.amount);
-    oldP.paymentDate = data.paymentDate || oldP.paymentDate;
-    oldP.paymentMode = data.paymentMode || oldP.paymentMode;
-    oldP.referenceNum = data.referenceNum || oldP.referenceNum;
-    oldP.remarks = data.remarks || oldP.remarks;
+      oldP.amount = Number(data.amount ?? oldP.amount);
+      oldP.paymentDate = data.paymentDate || oldP.paymentDate;
+      oldP.paymentMode = data.paymentMode || oldP.paymentMode;
+      oldP.referenceNum = data.referenceNum || oldP.referenceNum;
+      oldP.remarks = data.remarks || oldP.remarks;
 
-    if (isInvoiceChanged) {
-      oldP.invoiceId = updatedInvoiceId;
-      const targetInv = db_invoices.find(inv => inv.id === updatedInvoiceId);
-      oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
-    }
+      if (isInvoiceChanged) {
+        oldP.invoiceId = updatedInvoiceId;
+        const targetInv = db_invoices.find(inv => inv.id === updatedInvoiceId);
+        oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
+      }
 
-    // 2. Apply New values
-    const newAmount = oldP.amount;
-    const newInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
-    if (newInvIndex !== -1) {
-      const inv = db_invoices[newInvIndex];
-      inv.paidAmount = inv.paidAmount + newAmount;
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      await syncStateToFirestore('invoices', inv.id);
-    }
+      // 2. Apply New values
+      const newAmount = Number(oldP.amount || 0);
+      const newInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
+      if (newInvIndex !== -1) {
+        const inv = db_invoices[newInvIndex];
+        inv.paidAmount = Number(inv.paidAmount || 0) + newAmount;
+        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
+        inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+        await syncStateToFirestore('invoices', inv.id);
+      }
 
-    const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
-    let runningClientBalance = 0;
-    if (newClientIndex !== -1) {
-      db_clients[newClientIndex].outstandingBalance = Math.max(0, db_clients[newClientIndex].outstandingBalance - newAmount);
-      runningClientBalance = db_clients[newClientIndex].outstandingBalance;
-      await syncStateToFirestore('clients', db_clients[newClientIndex].id);
-    }
+      const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
+      let runningClientBalance = 0;
+      if (newClientIndex !== -1) {
+        db_clients[newClientIndex].outstandingBalance = Math.max(0, Number(db_clients[newClientIndex].outstandingBalance || 0) - newAmount);
+        runningClientBalance = db_clients[newClientIndex].outstandingBalance;
+        await syncStateToFirestore('clients', db_clients[newClientIndex].id);
+      }
 
-    // Filter and rebuild Ledger entry
-    const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === oldP.id);
-    db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
-    for (const led of ledgerToRemove) {
-      await syncStateToFirestore('ledger', led.id);
-    }
-    const newLedger: LedgerEntry = {
-      id: `led-${Date.now()}`,
-      clientId: oldP.clientId,
-      clientName: oldP.clientName,
-      date: oldP.paymentDate,
-      description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
-      type: "credit",
-      amount: newAmount,
-      runningBalance: runningClientBalance,
-      referenceType: "payment",
-      referenceId: oldP.id,
-      createdAt: new Date().toISOString()
-    };
-    db_ledger.unshift(newLedger);
-    await syncStateToFirestore('ledger', newLedger.id);
+      // Filter and rebuild Ledger entry
+      const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === oldP.id);
+      db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
+      for (const led of ledgerToRemove) {
+        await syncStateToFirestore('ledger', led.id);
+      }
+      const newLedger: LedgerEntry = {
+        id: `led-${Date.now()}`,
+        clientId: oldP.clientId,
+        clientName: oldP.clientName,
+        date: oldP.paymentDate,
+        description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
+        type: "credit",
+        amount: newAmount,
+        runningBalance: runningClientBalance,
+        referenceType: "payment",
+        referenceId: oldP.id,
+        createdAt: new Date().toISOString()
+      };
+      db_ledger.unshift(newLedger);
+      await syncStateToFirestore('ledger', newLedger.id);
 
-    // Filter and rebuild Cashbook entry
-    const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === oldP.id);
-    db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
-    for (const cb of cashbookToRemove) {
-      await syncStateToFirestore('cashbook', cb.id);
-    }
-    
-    let cashChange = 0;
-    let bankChange = 0;
-    if (oldP.paymentMode === 'Cash') {
-      cashChange = newAmount;
+      // Filter and rebuild Cashbook entry
+      const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === oldP.id);
+      db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
+      for (const cb of cashbookToRemove) {
+        await syncStateToFirestore('cashbook', cb.id);
+      }
+      
+      let cashChange = 0;
+      let bankChange = 0;
+      if (oldP.paymentMode === 'Cash') {
+        cashChange = newAmount;
+      } else {
+        bankChange = newAmount;
+      }
+
+      const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) return dateA - dateB;
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        return a.id.localeCompare(b.id);
+      });
+      const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
+
+      const newCashbook: CashbookEntry = {
+        id: `cb-${Date.now()}`,
+        date: oldP.paymentDate,
+        description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
+        type: "income",
+        paymentMode: oldP.paymentMode,
+        amount: newAmount,
+        referenceId: oldP.id,
+        runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
+        runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
+        createdAt: new Date().toISOString()
+      };
+      db_cashbook.unshift(newCashbook);
+      await syncStateToFirestore('cashbook', newCashbook.id);
+
+      await syncStateToFirestore('payments', oldP.id);
+
+      const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+      (oldP as any).updatedBy = performerName;
+
+      // Trigger centralized master business notification broadcast
+      await triggerBusinessNotification(
+        req,
+        "Payment Updated",
+        `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified by ${performerName}`,
+        "info",
+        "payments",
+        { paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
+      ).catch(err => console.error("Notification trigger caught error:", err));
+
+      logUserActivity(req, "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName} (Updated by ${performerName}). Double-entry log updated.`);
+      res.json(oldP);
     } else {
-      bankChange = newAmount;
+      res.status(404).json({ error: "Payment not found" });
     }
-
-    const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      if (dateA !== dateB) return dateA - dateB;
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      return a.id.localeCompare(b.id);
-    });
-    const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
-
-    const newCashbook: CashbookEntry = {
-      id: `cb-${Date.now()}`,
-      date: oldP.paymentDate,
-      description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
-      type: "income",
-      paymentMode: oldP.paymentMode,
-      amount: newAmount,
-      referenceId: oldP.id,
-      runningCashBalance: lastCashbookEntry.runningCashBalance + cashChange,
-      runningBankBalance: lastCashbookEntry.runningBankBalance + bankChange,
-      createdAt: new Date().toISOString()
-    };
-    db_cashbook.unshift(newCashbook);
-    await syncStateToFirestore('cashbook', newCashbook.id);
-
-    await syncStateToFirestore('payments', oldP.id);
-
-    const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
-    (oldP as any).updatedBy = performerName;
-
-    // Trigger centralized master business notification broadcast
-    await triggerBusinessNotification(
-      req,
-      "Payment Updated",
-      `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified by ${performerName}`,
-      "info",
-      "payments",
-      { paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
-    ).catch(err => console.error("Notification trigger caught error:", err));
-
-    logUserActivity(req, "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName} (Updated by ${performerName}). Double-entry log updated.`);
-    res.json(oldP);
-  } else {
-    res.status(404).json({ error: "Payment not found" });
+  } catch (err: any) {
+    console.error("Critical payment update execution failed: ", err);
+    res.status(500).json({ error: `Could not update payment receipt: ${err.message}` });
   }
 });
 
 app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const pIndex = db_payments.findIndex(pay => pay.id === id);
-  if (pIndex !== -1) {
-    const p = db_payments[pIndex];
+  try {
+    const { id } = req.params;
+    const pIndex = db_payments.findIndex(pay => pay.id === id);
+    if (pIndex !== -1) {
+      const p = db_payments[pIndex];
 
-    // Revert Invoice paid amount
-    const invIndex = db_invoices.findIndex(inv => inv.id === p.invoiceId);
-    if (invIndex !== -1) {
-      const inv = db_invoices[invIndex];
-      inv.paidAmount = Math.max(0, inv.paidAmount - p.amount);
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === inv.total ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-      await syncStateToFirestore('invoices', inv.id);
+      // Revert Invoice paid amount
+      const invIndex = db_invoices.findIndex(inv => inv.id === p.invoiceId);
+      if (invIndex !== -1) {
+        const inv = db_invoices[invIndex];
+        inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - Number(p.amount || 0));
+        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
+        inv.status = inv.dueAmount === Number(inv.total || 0) ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
+        await syncStateToFirestore('invoices', inv.id);
+      }
+
+      // Revert Client outstanding balance
+      const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
+      if (clientIndex !== -1) {
+        db_clients[clientIndex].outstandingBalance = Number(db_clients[clientIndex].outstandingBalance || 0) + Number(p.amount || 0);
+        await syncStateToFirestore('clients', db_clients[clientIndex].id);
+      }
+
+      // Revert Ledger
+      const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === p.id);
+      db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
+      for (const led of ledgerToRemove) {
+        await syncStateToFirestore('ledger', led.id);
+      }
+
+      // Revert Cashbook
+      const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === p.id);
+      db_cashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
+      for (const cb of cashbookToRemove) {
+        await syncStateToFirestore('cashbook', cb.id);
+      }
+
+      // Delete payment
+      db_payments.splice(pIndex, 1);
+
+      await syncStateToFirestore('payments', id);
+
+      const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
+
+      // Trigger centralized master business notification broadcast
+      await triggerBusinessNotification(
+        req,
+        "Payment Deleted",
+        `Payment of ₹${Number(p.amount).toLocaleString()} from ${p.clientName} has been permanently deleted by ${performerName}`,
+        "warning",
+        "payments",
+        { tab: 'payments' }
+      ).catch(err => console.error("Notification trigger caught error:", err));
+
+      logUserActivity(req, "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName} (Deleted by ${performerName})`);
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: "Payment not found" });
     }
-
-    // Revert Client outstanding balance
-    const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = db_clients[clientIndex].outstandingBalance + p.amount;
-      await syncStateToFirestore('clients', db_clients[clientIndex].id);
-    }
-
-    // Revert Ledger
-    const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === p.id);
-    db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
-    for (const led of ledgerToRemove) {
-      await syncStateToFirestore('ledger', led.id);
-    }
-
-    // Revert Cashbook
-    const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === p.id);
-    db_cashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
-    for (const cb of cashbookToRemove) {
-      await syncStateToFirestore('cashbook', cb.id);
-    }
-
-    // Delete payment
-    db_payments.splice(pIndex, 1);
-
-    await syncStateToFirestore('payments', id);
-
-    const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
-
-    // Trigger centralized master business notification broadcast
-    await triggerBusinessNotification(
-      req,
-      "Payment Deleted",
-      `Payment of ₹${Number(p.amount).toLocaleString()} from ${p.clientName} has been permanently deleted by ${performerName}`,
-      "warning",
-      "payments",
-      { tab: 'payments' }
-    ).catch(err => console.error("Notification trigger caught error:", err));
-
-    logUserActivity(req, "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName} (Deleted by ${performerName})`);
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: "Payment not found" });
+  } catch (err: any) {
+    console.error("Critical payment delete execution failed: ", err);
+    res.status(500).json({ error: `Could not delete payment receipt: ${err.message}` });
   }
 });
 
