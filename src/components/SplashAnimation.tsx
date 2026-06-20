@@ -97,7 +97,7 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
         {/* Dynamic App Brand Block */}
         <div className="space-y-2 z-10">
           <h1 className="text-3xl font-bold text-slate-100 font-display tracking-tight leading-tight">
-            {companyName || 'Internet Modules'}
+            {companyName || 'iModules'}
           </h1>
           <p className="text-[10px] text-indigo-400 font-bold tracking-[0.3em] uppercase leading-none pl-[0.3em]">
             Global ERP Register

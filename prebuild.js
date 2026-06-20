@@ -125,7 +125,7 @@ function downloadImage(url, dest) {
 }
 
 async function syncAppDetails() {
-  let companyName = "Internet Modules";
+  let companyName = "iModules";
   let logoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80";
 
   // Priority 1: Check Local cache file first (offline, 100% reliable during build sandbox)

@@ -1089,6 +1089,9 @@ export default function App() {
 
   // Native connectivity & lifecycle resume integration
   useEffect(() => {
+    if (isMobileDevice()) {
+      document.body.classList.add('is-native-android');
+    }
     let networkHandle: any = null;
     let lifecycleHandle: any = null;
     let lastNetworkConnected: boolean | null = null;
@@ -1894,7 +1897,7 @@ export default function App() {
 
         {showSplash && (
           <SplashAnimation 
-            companyName={businessSettings?.companyName || 'Internet Modules'} 
+            companyName={businessSettings?.companyName || 'iModules'} 
             logoUrl={businessSettings?.logoUrl || ''} 
             onComplete={() => setShowSplash(false)}
           />
@@ -2953,7 +2956,7 @@ export default function App() {
 
       {showSplash && (
         <SplashAnimation 
-          companyName={businessSettings?.companyName || 'Internet Modules'} 
+          companyName={businessSettings?.companyName || 'iModules'} 
           logoUrl={businessSettings?.logoUrl || ''} 
           onComplete={() => setShowSplash(false)}
         />

@@ -3126,7 +3126,7 @@ app.post('/api/transfer-cache', checkPermission('settings', 'write'), async (req
 // 11.4 Public Settings Endpoint for App Branding prior to Authentication
 app.get('/api/public/settings', (req: Request, res: Response) => {
   res.json({
-    companyName: db_settings.companyName || "Internet Modules",
+    companyName: db_settings.companyName || "iModules",
     logoUrl: db_settings.logoUrl || "",
     titleBarText: db_settings.titleBarText || ""
   });

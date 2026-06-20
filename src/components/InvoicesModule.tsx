@@ -33,6 +33,7 @@ import Pagination from './Pagination';
 import QRCode from 'qrcode';
 import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { isMobileDevice } from '../services/mobile';
 
 async function toBase64(url: string): Promise<string> {
   if (!url) return '';
@@ -993,7 +994,7 @@ export default function InvoicesModule({
         }
         
         // Draw Core Business Identity vertically centered next to logo
-        const compName = businessSettings?.companyName || "Internet Modules";
+        const compName = businessSettings?.companyName || "iModules";
         const hasGst = businessSettings?.gstIn && (businessSettings?.showInvoiceGst ?? true) !== false;
         
         pdf.setTextColor(15, 23, 42); // slate-900
@@ -1662,6 +1663,31 @@ export default function InvoicesModule({
       const finalBlob = new Blob([finalBytes], { type: 'application/pdf' });
       const blobUrl = URL.createObjectURL(finalBlob);
 
+      // Native Capacitor download/print handling for Android/Mobile devices
+      if (isMobileDevice()) {
+        let pdfUrlToShare = blobUrl;
+        if (selectedInvoice && onUpdateInvoice) {
+          try {
+            const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${safeInvoiceName}.pdf`);
+            await uploadBytes(fileRef, finalBlob);
+            const publicUrl = await getDownloadURL(fileRef);
+            await onUpdateInvoice(selectedInvoice.id, { pdfUrl: publicUrl });
+            pdfUrlToShare = publicUrl;
+          } catch (storageErr) {
+            console.warn("Could not upload to storage, fallback to local URL sharing:", storageErr);
+          }
+        }
+
+        // Trigger native share sheet which handles download, print, cloud print, and send beautifully
+        const { shareContent } = await import('../services/mobile');
+        await shareContent(
+          `Invoice_${safeInvoiceName}`,
+          `Please find Invoice ${selectedInvoice?.invoiceNumber || ''} for ${selectedInvoice?.clientName || ''}.`,
+          pdfUrlToShare
+        );
+        return;
+      }
+
       if (action === 'print') {
         const existingIframe = document.getElementById('pdf-print-iframe') as HTMLIFrameElement;
         if (existingIframe) {
@@ -1910,9 +1936,11 @@ export default function InvoicesModule({
               )}
               {selectedInvoice && (
                 <>
-                  <button 
-                    onClick={() => {
-                      const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                  <button                    onClick={() => {
+                      const hostOrigin = (window.location.origin.includes('capacitor') || window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                        ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+                        : window.location.origin;
+                      const url = `${hostOrigin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
                       navigator.clipboard.writeText(url);
                       alert(`Public Verification Portal URL Copied:\n${url}`);
                     }}
@@ -1922,10 +1950,13 @@ export default function InvoicesModule({
                     <ExternalLink className="w-4 h-4 text-emerald-600" />
                     <span>Copy Verification URL</span>
                   </button>
-
+ 
                   <button 
                     onClick={async () => {
-                      const url = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+                      const hostOrigin = (window.location.origin.includes('capacitor') || window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                        ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+                        : window.location.origin;
+                      const url = `${hostOrigin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
                       const title = `Invoice ${selectedInvoice.invoiceNumber}`;
                       const text = `Please find the Invoice Reference ${selectedInvoice.invoiceNumber} for Apex ERP.`;
                       

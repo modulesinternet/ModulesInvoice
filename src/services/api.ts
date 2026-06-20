@@ -214,7 +214,7 @@ function getHeaders(): HeadersInit {
   };
 }
 
-let activeCapacitorFallback = 'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
+let activeCapacitorFallback = 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app';
 
 // Dynamic multi-host prober to identify the currently active server node at runtime
 async function probeActiveApiUrl() {
@@ -226,8 +226,8 @@ async function probeActiveApiUrl() {
   } catch (_) {}
 
   const candidates = [
-    'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app',
-    'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+    'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app',
+    'https://ais-dev-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
   ];
 
   for (const candidate of candidates) {
@@ -236,19 +236,28 @@ async function probeActiveApiUrl() {
       const timeoutId = setTimeout(() => controller.abort(), 2000);
       const res = await fetch(`${candidate}/api/health`, {
         method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        },
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       if (res.ok) {
-        activeCapacitorFallback = candidate;
-        try {
-          localStorage.setItem('detected_api_base', candidate);
-        } catch (_) {}
-        console.log(`[API PROBE] Successfully synchronized with central backend: ${candidate}`);
-        break;
+        const text = await res.text();
+        // Parse JSON to verify that it is actually returning JSON and has a valid status,
+        // rather than an HTML page or routing error.
+        const parsed = JSON.parse(text);
+        if (parsed && (parsed.status === 'ok' || parsed.success === true)) {
+          activeCapacitorFallback = candidate;
+          try {
+            localStorage.setItem('detected_api_base', candidate);
+          } catch (_) {}
+          console.log(`[API PROBE] Successfully synchronized with central backend: ${candidate}`);
+          break;
+        }
       }
     } catch (e) {
-      console.warn(`[API PROBE] Candidate endpoint ${candidate} was unreachable.`);
+      console.warn(`[API PROBE] Candidate endpoint ${candidate} was unreachable or didn't respond with valid JSON.`);
     }
   }
 }
@@ -282,9 +291,7 @@ function getApiUrl(url: string) {
   const isLocalhost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3000' || window.location.port === '3001');
 
   // Direct connect default server URL - prioritizing activeCapacitorFallback on native/external views
-  const base = (isCapacitor || (!isCloudRun && !isLocalhost))
-    ? activeCapacitorFallback
-    : '';
+  const base = isCapacitor ? activeCapacitorFallback : '';
   return `${base}${url}`;
 }
 

@@ -171,3 +171,77 @@
   animation: progress-drain 4000ms linear forwards;
 }
 
+/* Android APK Only Touch & Layout Optimization Rules */
+.is-native-android {
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection inside input fields only */
+.is-native-android input, 
+.is-native-android textarea,
+.is-native-android [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Fix table overflows and shrink padding to fit mobile screens comfortably */
+.is-native-android table {
+  font-size: 11px !important;
+}
+
+.is-native-android th, 
+.is-native-android td {
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+  padding-top: 0.65rem !important;
+  padding-bottom: 0.65rem !important;
+}
+
+/* Restructure multi-column options to avoid overlapping rows */
+.is-native-android .grid {
+  gap: 1rem !important;
+}
+
+/* Ensure modals/dialog panels don't extend past the screen height (especially when the keyboard appears) */
+.is-native-android .fixed.inset-0.flex {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.is-native-android .bg-white.rounded-2xl.shadow-2xl,
+.is-native-android [role="dialog"] {
+  max-height: 90vh !important;
+  max-width: 94vw !important;
+  overflow-y: auto !important;
+  padding: 1.25rem !important;
+  margin: auto !important;
+}
+
+/* Compact layout forms to prevent unnecessary scrolling */
+.is-native-android form .space-y-4 > * + * {
+  margin-top: 0.75rem !important;
+}
+
+/* Smoothen scroll physics on Android Webview lists */
+.is-native-android .overflow-y-auto,
+.is-native-android .overflow-x-auto {
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Understate non-essential elements on compact mobile to save viewport estate */
+.is-native-android p.text-xs.text-slate-400 {
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+}
+
+.is-native-android h1 {
+  font-size: 1.5rem !important;
+}
+
+.is-native-android h2 {
+  font-size: 1.25rem !important;
+}
+
