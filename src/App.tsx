@@ -467,6 +467,12 @@ export default function App() {
     return defaults;
   });
 
+  // Advanced Server Connection Options on Login screen
+  const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
+  const [gatewayUrlInput, setGatewayUrlInput] = useState(() => api.getSavedBackendUrl() || api.getDefaultBackendUrl());
+  const [isTestingGateway, setIsTestingGateway] = useState(false);
+  const [gatewayTestResult, setGatewayTestResult] = useState<{ success?: boolean; msg?: string; pingMs?: number } | null>(null);
+
   const companyNameText = businessSettings?.titleBarText || businessSettings?.companyName || "Your Corporate Platform";
   const companyInitials = companyNameText
     .split(/\s+/)
@@ -1538,6 +1544,59 @@ export default function App() {
     }
   };
 
+  const handleTestGatewayOnLogin = async () => {
+    setIsTestingGateway(true);
+    setGatewayTestResult(null);
+    const start = Date.now();
+    try {
+      const res = await api.testHealth(gatewayUrlInput);
+      const end = Date.now();
+      if (res.success) {
+        setGatewayTestResult({
+          success: true,
+          msg: `Online - Sync portal connected.`,
+          pingMs: end - start
+        });
+      } else {
+        setGatewayTestResult({
+          success: false,
+          msg: `Offline: ${res.error || 'Connection failed'}`
+        });
+      }
+    } catch (err: any) {
+      setGatewayTestResult({
+        success: false,
+        msg: err.message || 'Connection offline'
+      });
+    } finally {
+      setIsTestingGateway(false);
+    }
+  };
+
+  const handleSaveGatewayOnLogin = () => {
+    if (!gatewayUrlInput || gatewayUrlInput.trim() === '') {
+      api.setBackendUrl('');
+      setGatewayUrlInput(api.getDefaultBackendUrl());
+      showToast("Backend connection is reset to original prebuilt server.", "info");
+    } else {
+      api.setBackendUrl(gatewayUrlInput);
+      showToast("Custom Backend URL saved. Retrying sync with this target.", "success");
+    }
+    // Clear any previous detected/active API base to force reload & re-probe on newly saved URL
+    localStorage.removeItem('detected_api_base');
+    // Reload databases
+    loadMasterData(true, true);
+  };
+
+  const handleResetGatewayOnLogin = () => {
+    api.setBackendUrl('');
+    localStorage.removeItem('detected_api_base');
+    setGatewayUrlInput(api.getDefaultBackendUrl());
+    setGatewayTestResult(null);
+    showToast("Backend connection reset to system default.", "info");
+    loadMasterData(true, true);
+  };
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail) {
@@ -1895,6 +1954,98 @@ export default function App() {
             </form>
           )}
 
+          {/* Advanced Server connection options section */}
+          <div className="border-t border-slate-100 pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdvancedGateway(!showAdvancedGateway);
+                setGatewayUrlInput(api.getSavedBackendUrl() || api.getDefaultBackendUrl());
+                setGatewayTestResult(null);
+              }}
+              className="w-full flex items-center justify-between py-1.5 text-slate-500 hover:text-slate-700 text-[11px] font-bold tracking-tight uppercase cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Settings className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Advanced Gateway Options</span>
+              </div>
+              <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${showAdvancedGateway ? 'rotate-90 text-indigo-500' : ''}`} />
+            </button>
+
+            {showAdvancedGateway && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5 text-left"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9.5px] font-bold text-slate-400 uppercase">Backend Server URL</span>
+                    <span className="text-[9px] font-medium text-slate-500 font-mono">
+                      {api.getSavedBackendUrl() ? "Custom Override" : "Prebuilt Default"}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={gatewayUrlInput}
+                    onChange={(e) => setGatewayUrlInput(e.target.value)}
+                    placeholder="e.g. https://ais-pre-xyz.run.app"
+                    className="w-full text-[11px] p-2 bg-white border border-slate-200 rounded-xl font-mono focus:border-indigo-500 outline-none"
+                  />
+                  <p className="text-[9px] text-slate-400 leading-relaxed font-sans mt-1">
+                    Current active connection target:{" "}
+                    <span className="font-mono text-indigo-600 break-all">{api.getActiveBackendUrl()}</span>
+                  </p>
+                </div>
+
+                {gatewayTestResult && (
+                  <div className={`p-2 rounded-xl text-[10px] font-mono leading-normal border ${
+                    gatewayTestResult.success 
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                      : 'bg-rose-50 text-rose-800 border-rose-200'
+                  }`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <span className={`w-1.5 h-1.5 rounded-full ${gatewayTestResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                      {gatewayTestResult.success ? 'CONNECTED SUCCESSFUL' : 'TARGET UNREACHABLE'}
+                    </div>
+                    <div className="mt-0.5 break-all text-[9.5px]">{gatewayTestResult.msg}</div>
+                    {gatewayTestResult.pingMs && <div className="mt-0.5 text-slate-450">Ping rate: {gatewayTestResult.pingMs}ms</div>}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isTestingGateway}
+                    onClick={handleTestGatewayOnLogin}
+                    className="flex-1 py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] rounded-lg transition duration-150 cursor-pointer text-center flex items-center justify-center gap-1 min-w-[70px] disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isTestingGateway ? 'animate-spin' : ''}`} />
+                    <span>{isTestingGateway ? "Verifying..." : "Verify Connection"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveGatewayOnLogin}
+                    className="flex-1 py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg transition duration-150 cursor-pointer text-center"
+                  >
+                    Save URL
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetGatewayOnLogin}
+                    className="py-1.5 px-2 bg-slate-300 hover:bg-slate-400 text-slate-600 font-bold text-[10px] rounded-lg transition duration-150 cursor-pointer text-center"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
           {/* Sandbox alert disclaimer */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
             <Info className="w-4 h-4 text-slate-450 shrink-0 mt-0.5" />
@@ -2197,6 +2348,16 @@ export default function App() {
             <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} />
             <span>{isConnected ? "online" : "offline"}</span>
           </div>
+
+          {/* Direct manual cloud sync refresh button for mobile/Android view */}
+          <button 
+            onClick={() => loadMasterData(true, false)}
+            disabled={loading}
+            className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer bg-white transition relative focus:outline-none disabled:opacity-50"
+            title="Force Real-time Sync with Cloud Firestore"
+          >
+            <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+          </button>
 
           {/* Mobile global search trigger */}
           <button 
