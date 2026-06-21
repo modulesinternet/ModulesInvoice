@@ -3036,37 +3036,6 @@ export default function App() {
             const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(androidIncomingCall.amount);
             api.createLog('CALL_ACCEPTED', `Operator accepted VoIP Call notification for payment of ${formattedAmt} received from ${androidIncomingCall.clientName || 'N/A'} via ${androidIncomingCall.paymentMode}.`).catch(() => {});
             
-            // Speak accepted TTS Announcement
-            if (window.speechSynthesis) {
-              try {
-                window.speechSynthesis.cancel();
-                const tmpl = businessSettings?.voiceAnnounceTemplate || "Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.";
-                const formattedAmtNoSymbol = new Intl.NumberFormat('en-IN').format(androidIncomingCall.amount);
-                let textToSpeak = tmpl
-                  .replace(/{amount}/g, formattedAmtNoSymbol)
-                  .replace(/{hotelName}/g, androidIncomingCall.clientName || '')
-                  .replace(/{paymentMode}/g, androidIncomingCall.paymentMode || '')
-                  .replace(/{date}/g, new Date(androidIncomingCall.paymentDate || Date.now()).toLocaleDateString());
-                
-                textToSpeak = textToSpeak.replace(/{|}/g, '').trim();
-                const utterance = new SpeechSynthesisUtterance(textToSpeak);
-                
-                // Find natural English speech voice
-                const voices = window.speechSynthesis.getVoices();
-                const targetVoice = voices.find(v => 
-                  v.lang.startsWith('en') && 
-                  (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft'))
-                );
-                if (targetVoice) utterance.voice = targetVoice;
-                
-                utterance.volume = 1.0;
-                utterance.rate = 0.95;
-                window.speechSynthesis.speak(utterance);
-              } catch (ttsErr) {
-                console.error("Speech synthesis failed: ", ttsErr);
-              }
-            }
-
             setActiveTab('payments');
             setAndroidIncomingCall(null);
           }}

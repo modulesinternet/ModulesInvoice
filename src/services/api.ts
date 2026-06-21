@@ -217,20 +217,45 @@ function getHeaders(): HeadersInit {
 }
 
 function getApiUrl(url: string) {
+  // Determine if we are genuinely running inside a native mobile app shell (not a web preview)
+  const isWebPlatform = Capacitor.getPlatform() === 'web';
+  const isHttpClient = window.location.protocol.startsWith('http') && 
+                       !window.location.origin.startsWith('capacitor://') &&
+                       window.location.hostname !== 'localhost' &&
+                       !navigator.userAgent.includes('Capacitor');
+
+  // If running in a standard desktop or mobile web browser, always use relative URLs.
+  // This completely eliminates CORS issues, domain mismatches, and offline server connection exceptions.
+  if (isWebPlatform && isHttpClient) {
+    return `${url}`;
+  }
+
+  // If running on local machine host via browser
+  if (window.location.hostname === 'localhost') {
+    const port = window.location.port;
+    if (port === '3000' || port === '3001' || port === '5173') {
+      return `${url}`;
+    }
+  }
+
   const isCapacitor = Capacitor.isNativePlatform() || 
                       typeof (window as any).Capacitor !== 'undefined' || 
                       window.location.protocol === 'capacitor:' || 
                       window.location.origin.startsWith('capacitor://') ||
-                      navigator.userAgent.includes('Capacitor') ||
-                      (window.location.hostname === 'localhost' && window.location.port !== '3000' && window.location.port !== '3001') ||
-                      (window.location.hostname === 'localhost' && window.location.port === ''); // native scheme https://localhost on newer platforms
+                      navigator.userAgent.includes('Capacitor');
   
-  // Directly point all native/external connections specifically to the direct pre-production central database
+  // Directly point all native/external connections securely to the database
   if (isCapacitor) {
+    // If the active protocol is https but running in a web-based responsive preview emulator,
+    // match the current workspace subdomain dynamically instead of forcing pre-production mismatch
+    const currentOrigin = window.location.origin;
+    if (currentOrigin && currentOrigin.startsWith('https://') && !currentOrigin.includes('localhost')) {
+      return `${currentOrigin}${url}`;
+    }
     return `https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app${url}`;
   }
 
-  // Otherwise, use relative URLs (which matches the host domain) to prevent CORS issues
+  // Fallback to relative pathing
   return `${url}`;
 }
 
