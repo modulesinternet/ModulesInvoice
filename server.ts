@@ -2030,58 +2030,66 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
 });
 
 app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const index = db_invoices.findIndex(inv => inv.id === id);
-  if (index !== -1) {
-    const oldInv = db_invoices[index];
-    const data = req.body;
-    
-    const newTotal = Number(data.total ?? oldInv.total);
-    const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
-    const newDueAmount = Number(data.dueAmount ?? (newTotal - newPaidAmount));
-    
-    // Adjust client outstanding balance safely
-    const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - oldInv.dueAmount + newDueAmount);
-      await syncStateToFirestore('clients', oldInv.clientId);
-    }
-    
-    // Adjust ledger entry if it exists
-    const ledgerIndex = db_ledger.findIndex(led => led.referenceType === "invoice" && led.referenceId === id);
-    if (ledgerIndex !== -1) {
-      db_ledger[ledgerIndex].amount = newTotal;
-      db_ledger[ledgerIndex].description = `Invoice Modified: ${data.invoiceNumber || oldInv.invoiceNumber}`;
+  try {
+    const { id } = req.params;
+    const index = db_invoices.findIndex(inv => inv.id === id);
+    if (index !== -1) {
+      const oldInv = db_invoices[index];
+      const data = req.body;
+      
+      const newTotal = Number(data.total ?? oldInv.total);
+      const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
+      const newDueAmount = Number(data.dueAmount ?? (newTotal - newPaidAmount));
+      
+      // Adjust client outstanding balance safely
+      const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
       if (clientIndex !== -1) {
-        db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
+        const oldDue = Number(oldInv.dueAmount || 0);
+        const newDue = Number(newDueAmount || 0);
+        const clientBal = Number(db_clients[clientIndex].outstandingBalance || 0);
+        db_clients[clientIndex].outstandingBalance = Math.max(0, clientBal - oldDue + newDue);
+        await syncStateToFirestore('clients', oldInv.clientId);
       }
-      await syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
+      
+      // Adjust ledger entry if it exists
+      const ledgerIndex = db_ledger.findIndex(led => led.referenceType === "invoice" && led.referenceId === id);
+      if (ledgerIndex !== -1) {
+        db_ledger[ledgerIndex].amount = newTotal;
+        db_ledger[ledgerIndex].description = `Invoice Modified: ${data.invoiceNumber || oldInv.invoiceNumber}`;
+        if (clientIndex !== -1) {
+          db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
+        }
+        await syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
+      }
+
+      db_invoices[index] = {
+        ...oldInv,
+        ...data,
+        total: newTotal,
+        paidAmount: newPaidAmount,
+        dueAmount: newDueAmount,
+      };
+      
+      await syncStateToFirestore('invoices', id);
+
+      // Trigger centralized master business notification broadcast
+      await triggerBusinessNotification(
+        req,
+        "Invoice Updated",
+        `Invoice #${db_invoices[index].invoiceNumber} has been modified`,
+        "info",
+        "invoices",
+        { invoiceId: id, route: '/invoices', tab: 'invoices' }
+      ).catch(err => console.error("Notification trigger caught error:", err));
+
+      logUserActivity(req, "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
+      res.json(db_invoices[index]);
+    } else {
+      res.status(404).json({ error: "Invoice not found" });
     }
-
-    db_invoices[index] = {
-      ...oldInv,
-      ...data,
-      total: newTotal,
-      paidAmount: newPaidAmount,
-      dueAmount: newDueAmount,
-    };
-    
-    await syncStateToFirestore('invoices', id);
-
-    // Trigger centralized master business notification broadcast
-    await triggerBusinessNotification(
-      req,
-      "Invoice Updated",
-      `Invoice #${db_invoices[index].invoiceNumber} has been modified`,
-      "info",
-      "invoices",
-      { invoiceId: id, route: '/invoices', tab: 'invoices' }
-    ).catch(err => console.error("Notification trigger caught error:", err));
-
-    logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
-    res.json(db_invoices[index]);
-  } else {
-    res.status(404).json({ error: "Invoice not found" });
+  } catch (err: any) {
+    console.error("Error updating invoice:", err);
+    res.status(500).json({ error: err.message || "Failed to update invoice due to internal error" });
   }
 });
 

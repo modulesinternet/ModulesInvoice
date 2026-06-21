@@ -257,13 +257,8 @@ export default function App() {
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
   const triggerIncomingCall = (pay: Payment) => {
-    const isAndroid = Capacitor.getPlatform() === 'android';
-    if (!isAndroid) {
-      showToast("Simulation note: Call screens are restricted to Android app builds.", "info");
-      return;
-    }
     const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
-    api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName} via ${pay.paymentMode}.`).catch(() => {});
+    api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName || 'N/A'} via ${pay.paymentMode}.`).catch(() => {});
     setAndroidIncomingCall(pay);
   };
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
@@ -951,21 +946,17 @@ export default function App() {
         try {
           if (prev && prev.length > 0) {
             const prevMap = new Map<string, Payment>(prev.map(p => [p.id, p]));
-            const isAndroid = Capacitor.getPlatform() === 'android';
 
             list.forEach(currPay => {
               const prevPay = prevMap.get(currPay.id);
               if (!prevPay) {
                 // New payment created!
-                if (isAndroid) {
-                  triggerIncomingCall(currPay);
-                } else {
-                  const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
-                  triggerLocalNotification(
-                    "💰 Payment Received",
-                    `Received ${formattedAmt} from ${currPay.clientName} against Invoice #${currPay.invoiceNumber || 'N/A'}.`
-                  );
-                }
+                triggerIncomingCall(currPay);
+                const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
+                triggerLocalNotification(
+                  "💰 Payment Received",
+                  `Received ${formattedAmt} from ${currPay.clientName} against Invoice #${currPay.invoiceNumber || 'N/A'}.`
+                );
               } else {
                 // Existing payment updated!
                 const amountChanged = currPay.amount !== prevPay.amount;
@@ -975,9 +966,11 @@ export default function App() {
                 const remarksChanged = currPay.remarks !== prevPay.remarks;
 
                 if (amountChanged || clientChanged || modeChanged || refChanged || remarksChanged) {
-                  if (isAndroid) {
-                    triggerIncomingCall(currPay);
-                  }
+                  triggerIncomingCall(currPay);
+                  triggerLocalNotification(
+                    "🔄 Payment Updated",
+                    `Payment of INR ${currPay.amount} from ${currPay.clientName} has been updated.`
+                  );
                 }
               }
             });
@@ -2146,7 +2139,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-tight flex flex-col justify-center">
-                  <h1 className="text-xs md:text-sm font-bold tracking-tight text-slate-900 font-display truncate max-w-[130px] md:max-w-[160px] leading-snug">
+                  <h1 className="text-[11px] md:text-xs font-black tracking-tight text-slate-900 font-display truncate max-w-[190px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2157,7 +2150,7 @@ export default function App() {
                       return companyNameText;
                     })()}
                   </h1>
-                  <span className="text-[9px] md:text-[10px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[130px] md:max-w-[160px]">
+                  <span className="text-[8px] md:text-[9px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
                     {businessSettings?.gstIn || "Active Portal"}
                   </span>
                 </div>
@@ -2243,7 +2236,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[11px] font-bold text-slate-900 font-display truncate max-w-[110px]">
+              <span className="text-[10px] font-bold text-slate-900 font-display truncate max-w-[140px]">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);
@@ -2268,16 +2261,6 @@ export default function App() {
             <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500 animate-ping'}`} />
             <span>{isConnected ? "online" : "offline"}</span>
           </div>
-
-          {/* Direct manual cloud sync refresh button for mobile/Android view */}
-          <button 
-            onClick={() => loadMasterData(true, false)}
-            disabled={loading}
-            className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer bg-white transition relative focus:outline-none disabled:opacity-50"
-            title="Force Real-time Sync with Cloud Firestore"
-          >
-            <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
-          </button>
 
           {/* Mobile global search trigger */}
           <button 
