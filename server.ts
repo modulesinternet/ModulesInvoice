@@ -969,28 +969,75 @@ async function bootstrapFromFirestore() {
       demoSeedList: T[],
       idKey: 'id' | 'userId' | 'tokenId' = 'id'
     ): Promise<T[]> => {
-      const snap = await withTimeout(getDocs(collection(db, collectionName)), 25000);
-      if (snap.empty) {
-        if (isFirstSeed) {
-          // If this is the absolute first-time seed of the database:
-          // Use whatever local cached records exist, or fallback to the standard demo dataset
-          const seedData = currentList.length > 0 ? currentList : demoSeedList;
-          console.log(`Firestore '${collectionName}' collection is empty. First-time seeding with default dataset (${seedData.length} records) to cloud...`);
-          const batch = writeBatch(db);
-          for (const item of seedData) {
-            const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
-            if (docId) batch.set(doc(db, collectionName, docId), item);
+      try {
+        const snap = await withTimeout(getDocs(collection(db, collectionName)), 25000);
+        if (snap.empty) {
+          if (currentList && currentList.length > 0) {
+            // If Firestore is empty, but we have valid local cache records, do NOT wipe them.
+            // Upload them to Firestore to restore/reconcile the cloud state.
+            console.log(`Firestore '${collectionName}' is empty but we have local cache records (${currentList.length}). Syncing local cache to cloud...`);
+            const batch = writeBatch(db);
+            for (const item of currentList) {
+              const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
+              if (docId) batch.set(doc(db, collectionName, docId), item);
+            }
+            await withTimeout(batch.commit(), 25000).catch(e => {
+              console.error(`Failed to commit local cache sync for '${collectionName}' to Firestore:`, e);
+            });
+            return currentList;
+          } else if (isFirstSeed) {
+            // First time seeding with demo data
+            console.log(`Firestore '${collectionName}' is empty and no local cache exists. Seeding database with default dataset (${demoSeedList.length} records)...`);
+            const batch = writeBatch(db);
+            for (const item of demoSeedList) {
+              const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
+              if (docId) batch.set(doc(db, collectionName, docId), item);
+            }
+            await withTimeout(batch.commit(), 25000).catch(e => {
+              console.error(`Failed to commit demo seed for '${collectionName}':`, e);
+            });
+            return demoSeedList;
+          } else {
+            console.log(`Firestore '${collectionName}' is empty and no local cache exists. Keeping it empty.`);
+            return [];
           }
-          await withTimeout(batch.commit(), 25000);
-          return seedData;
         } else {
-          // If the database is NOT brand-new (settings exists), an empty database collection
-          // means the user intentionally deleted all records. We must NOT seed with demo data!
-          console.log(`Firestore '${collectionName}' is empty (cleared by user). Keeping it empty.`);
-          return [];
+          const firestoreDocs = snap.docs.map(d => d.data() as T);
+          if (currentList && currentList.length > 0) {
+            console.log(`Firestore '${collectionName}' has ${firestoreDocs.length} records, local cache has ${currentList.length} records. Reconciling...`);
+            const mergedMap = new Map<string, T>();
+            // Add all Firestore records
+            for (const item of firestoreDocs) {
+              const key = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
+              if (key) mergedMap.set(key, item);
+            }
+            // Add any local cache records missing in Firestore, then sync them up
+            const missingInFirestore: T[] = [];
+            for (const item of currentList) {
+              const key = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
+              if (key && !mergedMap.has(key)) {
+                mergedMap.set(key, item);
+                missingInFirestore.push(item);
+              }
+            }
+            if (missingInFirestore.length > 0) {
+              console.log(`Syncing ${missingInFirestore.length} local cache records of '${collectionName}' missing in Firestore...`);
+              const batch = writeBatch(db);
+              for (const item of missingInFirestore) {
+                const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
+                if (docId) batch.set(doc(db, collectionName, docId), item);
+              }
+              await withTimeout(batch.commit(), 25000).catch(e => {
+                console.error(`Failed to sync missing records for '${collectionName}' to Firestore:`, e);
+              });
+            }
+            return Array.from(mergedMap.values());
+          }
+          return firestoreDocs;
         }
-      } else {
-        return snap.docs.map(d => d.data() as T);
+      } catch (err) {
+        console.error(`Error in syncCollectionOnStartup for '${collectionName}':`, err);
+        return currentList; // Fallback to local cache so we don't return an empty array on connection warning
       }
     };
 

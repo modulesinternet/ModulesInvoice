@@ -257,6 +257,10 @@ export default function App() {
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
   const triggerIncomingCall = (pay: Payment) => {
+    if (Capacitor.getPlatform() !== 'android') {
+      console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform.");
+      return;
+    }
     const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
     api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName || 'N/A'} via ${pay.paymentMode}.`).catch(() => {});
     setAndroidIncomingCall(pay);
@@ -844,10 +848,14 @@ export default function App() {
       try {
         unsub = onSnapshot(refOrQuery, onNext, (error) => {
           handleFirestoreError(error, OperationType.GET, errorCollectionName);
-          if (unsub) {
-            console.log(`[Safe Snapshot] Auto-decoupling listener for "${errorCollectionName}" due to:`, error.message);
-            unsub();
-            unsub = null;
+          if (error.code === 'permission-denied') {
+            if (unsub) {
+              console.log(`[Safe Snapshot] Auto-decoupling listener for "${errorCollectionName}" due to permissions:`, error.message);
+              unsub();
+              unsub = null;
+            }
+          } else {
+            console.warn(`[Safe Snapshot] Transient network warning/handshake delay for "${errorCollectionName}":`, error.message);
           }
         });
       } catch (err) {
@@ -1041,7 +1049,9 @@ export default function App() {
 
     const unsubNotifications = registerSafeSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
       const rawList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
-      const list = rawList.filter(n => n.userId === currentUser.userId);
+      const list = rawList
+                     .filter(n => n.userId === currentUser.userId)
+                     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotifications(prev => {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
@@ -1057,33 +1067,36 @@ export default function App() {
           const isFresh = new Date(docData.createdAt).getTime() > freshThreshold;
           
           if (docData.userId === currentUser.userId && !docData.isRead && isFresh) {
-            // Play configured tone
-            const soundId = businessSettings?.notificationSound || 'crystal';
-            playSoundTone(soundId);
+            // Guard sounds, voice announcements, and call alert overlays to run ONLY on the Android native app
+            if (Capacitor.getPlatform() === 'android') {
+              // Play configured tone
+              const soundId = businessSettings?.notificationSound || 'crystal';
+              playSoundTone(soundId);
 
-            // Speak configured voice announcement template
-            if (businessSettings?.voiceAnnounceEnabled) {
-              const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-              const amtMatched = docData.message.match(/₹[\d,]+/);
-              const amount = amtMatched ? amtMatched[0] : "some amount";
-              
-              const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
-              const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-              
-              const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-              const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+              // Speak configured voice announcement template
+              if (businessSettings?.voiceAnnounceEnabled) {
+                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+                const amtMatched = docData.message.match(/₹[\d,]+/);
+                const amount = amtMatched ? amtMatched[0] : "some amount";
+                
+                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
+                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+                
+                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
 
-              playVoiceAnnouncement(tmpl, {
-                amount,
-                hotelName,
-                paymentMode,
-                date: new Date(docData.createdAt).toLocaleDateString()
-              });
-            }
+                playVoiceAnnouncement(tmpl, {
+                  amount,
+                  hotelName,
+                  paymentMode,
+                  date: new Date(docData.createdAt).toLocaleDateString()
+                });
+              }
 
-            // Show incoming call alert if enabled for payments (bypass on Android APK which uses WhatsApp Call Screen)
-            if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success' && Capacitor.getPlatform() !== 'android') {
-              setShowIncomingCallAlert(docData);
+              // Show incoming call alert if enabled for payments
+              if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
+                setShowIncomingCallAlert(docData);
+              }
             }
           }
         }
@@ -2139,7 +2152,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-tight flex flex-col justify-center">
-                  <h1 className="text-[11px] md:text-xs font-black tracking-tight text-slate-900 font-display truncate max-w-[190px]">
+                  <h1 className="text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider text-slate-900 font-display truncate max-w-[170px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2211,6 +2224,25 @@ export default function App() {
             );
           })}
         </nav>
+
+        {/* Sidebar Footer Logout Button */}
+        {currentUser && (
+          <div className="p-3 border-t border-[#E5E7EB] bg-slate-50/50">
+            <button
+              onClick={() => {
+                localStorage.removeItem('current_user');
+                setCurrentUser(null);
+                setIsSidebarOpen(false);
+                showToast("Logged out successfully from portal session", "info");
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition tracking-wide cursor-pointer focus:outline-none"
+              title="Logout from system"
+            >
+              <LogOut className="w-4.5 h-4.5 shrink-0 text-rose-500" />
+              {isSidebarOpen && <span>Sign Out</span>}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* MOBILE BAR TOP NAVIGATION */}
@@ -2236,7 +2268,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[10px] font-bold text-slate-900 font-display truncate max-w-[140px]">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-900 font-display truncate max-w-[135px]">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);
@@ -2317,7 +2349,23 @@ export default function App() {
                     </div>
                   ) : (
                     notifications.slice(0, 5).map((item) => (
-                      <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
+                      <div 
+                        key={item.id} 
+                        onClick={async () => {
+                          if (!item.isRead) {
+                            try {
+                              await api.markNotificationRead(item.id);
+                              setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+                              showToast("Notification marked as read", "success");
+                            } catch (err: any) {
+                              console.error("Failed to mark individual notification as read:", err);
+                              showToast("Failed to mark notice as read", "error");
+                            }
+                          }
+                        }}
+                        className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70 cursor-pointer hover:bg-slate-100'}`}
+                        title={item.isRead ? "Operational Alert" : "Click to mark as read"}
+                      >
                         <div className="flex items-center gap-1.5 justify-between">
                           <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
                           <span className="text-[8px] font-mono text-slate-400 shrink-0">{new Date(item.createdAt).toLocaleDateString()}</span>
