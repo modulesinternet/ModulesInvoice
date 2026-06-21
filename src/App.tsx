@@ -744,16 +744,83 @@ export default function App() {
   useEffect(() => {
     if (currentUser && currentUser.userId) {
       console.log("Enabling real-time push notifications listener on User authenticated state:", currentUser.userId);
-      setupPushNotifications(currentUser.userId, (route: string) => {
-        // Map native notification actions to specific app UI tabs
-        if (route.includes('invoices')) {
-          setActiveTab('invoices');
-        } else if (route.includes('payments')) {
-          setActiveTab('payments');
-        } else if (route.includes('cashbook')) {
-          setActiveTab('cashbook');
+      setupPushNotifications(
+        currentUser.userId, 
+        (route: string, data?: any) => {
+          // 1. Notification tapped (Background / Closed wake-up handler)
+          console.log("Push notification tapped. Route:", route, "Data:", data);
+          if (route.includes('invoices')) {
+            setActiveTab('invoices');
+          } else if (route.includes('payments')) {
+            setActiveTab('payments');
+          } else if (route.includes('cashbook')) {
+            setActiveTab('cashbook');
+          }
+
+          // If the tapped notification contains payment creation / modification metadata, ring!
+          if (data && (data.paymentId || data.topic === 'payments' || route.includes('payments'))) {
+            try {
+              const paymentAmount = data.amount ? parseFloat(data.amount) : 0;
+              if (paymentAmount > 0) {
+                const mockPayment: Payment = {
+                  id: data.paymentId || `pay-${Date.now()}`,
+                  invoiceId: data.invoiceId || '',
+                  invoiceNumber: data.invoiceId || '',
+                  clientId: data.clientId || '',
+                  clientName: data.clientName || 'Client',
+                  amount: paymentAmount,
+                  paymentMode: (data.paymentMode || 'UPI/Bank Transfer') as any,
+                  paymentDate: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  referenceNum: '',
+                  remarks: 'Tapped push notification alert call',
+                };
+                console.log("Launching auto WhatsApp VoIP call screen from tapped message:", mockPayment);
+                triggerIncomingCall(mockPayment);
+              }
+            } catch (err) {
+              console.error("Failed to construct call screen from tapped push:", err);
+            }
+          }
+        },
+        (notification: any) => {
+          // 2. Notification received while app is in foreground
+          console.log("Foreground push notification received:", notification);
+          const data = notification.data;
+          
+          // Trigger the standard visual local notification banner
+          triggerLocalNotification(
+            notification.title || "Message Received", 
+            notification.body || "New update registered."
+          );
+
+          // If it is a payment alert, launch the VoIP ring screen immediately
+          if (data && (data.paymentId || data.topic === 'payments')) {
+            try {
+              const paymentAmount = data.amount ? parseFloat(data.amount) : 0;
+              if (paymentAmount > 0) {
+                const mockPayment: Payment = {
+                  id: data.paymentId || `pay-${Date.now()}`,
+                  invoiceId: data.invoiceId || '',
+                  invoiceNumber: data.invoiceId || '',
+                  clientId: data.clientId || '',
+                  clientName: data.clientName || 'Client',
+                  amount: paymentAmount,
+                  paymentMode: (data.paymentMode || 'UPI/Bank Transfer') as any,
+                  paymentDate: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  referenceNum: '',
+                  remarks: 'Foreground push notification alert call',
+                };
+                console.log("Launching auto WhatsApp VoIP call screen in foreground:", mockPayment);
+                triggerIncomingCall(mockPayment);
+              }
+            } catch (err) {
+              console.error("Failed to trigger foreground call from push:", err);
+            }
+          }
         }
-      });
+      );
     }
   }, [currentUser]);
 
@@ -2078,8 +2145,8 @@ export default function App() {
                 </div>
               )}
               {isSidebarOpen && (
-                <div className="overflow-hidden">
-                  <h1 className="text-sm font-bold tracking-tight text-slate-900 font-display truncate">
+                <div className="overflow-hidden leading-tight flex flex-col justify-center">
+                  <h1 className="text-xs md:text-sm font-bold tracking-tight text-slate-900 font-display truncate max-w-[130px] md:max-w-[160px] leading-snug">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2090,7 +2157,7 @@ export default function App() {
                       return companyNameText;
                     })()}
                   </h1>
-                  <span className="text-[10px] font-mono text-purple-600 block leading-tight font-semibold truncate">
+                  <span className="text-[9px] md:text-[10px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[130px] md:max-w-[160px]">
                     {businessSettings?.gstIn || "Active Portal"}
                   </span>
                 </div>
@@ -2176,7 +2243,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-xs font-bold text-slate-900 font-display truncate max-w-[120px]">
+              <span className="text-[11px] font-bold text-slate-900 font-display truncate max-w-[110px]">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);

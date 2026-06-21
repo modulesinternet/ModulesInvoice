@@ -292,7 +292,7 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
         sound: 'default', // Standard fallback sound ensures it works on all devices without raw resource errors
         channelId: 'high_priority_notifications', // Use high-priority notification channel
         visibility: 'public' as const, // Render details securely on lockscreen
-        notificationPriority: 'PRIORITY_HIGH' as const, // Show heads-up banner above general notifications
+        notificationPriority: 'PRIORITY_MAX' as const, // Show heads-up banner with max urgency above general notifications
         defaultSound: true, // Auto-play system sound
         defaultVibrateTimings: true, // Auto-vibrate
         defaultLightSettings: true, // Enable indicator LEDs
@@ -2602,7 +2602,14 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         `Payment of ₹${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified by ${performerName}`,
         "info",
         "payments",
-        { paymentId: oldP.id, invoiceId: oldP.invoiceId, tab: 'payments' }
+        { 
+          paymentId: oldP.id, 
+          amount: String(oldP.amount),
+          clientName: oldP.clientName,
+          paymentMode: oldP.paymentMode,
+          invoiceId: oldP.invoiceId || '', 
+          tab: 'payments' 
+        }
       ).catch(err => console.error("Notification trigger caught error:", err));
 
       logUserActivity(req, "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName} (Updated by ${performerName}). Double-entry log updated.`);

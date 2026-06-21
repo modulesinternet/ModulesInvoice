@@ -181,7 +181,8 @@ import { api } from './api';
 
 export const setupPushNotifications = async (
   userId: string, 
-  onRouteNeeded: (route: string) => void
+  onRouteNeeded: (route: string, data?: any) => void,
+  onNotificationReceived?: (notification: any) => void
 ): Promise<void> => {
   if (!isMobileDevice()) {
     console.log("FCM setup skipped: Not running on a native mobile device platform.");
@@ -248,20 +249,26 @@ export const setupPushNotifications = async (
     // Listen for when push notification arrives while app is open
     await PushNotifications.addListener('pushNotificationReceived', (notification) => {
       console.log('FCM push notification received in foreground:', notification);
-      // Display/trigger standard local overlay notification for better visual parity in foreground
-      triggerLocalNotification(
-        notification.title || "Message Received", 
-        notification.body || "New update registered."
-      );
+      if (onNotificationReceived) {
+        onNotificationReceived(notification);
+      } else {
+        // Display/trigger standard local overlay notification for better visual parity in foreground
+        triggerLocalNotification(
+          notification.title || "Message Received", 
+          notification.body || "New update registered."
+        );
+      }
     });
 
     // Listen for push notification action perform (tapping the notification bubble)
     await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       console.log('User performed action on FCM notification:', action);
       const data = action.notification.data;
-      if (data && data.route) {
-        console.log('FCM notification requested routing navigation to:', data.route);
-        onRouteNeeded(data.route);
+      if (data) {
+        const route = data.route || '';
+        onRouteNeeded(route, data);
+      } else {
+        onRouteNeeded('');
       }
     });
 

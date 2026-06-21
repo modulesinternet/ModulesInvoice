@@ -36,15 +36,21 @@ jobs:
 
       - name: Compile and Build iOS Simulator Runtime
         run: |
-          # Use xcodebuild to build the app for the simulator without requiring private code signing keys
+          # First resolve SPM package dependencies explicitly to guarantee SwiftEmitModule finishes cleanly
+          xcodebuild -project ios/App/App.xcodeproj \
+            -scheme App \
+            -resolvePackageDependencies
+
+          # Use xcodebuild to build the app for the simulator without requiring private certificates (using ad-hoc signing)
           xcodebuild -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Compress Simulator Build package
