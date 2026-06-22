@@ -257,7 +257,8 @@ export default function App() {
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
   const triggerIncomingCall = (pay: Payment) => {
-    if (Capacitor.getPlatform() !== 'android') {
+    const isAndroid = Capacitor.getPlatform() === 'android' || (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
+    if (!isAndroid) {
       console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform.");
       return;
     }
@@ -955,7 +956,7 @@ export default function App() {
            const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
            const payTime = currPay.createdAt ? new Date(currPay.createdAt).getTime() : 0;
            // 10 minutes leeway, using Math.abs to protect against client-server clock drift
-           const isRecent = payTime && (Math.abs(Date.now() - payTime) < 10 * 60 * 1000);
+           const isRecent = payTime && (Math.abs(Date.now() - payTime) < 30 * 60 * 1000);
 
            if (!isFirstPaymentsSnapshot || isRecent) {
              const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
@@ -1058,14 +1059,15 @@ export default function App() {
           const triggeredKey = `notif_alert_triggered_${docData.id}`;
           if (docData.userId === currentUser.userId && !docData.isRead && !localStorage.getItem(triggeredKey)) {
             const notifTime = docData.createdAt ? new Date(docData.createdAt).getTime() : 0;
-            // 5 minutes leeway, protecting against clock drift with Math.abs
-            const isRecent = notifTime && (Math.abs(Date.now() - notifTime) < 5 * 60 * 1000);
+            // 30 minutes leeway, protecting against clock drift with Math.abs
+            const isRecent = notifTime && (Math.abs(Date.now() - notifTime) < 30 * 60 * 1000);
 
             if (!isFirstNotificationsSnapshot || isRecent) {
               localStorage.setItem(triggeredKey, 'true');
               
-              // Guard sounds, voice announcements, and call alert overlays to run ONLY on the Android native app
-              if (Capacitor.getPlatform() === 'android') {
+              // Guard sounds, voice announcements, and call alert overlays to run on any Android environment (native or browser)
+              const isAndroid = Capacitor.getPlatform() === 'android' || (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
+              if (isAndroid) {
                 // Play configured tone
                 const soundId = businessSettings?.notificationSound || 'crystal';
                 playSoundTone(soundId);

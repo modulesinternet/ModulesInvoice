@@ -20,5 +20,15 @@ public class MainActivity extends BridgeActivity {
                     | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                     | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         }
+
+        try {
+            // Disable native media playback user gesture restriction to allow immediate real-time ringtones & notification TTS
+            if (this.bridge != null && this.bridge.getWebView() != null) {
+                this.bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+                System.out.println("MainActivity: Successfully disabled MediaPlaybackRequiresUserGesture for prompt billing notifications & ringtones.");
+            }
+        } catch (Exception e) {
+            System.err.println("MainActivity: Bypassed WebView media gesture configuration error: " + e.getMessage());
+        }
     }
 }

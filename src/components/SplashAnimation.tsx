@@ -58,7 +58,7 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
 
   return (
     <div 
-      className={`fixed inset-0 bg-slate-950 flex flex-col items-center justify-between pt-10 pb-16 px-8 select-none z-[10000] overflow-hidden transition-all duration-600 ease-in-out ${
+      className={`fixed inset-0 bg-slate-950 flex flex-col items-center justify-between pt-4 pb-16 px-8 select-none z-[10000] overflow-hidden transition-all duration-600 ease-in-out ${
         isExiting ? 'opacity-0 scale-[1.03] pointer-events-none' : 'opacity-100 scale-100'
       }`}
       id="app-splash-screen"
@@ -68,13 +68,13 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-violet-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
       {/* Top Header Label - Understated & Minimal */}
-      <div className="flex items-center gap-2 opacity-45 mt-4 self-center">
+      <div className="flex items-center gap-2 opacity-45 mt-2 self-center">
         <Shield className="w-3.5 h-3.5 text-indigo-400" />
         <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-slate-400">Secure Node authorization</span>
       </div>
 
-      {/* Centerpiece: Logo and Title (separated with mt-16 for look professional spacing) */}
-      <div className="flex flex-col items-center max-w-sm text-center mt-16 sm:mt-24">
+      {/* Centerpiece: Logo and Title (separated with mt-24 for look professional spacing) */}
+      <div className="flex flex-col items-center max-w-sm text-center mt-24 sm:mt-32">
         {/* Logo Container with continuous professional breath glow */}
         <div className="relative mb-6">
           <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-indigo-500/10 to-violet-500/10 opacity-70 blur-md animate-pulse duration-[4000ms]"></div>
