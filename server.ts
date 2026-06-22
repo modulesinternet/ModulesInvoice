@@ -1003,36 +1003,7 @@ async function bootstrapFromFirestore() {
           }
         } else {
           const firestoreDocs = snap.docs.map(d => d.data() as T);
-          if (currentList && currentList.length > 0) {
-            console.log(`Firestore '${collectionName}' has ${firestoreDocs.length} records, local cache has ${currentList.length} records. Reconciling...`);
-            const mergedMap = new Map<string, T>();
-            // Add all Firestore records
-            for (const item of firestoreDocs) {
-              const key = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
-              if (key) mergedMap.set(key, item);
-            }
-            // Add any local cache records missing in Firestore, then sync them up
-            const missingInFirestore: T[] = [];
-            for (const item of currentList) {
-              const key = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
-              if (key && !mergedMap.has(key)) {
-                mergedMap.set(key, item);
-                missingInFirestore.push(item);
-              }
-            }
-            if (missingInFirestore.length > 0) {
-              console.log(`Syncing ${missingInFirestore.length} local cache records of '${collectionName}' missing in Firestore...`);
-              const batch = writeBatch(db);
-              for (const item of missingInFirestore) {
-                const docId = idKey === 'id' ? item.id : (idKey === 'userId' ? item.userId : item.tokenId);
-                if (docId) batch.set(doc(db, collectionName, docId), item);
-              }
-              await withTimeout(batch.commit(), 25000).catch(e => {
-                console.error(`Failed to sync missing records for '${collectionName}' to Firestore:`, e);
-              });
-            }
-            return Array.from(mergedMap.values());
-          }
+          console.log(`Firestore '${collectionName}' contains ${firestoreDocs.length} records. Trusting Firestore as the definitive source of truth.`);
           return firestoreDocs;
         }
       } catch (err) {
@@ -1049,6 +1020,39 @@ async function bootstrapFromFirestore() {
 
     // 6. Invoices
     db_invoices = await syncCollectionOnStartup('invoices', db_invoices, DEMO_INVOICES);
+
+    // Self-healing invoice de-duplication: Ensure physical uniqueness on startup
+    const seenInvoiceNumbers = new Set<string>();
+    const uniqueInvoices: Invoice[] = [];
+    const duplicateIds: string[] = [];
+    
+    // Iterate from newest to oldest (since they are unshifted / chronological)
+    for (const inv of db_invoices) {
+      if (!inv.invoiceNumber) {
+        uniqueInvoices.push(inv);
+        continue;
+      }
+      const numTrimmed = inv.invoiceNumber.trim().toLowerCase();
+      if (seenInvoiceNumbers.has(numTrimmed)) {
+        duplicateIds.push(inv.id);
+      } else {
+        seenInvoiceNumbers.add(numTrimmed);
+        uniqueInvoices.push(inv);
+      }
+    }
+    
+    if (duplicateIds.length > 0) {
+      console.log(`[Startup Deduplicator] Detected ${duplicateIds.length} duplicate invoice number document(s). Pruning...`);
+      db_invoices = uniqueInvoices;
+      for (const invId of duplicateIds) {
+        try {
+          await withTimeout(deleteDoc(doc(db, 'invoices', invId)), 15000);
+          console.log(`[Startup Deduplicator] Successfully deleted duplicate invoice document "${invId}" from Firestore.`);
+        } catch (e: any) {
+          console.warn(`[Startup Deduplicator Error] Failed to delete duplicate invoice ${invId}:`, e.message);
+        }
+      }
+    }
 
     // 7. Quotations
     db_quotations = await syncCollectionOnStartup('quotations', db_quotations, DEMO_QUOTATIONS);
@@ -2008,12 +2012,18 @@ app.get('/api/invoices', checkPermission('invoices', 'read'), (req: Request, res
 
 app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Request, res: Response) => {
   const data = req.body;
+  const invoiceNum = (data.invoiceNumber || `${db_settings.invoicePrefix}${String(db_invoices.length + 1).padStart(3, '0')}`).trim();
+  const duplicate = db_invoices.find(inv => inv.invoiceNumber && inv.invoiceNumber.trim().toLowerCase() === invoiceNum.toLowerCase());
+  if (duplicate) {
+    return res.status(400).json({ error: `An invoice with invoice number "${invoiceNum}" already exists. Duplicate invoice numbers are not allowed.` });
+  }
+
   const id = `inv-${Date.now()}`;
   const total = Number(data.total || 0);
 
   const newInvoice: Invoice = {
     id,
-    invoiceNumber: data.invoiceNumber || `${db_settings.invoicePrefix}${String(db_invoices.length + 1).padStart(3, '0')}`,
+    invoiceNumber: invoiceNum,
     clientId: data.clientId,
     clientName: data.clientName,
     clientGst: data.clientGst || "",
@@ -2083,6 +2093,14 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
     if (index !== -1) {
       const oldInv = db_invoices[index];
       const data = req.body;
+      
+      const newInvoiceNum = (data.invoiceNumber || "").trim();
+      if (newInvoiceNum) {
+        const duplicate = db_invoices.find(inv => inv.id !== id && inv.invoiceNumber && inv.invoiceNumber.trim().toLowerCase() === newInvoiceNum.toLowerCase());
+        if (duplicate) {
+          return res.status(400).json({ error: `An invoice with invoice number "${newInvoiceNum}" already exists. Duplicate invoice numbers are not allowed.` });
+        }
+      }
       
       const newTotal = Number(data.total ?? oldInv.total);
       const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);

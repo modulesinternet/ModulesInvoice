@@ -838,6 +838,9 @@ export default function App() {
     if (!currentUser) return;
     console.log("Registering active real-time Firestore listeners for instant responsive feedback...");
 
+    let isFirstPaymentsSnapshot = true;
+    let isFirstNotificationsSnapshot = true;
+
     // Safe, unauthenticated-client-aware subscription helper that auto-disconnects on permission/auth errors
     const registerSafeSnapshot = (
       refOrQuery: any,
@@ -946,50 +949,30 @@ export default function App() {
     const unsubPayments = registerSafeSnapshot(collection(firestoreDb, 'payments'), (snapshot) => {
        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
                       .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
+       
+       if (!isFirstPaymentsSnapshot) {
+         snapshot.docChanges().forEach((change) => {
+           if (change.type === "added" || change.type === "modified") {
+             const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
+             triggerIncomingCall(currPay);
+             const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
+             triggerLocalNotification(
+               change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
+               change.type === "added"
+                 ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
+                 : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
+             );
+           }
+         });
+       }
+       isFirstPaymentsSnapshot = false;
+
        setPayments(prev => {
-        const nextStr = JSON.stringify(list);
-        if (JSON.stringify(prev) === nextStr) return prev;
-
-        // Trigger local notification / WhatsApp APK call screen for new or updated payments
-        try {
-          if (prev && prev.length > 0) {
-            const prevMap = new Map<string, Payment>(prev.map(p => [p.id, p]));
-
-            list.forEach(currPay => {
-              const prevPay = prevMap.get(currPay.id);
-              if (!prevPay) {
-                // New payment created!
-                triggerIncomingCall(currPay);
-                const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
-                triggerLocalNotification(
-                  "💰 Payment Received",
-                  `Received ${formattedAmt} from ${currPay.clientName} against Invoice #${currPay.invoiceNumber || 'N/A'}.`
-                );
-              } else {
-                // Existing payment updated!
-                const amountChanged = currPay.amount !== prevPay.amount;
-                const clientChanged = currPay.clientName !== prevPay.clientName;
-                const modeChanged = currPay.paymentMode !== prevPay.paymentMode;
-                const refChanged = currPay.referenceNum !== prevPay.referenceNum;
-                const remarksChanged = currPay.remarks !== prevPay.remarks;
-
-                if (amountChanged || clientChanged || modeChanged || refChanged || remarksChanged) {
-                  triggerIncomingCall(currPay);
-                  triggerLocalNotification(
-                    "🔄 Payment Updated",
-                    `Payment of INR ${currPay.amount} from ${currPay.clientName} has been updated.`
-                  );
-                }
-              }
-            });
-          }
-        } catch (e) {
-          console.error("Local payment notification runner error: ", e);
-        }
-
-        localStorage.setItem('db_payments', nextStr);
-        return list;
-      });
+         const nextStr = JSON.stringify(list);
+         if (JSON.stringify(prev) === nextStr) return prev;
+         localStorage.setItem('db_payments', nextStr);
+         return list;
+       });
     }, 'payments');
 
     const unsubLedger = registerSafeSnapshot(collection(firestoreDb, 'ledger'), (snapshot) => {
@@ -1059,48 +1042,49 @@ export default function App() {
         return list;
       });
 
-      // Trigger high-priority alerts in real time for newly added unread notifications
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
-          const freshThreshold = Date.now() - 15000;
-          const isFresh = new Date(docData.createdAt).getTime() > freshThreshold;
-          
-          if (docData.userId === currentUser.userId && !docData.isRead && isFresh) {
-            // Guard sounds, voice announcements, and call alert overlays to run ONLY on the Android native app
-            if (Capacitor.getPlatform() === 'android') {
-              // Play configured tone
-              const soundId = businessSettings?.notificationSound || 'crystal';
-              playSoundTone(soundId);
+      if (!isFirstNotificationsSnapshot) {
+        // Trigger high-priority alerts in real time for newly added unread notifications
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
+            
+            if (docData.userId === currentUser.userId && !docData.isRead) {
+              // Guard sounds, voice announcements, and call alert overlays to run ONLY on the Android native app
+              if (Capacitor.getPlatform() === 'android') {
+                // Play configured tone
+                const soundId = businessSettings?.notificationSound || 'crystal';
+                playSoundTone(soundId);
 
-              // Speak configured voice announcement template
-              if (businessSettings?.voiceAnnounceEnabled) {
-                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-                const amtMatched = docData.message.match(/₹[\d,]+/);
-                const amount = amtMatched ? amtMatched[0] : "some amount";
-                
-                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
-                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-                
-                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+                // Speak configured voice announcement template
+                if (businessSettings?.voiceAnnounceEnabled) {
+                  const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+                  const amtMatched = docData.message.match(/₹[\d,]+/);
+                  const amount = amtMatched ? amtMatched[0] : "some amount";
+                  
+                  const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
+                  const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+                  
+                  const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                  const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
 
-                playVoiceAnnouncement(tmpl, {
-                  amount,
-                  hotelName,
-                  paymentMode,
-                  date: new Date(docData.createdAt).toLocaleDateString()
-                });
-              }
+                  playVoiceAnnouncement(tmpl, {
+                    amount,
+                    hotelName,
+                    paymentMode,
+                    date: new Date(docData.createdAt).toLocaleDateString()
+                  });
+                }
 
-              // Show incoming call alert if enabled for payments
-              if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
-                setShowIncomingCallAlert(docData);
+                // Show incoming call alert if enabled for payments
+                if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
+                  setShowIncomingCallAlert(docData);
+                }
               }
             }
           }
-        }
-      });
+        });
+      }
+      isFirstNotificationsSnapshot = false;
     }, 'notifications');
 
     const unsubUsers = registerSafeSnapshot(collection(firestoreDb, 'users'), (snapshot) => {
@@ -2152,7 +2136,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-tight flex flex-col justify-center">
-                  <h1 className="text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider text-slate-900 font-display truncate max-w-[170px]">
+                  <h1 className="text-[18px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[170px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2163,7 +2147,7 @@ export default function App() {
                       return companyNameText;
                     })()}
                   </h1>
-                  <span className="text-[8px] md:text-[9px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
+                  <span className="text-[14px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
                     {businessSettings?.gstIn || "Active Portal"}
                   </span>
                 </div>
