@@ -954,12 +954,13 @@ export default function App() {
          if (change.type === "added" || change.type === "modified") {
            const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
            const payTime = currPay.createdAt ? new Date(currPay.createdAt).getTime() : 0;
-           const isRecent = payTime && (Date.now() - payTime > 0) && (Date.now() - payTime < 10 * 60 * 1000); // 10 minutes leeway
+           // 10 minutes leeway, using Math.abs to protect against client-server clock drift
+           const isRecent = payTime && (Math.abs(Date.now() - payTime) < 10 * 60 * 1000);
 
            if (!isFirstPaymentsSnapshot || isRecent) {
              const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
-             if (!sessionStorage.getItem(processedKey)) {
-               sessionStorage.setItem(processedKey, 'true');
+             if (!localStorage.getItem(processedKey)) {
+               localStorage.setItem(processedKey, 'true');
                triggerIncomingCall(currPay);
                const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
                triggerLocalNotification(
@@ -1049,13 +1050,20 @@ export default function App() {
         return list;
       });
 
-      if (!isFirstNotificationsSnapshot) {
-        // Trigger high-priority alerts in real time for newly added unread notifications
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added") {
-            const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
-            
-            if (docData.userId === currentUser.userId && !docData.isRead) {
+      // Trigger high-priority alerts in real time for newly added unread notifications
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
+          
+          const triggeredKey = `notif_alert_triggered_${docData.id}`;
+          if (docData.userId === currentUser.userId && !docData.isRead && !localStorage.getItem(triggeredKey)) {
+            const notifTime = docData.createdAt ? new Date(docData.createdAt).getTime() : 0;
+            // 5 minutes leeway, protecting against clock drift with Math.abs
+            const isRecent = notifTime && (Math.abs(Date.now() - notifTime) < 5 * 60 * 1000);
+
+            if (!isFirstNotificationsSnapshot || isRecent) {
+              localStorage.setItem(triggeredKey, 'true');
+              
               // Guard sounds, voice announcements, and call alert overlays to run ONLY on the Android native app
               if (Capacitor.getPlatform() === 'android') {
                 // Play configured tone
@@ -1089,8 +1097,8 @@ export default function App() {
               }
             }
           }
-        });
-      }
+        }
+      });
       isFirstNotificationsSnapshot = false;
     }, 'notifications');
 
@@ -1731,7 +1739,7 @@ export default function App() {
             </div>
             
             <div className="space-y-1">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 font-display">
+              <h1 className="text-[18px] font-bold tracking-tight text-slate-900 font-display">
                 Internet <span className="text-[#5B21FF]">Modules</span>
               </h1>
               <p className="text-xs text-indigo-600 font-sans font-semibold tracking-wide uppercase">
@@ -2154,8 +2162,8 @@ export default function App() {
                       return companyNameText;
                     })()}
                   </h1>
-                  {typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && (
-                    <span className="text-[14px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
+                  {(businessSettings?.gstIn || (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && !/Android/i.test(navigator.userAgent))) && (
+                    <span className="text-[12px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
                       {businessSettings?.gstIn || "Active Portal"}
                     </span>
                   )}
@@ -2261,7 +2269,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-900 font-display truncate max-w-[135px]">
+              <span className="text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[185px] leading-tight select-none">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);
