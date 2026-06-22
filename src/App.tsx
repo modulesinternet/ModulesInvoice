@@ -954,7 +954,7 @@ export default function App() {
        snapshot.docChanges().forEach((change) => {
          if (change.type === "added" || change.type === "modified") {
            const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
-           const payTime = currPay.createdAt ? new Date(currPay.createdAt).getTime() : 0;
+           const payTime = ((currPay as any).updatedAt || currPay.createdAt) ? new Date((currPay as any).updatedAt || currPay.createdAt).getTime() : 0;
            // 10 minutes leeway, using Math.abs to protect against client-server clock drift
            const isRecent = payTime && (Math.abs(Date.now() - payTime) < 30 * 60 * 1000);
 
@@ -1057,7 +1057,12 @@ export default function App() {
           const docData = { id: change.doc.id, ...change.doc.data() } as Notification;
           
           const triggeredKey = `notif_alert_triggered_${docData.id}`;
-          if (docData.userId === currentUser.userId && !docData.isRead && !localStorage.getItem(triggeredKey)) {
+          const isUserMatch = currentUser && (
+            docData.userId === currentUser.userId ||
+            currentUser.role === 'Admin' ||
+            currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com'
+          );
+          if (isUserMatch && !docData.isRead && !localStorage.getItem(triggeredKey)) {
             const notifTime = docData.createdAt ? new Date(docData.createdAt).getTime() : 0;
             // 30 minutes leeway, protecting against clock drift with Math.abs
             const isRecent = notifTime && (Math.abs(Date.now() - notifTime) < 30 * 60 * 1000);
@@ -1092,10 +1097,18 @@ export default function App() {
                   });
                 }
 
-                // Show incoming call alert if enabled for payments
-                if (businessSettings?.incomingCallAlertEnabled && docData.type === 'success') {
-                  setShowIncomingCallAlert(docData);
+                // Show incoming call alert on Android app for: Invoice, Cashbook, Entry, or Payment (Created or Updated)
+                if (businessSettings?.incomingCallAlertEnabled) {
+                  const allowedModules = ['invoices', 'cashbook', 'payments'];
+                  if (allowedModules.includes(docData.module || '')) {
+                    setShowIncomingCallAlert(docData);
+                  }
                 }
+
+                // Trigger real system pull-down local notification banner on Android
+                triggerLocalNotification(docData.title, docData.message).catch(err => {
+                  console.warn("[Local Notif Fail] Suppressed banner error:", err);
+                });
               }
             }
           }
@@ -2152,8 +2165,8 @@ export default function App() {
                 </div>
               )}
               {isSidebarOpen && (
-                <div className="overflow-hidden leading-tight flex flex-col justify-center">
-                  <h1 className="text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[170px]">
+                <div className="overflow-hidden leading-snug flex flex-col justify-center">
+                  <h1 className="text-[12.5px] xs:text-[13.5px] md:text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[145px] xs:max-w-[170px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2165,7 +2178,7 @@ export default function App() {
                     })()}
                   </h1>
                   {(businessSettings?.gstIn || (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && !/Android/i.test(navigator.userAgent))) && (
-                    <span className="text-[12px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
+                    <span className="text-[10.5px] xs:text-[12px] font-mono text-purple-600 block leading-none font-semibold truncate max-w-[155px] xs:max-w-[190px] mt-0.5">
                       {businessSettings?.gstIn || "Active Portal"}
                     </span>
                   )}
@@ -2215,22 +2228,41 @@ export default function App() {
                     setIsSidebarOpen(false);
                   }
                 }}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition tracking-wide cursor-pointer ${
+                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[11px] md:text-sm font-semibold transition tracking-wide cursor-pointer ${
                   isActive 
                     ? 'bg-[#F3F0FF] text-[#5B21FF] font-bold shadow-sm' 
                     : 'text-slate-500 hover:text-slate-905 hover:bg-slate-50'
                 }`}
               >
-                <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-[#5B21FF]' : 'text-slate-400 group-hover:text-slate-705'}`} />
+                <Icon className={`w-4 h-4 md:w-4.5 md:h-4.5 shrink-0 ${isActive ? 'text-[#5B21FF]' : 'text-slate-400 group-hover:text-slate-705'}`} />
                 {isSidebarOpen && <span>{item.label}</span>}
               </button>
             );
           })}
+
+          {/* Conditional Logout item on Android/mobile directly below Business Settings */}
+          {currentUser && (
+            <div className="md:hidden pt-2 border-t border-slate-100 mt-2">
+              <button
+                onClick={() => {
+                  localStorage.removeItem('current_user');
+                  setCurrentUser(null);
+                  setIsSidebarOpen(false);
+                  showToast("Logged out successfully from portal session", "info");
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition tracking-wide cursor-pointer focus:outline-none"
+                title="Logout from system"
+              >
+                <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
+                {isSidebarOpen && <span>Sign Out</span>}
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* Sidebar Footer Logout Button */}
         {currentUser && (
-          <div className="p-3 border-t border-[#E5E7EB] bg-slate-50/50">
+          <div className="hidden md:block p-3 border-t border-[#E5E7EB] bg-slate-50/50">
             <button
               onClick={() => {
                 localStorage.removeItem('current_user');

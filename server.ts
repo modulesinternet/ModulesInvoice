@@ -2609,6 +2609,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
       oldP.paymentMode = data.paymentMode || oldP.paymentMode;
       oldP.referenceNum = data.referenceNum || oldP.referenceNum;
       oldP.remarks = data.remarks || oldP.remarks;
+      (oldP as any).updatedAt = new Date().toISOString();
 
       if (updatedClientId !== oldP.clientId) {
         oldP.clientId = updatedClientId;
