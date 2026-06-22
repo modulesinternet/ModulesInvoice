@@ -542,20 +542,38 @@ export default function PaymentsModule({
             </div>
 
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
-              {/* Select client (read-only for security & accounting consistency) */}
+              {/* Select client */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Target Client</label>
-                <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-700">
-                  {editingPayment.clientName}
-                </div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Target Client *</label>
+                <select 
+                  required
+                  value={clientId}
+                  onChange={(e) => handleClientChange(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:border-indigo-500 focus:outline-none font-medium"
+                >
+                  <option value="">-- Choose Client --</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
 
-              {/* Select Invoice (read-only for credit-matching log logic) */}
+              {/* Select Invoice */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Settled Bill Invoice</label>
-                <div className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-700">
-                  {editingPayment.invoiceNumber}
-                </div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase">Settled Bill Invoice *</label>
+                <select 
+                  required
+                  value={invoiceId}
+                  onChange={(e) => handleInvoiceChange(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:border-indigo-500 focus:outline-none font-medium font-mono"
+                >
+                  <option value="">-- Choose Invoice number --</option>
+                  {filteredInvoices.map(inv => (
+                    <option key={inv.id} value={inv.id}>
+                      #{inv.invoiceNumber} (Amt: {formatCurrency(inv.total)} | Due: {formatCurrency(inv.dueAmount + (editingPayment && inv.id === editingPayment.invoiceId ? editingPayment.amount : 0))})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Amount and Mode */}

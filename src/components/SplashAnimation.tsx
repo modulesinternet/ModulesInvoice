@@ -95,7 +95,7 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
         </div>
 
         {/* Dynamic App Brand Block */}
-        <div className="space-y-2 z-10">
+        <div className="space-y-3 z-10 pb-8">
           <h1 className="text-3xl font-bold text-slate-100 font-display tracking-tight leading-tight">
             {companyName || 'iModules'}
           </h1>
@@ -105,8 +105,8 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
         </div>
       </div>
 
-      {/* Understated bottom loader and clean status feedback */}
-      <div className="w-full max-w-[210px] flex flex-col items-center space-y-4.5 z-10">
+      {/* Understated bottom loader and clean status feedback with defensive margin to avoid collision */}
+      <div className="w-full max-w-[210px] flex flex-col items-center space-y-6 mt-12 mb-6 z-10">
         <div className="w-full">
           {/* Extremely thin, elegant sleek status tracks */}
           <div className="w-full h-[3px] bg-slate-900/90 rounded-full overflow-hidden relative">

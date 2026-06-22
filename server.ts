@@ -845,6 +845,41 @@ async function performSelfHealingAudit() {
     }
   }
 
+  // Sweep invoices to keep their paidAmount, dueAmount and status dynamically aligned with their actual payment receipts
+  console.log("[Self-Healing] Running systematic invoice status and due amounts alignment audit...");
+  for (let i = 0; i < db_invoices.length; i++) {
+    const inv = db_invoices[i];
+    const invPayments = db_payments.filter(p => p.invoiceId === inv.id);
+    const calculatedPaid = invPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
+    
+    // Status resolution based on dueAmount
+    let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
+    if (calculatedDue === 0) {
+      calculatedStatus = 'paid';
+    } else if (calculatedPaid > 0) {
+      calculatedStatus = 'partially_paid';
+    }
+
+    if (
+      Number(inv.paidAmount || 0) !== calculatedPaid || 
+      Number(inv.dueAmount || 0) !== calculatedDue || 
+      inv.status !== calculatedStatus
+    ) {
+      console.log(`[Self-Healing] Adjusting invoice ${inv.invoiceNumber} (ID: ${inv.id}): paid=${calculatedPaid}, due=${calculatedDue}, status=${calculatedStatus}`);
+      db_invoices[i].paidAmount = calculatedPaid;
+      db_invoices[i].dueAmount = calculatedDue;
+      db_invoices[i].status = calculatedStatus;
+      if (db) {
+        try {
+          await setDoc(doc(db, 'invoices', inv.id), db_invoices[i]);
+        } catch (e) {
+          console.error(`[Self-Healing] Failed to sync aligned invoice ${inv.id}:`, e);
+        }
+      }
+    }
+  }
+
   // Sweep client outstanding balances to keep them tight and aligned
   for (let i = 0; i < db_clients.length; i++) {
     const client = db_clients[i];
@@ -2565,9 +2600,9 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         await syncStateToFirestore('clients', db_clients[oldClientIndex].id);
       }
 
-      // Apply edits
+      // Apply edits & update pointers dynamically
+      const updatedClientId = data.clientId || oldP.clientId;
       const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
-      const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
 
       oldP.amount = Number(data.amount ?? oldP.amount);
       oldP.paymentDate = data.paymentDate || oldP.paymentDate;
@@ -2575,7 +2610,13 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
       oldP.referenceNum = data.referenceNum || oldP.referenceNum;
       oldP.remarks = data.remarks || oldP.remarks;
 
-      if (isInvoiceChanged) {
+      if (updatedClientId !== oldP.clientId) {
+        oldP.clientId = updatedClientId;
+        const targetClient = db_clients.find(c => c.id === updatedClientId);
+        oldP.clientName = targetClient ? targetClient.name : oldP.clientName;
+      }
+
+      if (updatedInvoiceId !== oldP.invoiceId) {
         oldP.invoiceId = updatedInvoiceId;
         const targetInv = db_invoices.find(inv => inv.id === updatedInvoiceId);
         oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;

@@ -950,21 +950,28 @@ export default function App() {
        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
                       .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
        
-       if (!isFirstPaymentsSnapshot) {
-         snapshot.docChanges().forEach((change) => {
-           if (change.type === "added" || change.type === "modified") {
-             const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
-             triggerIncomingCall(currPay);
-             const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
-             triggerLocalNotification(
-               change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
-               change.type === "added"
-                 ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
-                 : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
-             );
+       snapshot.docChanges().forEach((change) => {
+         if (change.type === "added" || change.type === "modified") {
+           const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
+           const payTime = currPay.createdAt ? new Date(currPay.createdAt).getTime() : 0;
+           const isRecent = payTime && (Date.now() - payTime > 0) && (Date.now() - payTime < 10 * 60 * 1000); // 10 minutes leeway
+
+           if (!isFirstPaymentsSnapshot || isRecent) {
+             const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
+             if (!sessionStorage.getItem(processedKey)) {
+               sessionStorage.setItem(processedKey, 'true');
+               triggerIncomingCall(currPay);
+               const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
+               triggerLocalNotification(
+                 change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
+                 change.type === "added"
+                   ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
+                   : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
+               );
+             }
            }
-         });
-       }
+         }
+       });
        isFirstPaymentsSnapshot = false;
 
        setPayments(prev => {
@@ -2136,7 +2143,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-tight flex flex-col justify-center">
-                  <h1 className="text-[18px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[170px]">
+                  <h1 className="text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[170px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2147,9 +2154,11 @@ export default function App() {
                       return companyNameText;
                     })()}
                   </h1>
-                  <span className="text-[14px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
-                    {businessSettings?.gstIn || "Active Portal"}
-                  </span>
+                  {typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && (
+                    <span className="text-[14px] font-mono text-purple-600 block leading-tight font-semibold truncate max-w-[190px]">
+                      {businessSettings?.gstIn || "Active Portal"}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
