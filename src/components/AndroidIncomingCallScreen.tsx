@@ -3,7 +3,7 @@ import { Phone, PhoneOff, Volume2, Shield, Headphones, UserCheck } from 'lucide-
 import { Payment, BusinessSettings } from '../types';
 
 interface AndroidIncomingCallScreenProps {
-  payment: Payment;
+  payment: Partial<Payment>;
   settings: BusinessSettings;
   onAccept: () => void;
   onDecline: () => void;
@@ -141,7 +141,7 @@ export default function AndroidIncomingCallScreen({
           window.speechSynthesis.cancel();
           
           const tmpl = settings?.voiceAnnounceTemplate || "Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.";
-          const formattedAmt = new Intl.NumberFormat('en-IN').format(payment.amount);
+          const formattedAmt = new Intl.NumberFormat('en-IN').format(payment.amount || 0);
           let textToSpeak = tmpl
             .replace(/{amount}/g, formattedAmt)
             .replace(/{hotelName}/g, payment.clientName || '')
@@ -209,7 +209,7 @@ export default function AndroidIncomingCallScreen({
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0
-  }).format(payment.amount);
+  }).format(payment.amount || 0);
 
   // If call is connected, render the Connected Speaking Agent interface
   if (isAccepted) {

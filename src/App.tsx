@@ -255,14 +255,14 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>(() => getCachedItem('db_notifications', []));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
-  const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
-  const triggerIncomingCall = (pay: Payment) => {
+  const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | Partial<Payment> | null>(null);
+  const triggerIncomingCall = (pay: Partial<Payment>) => {
     const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
     if (!isAndroid) {
-      console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform.");
+      console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform as requested.");
       return;
     }
-    const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount);
+    const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount || 0);
     api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName || 'N/A'} via ${pay.paymentMode}.`).catch(() => {});
     setAndroidIncomingCall(pay);
   };
@@ -2913,6 +2913,13 @@ export default function App() {
                   settings={businessSettings}
                   onSaveSettings={handleSaveSettings}
                   onImportBackup={handleImportBackup}
+                  onTriggerDemoCall={triggerIncomingCall}
+                  onTriggerVoipDiagnostic={(notification) => {
+                    setShowIncomingCallAlert(notification);
+                    setTimeout(() => {
+                      setShowIncomingCallAlert(null);
+                    }, 3000);
+                  }}
                 />
               )}
 

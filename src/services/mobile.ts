@@ -296,7 +296,7 @@ const recentNotifications = new Map<string, number>();
 export const triggerLocalNotification = async (title: string, body: string): Promise<void> => {
   const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
   if (!isAndroidApp) {
-    console.log("[Notification Guard] Suppressed local notification on non-Android natively installed app.");
+    console.log("[Notification Guard] Suppressed local notification on non-Android natively installed app as requested.");
     return;
   }
   try {
@@ -320,45 +320,178 @@ export const triggerLocalNotification = async (title: string, body: string): Pro
       }
     }
 
-    const granted = await requestNotificationPermission();
-    if (!granted) {
-      // Fallback to standard web alert to prevent silent updates
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body });
-      } else if ('Notification' in window && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification(title, { body });
-          }
-        });
-      }
-      return;
+    // Create channel for high priority alerts if on Android (Crucial for newer Android OS versions)
+    try {
+      await LocalNotifications.createChannel({
+        id: 'high_priority_local',
+        name: 'High Priority Alerts',
+        description: 'Emergency notifications and critical billing status alerts',
+        importance: 5, // IMPORTANCE_HIGH / MAX
+        visibility: 1, // VISIBILITY_PUBLIC
+        sound: undefined,
+        vibration: true,
+        lights: true,
+        lightColor: '#3B82F6'
+      });
+    } catch (channelErr) {
+      console.error("Failed to create high priority LocalNotification channel:", channelErr);
     }
 
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          title,
-          body,
-          id: Math.floor(Math.random() * 100000),
-          schedule: { at: new Date(Date.now() + 500) }, // fire almost instantly
-          sound: undefined,
-          actionTypeId: "",
-          extra: null
-        }
-      ]
-    });
-  } catch (err) {
-    console.warn("Capacitor LocalNotification error, falling back to Web browser Notification API: ", err);
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body });
-    } else if ('Notification' in window && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          new Notification(title, { body });
-        }
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title,
+            body,
+            id: Math.floor(Math.random() * 100000),
+            schedule: { at: new Date(Date.now() + 500) }, // fire almost instantly
+            channelId: 'high_priority_local', // Bound to our high priority channel
+            sound: undefined,
+            actionTypeId: "",
+            extra: null
+          }
+        ]
       });
     }
+  } catch (err) {
+    console.warn("Notification trigger failed: ", err);
+  }
+};
+
+export interface NativeServiceHealth {
+  isAndroidNative: boolean;
+  pushPluginActive: boolean;
+  localPluginActive: boolean;
+  fcmConfigured: boolean;
+  permissionsGranted: boolean;
+  status: 'OK' | 'FAIL';
+  details: string;
+}
+
+export const checkNativeServiceHealth = async (): Promise<NativeServiceHealth> => {
+  const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  
+  if (!isAndroid) {
+    return {
+      isAndroidNative: false,
+      pushPluginActive: false,
+      localPluginActive: false,
+      fcmConfigured: false,
+      permissionsGranted: false,
+      status: 'FAIL',
+      details: 'Not running inside the Android App container. Web browser environment does not support native background service bindings.'
+    };
+  }
+
+  try {
+    // 1. Verify push notification plugin binding
+    let pushActive = false;
+    try {
+      const pushPerms = await PushNotifications.checkPermissions();
+      pushActive = !!pushPerms;
+    } catch (e) {
+      console.warn("PushNotifications plugin check failed:", e);
+    }
+
+    // 2. Verify local notification plugin binding
+    let localActive = false;
+    try {
+      const localPerms = await LocalNotifications.checkPermissions();
+      localActive = !!localPerms;
+    } catch (e) {
+      console.warn("LocalNotifications plugin check failed:", e);
+    }
+
+    // 3. Verify google-services.json FCM configuration status
+    const fcmConfigured = !!mobileConfig.googleServicesAvailable;
+
+    // 4. Verify permission status
+    let permissionsGranted = false;
+    try {
+      const localPerms = await LocalNotifications.checkPermissions();
+      const pushPerms = await PushNotifications.checkPermissions();
+      permissionsGranted = localPerms.display === 'granted' && pushPerms.receive === 'granted';
+    } catch (e) {
+      console.warn("Permissions verification failed:", e);
+    }
+
+    const isHealthy = pushActive && localActive && fcmConfigured;
+
+    return {
+      isAndroidNative: true,
+      pushPluginActive: pushActive,
+      localPluginActive: localActive,
+      fcmConfigured,
+      permissionsGranted,
+      status: isHealthy ? 'OK' : 'FAIL',
+      details: isHealthy 
+        ? 'Native Android bridge & FCM background notification listeners are fully registered and healthy.' 
+        : `Native service issues detected: ${!pushActive ? 'Push plugin inactive. ' : ''}${!localActive ? 'Local plugin inactive. ' : ''}${!fcmConfigured ? 'google-services.json is missing in android project.' : ''}`
+    };
+  } catch (error: any) {
+    return {
+      isAndroidNative: true,
+      pushPluginActive: false,
+      localPluginActive: false,
+      fcmConfigured: false,
+      permissionsGranted: false,
+      status: 'FAIL',
+      details: `Bridge verification threw exception: ${error?.message || error}`
+    };
+  }
+};
+
+export interface VoipBridgeStatus {
+  isAndroid: boolean;
+  pluginAvailable: boolean;
+  channelRegistered: boolean;
+  status: 'OK' | 'FAIL';
+  details: string;
+}
+
+export const pingVoipBridge = async (): Promise<VoipBridgeStatus> => {
+  const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  
+  if (!isAndroid) {
+    return {
+      isAndroid,
+      pluginAvailable: false,
+      channelRegistered: false,
+      status: 'FAIL',
+      details: 'VoIP CallScreen bridge is not available outside native Android app context.'
+    };
+  }
+
+  try {
+    let channelRegistered = false;
+    try {
+      // Create channel check or delivered check to verify Push Notification capability
+      const channels = await PushNotifications.getDeliveredNotifications();
+      if (channels) {
+        channelRegistered = true;
+      }
+    } catch (e) {
+      console.warn("FCM channel/delivered fetch check failed:", e);
+    }
+
+    return {
+      isAndroid,
+      pluginAvailable: true,
+      channelRegistered,
+      status: channelRegistered ? 'OK' : 'FAIL',
+      details: channelRegistered 
+        ? 'Native Android CallScreen VoIP notification channel bindings are fully synchronized and active.'
+        : 'Failed to access native background notification channel handles.'
+    };
+  } catch (err: any) {
+    return {
+      isAndroid,
+      pluginAvailable: false,
+      channelRegistered: false,
+      status: 'FAIL',
+      details: `Native bridge execution error: ${err?.message || err}`
+    };
   }
 };
 

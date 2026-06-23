@@ -23,14 +23,15 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { BusinessSettings } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { BusinessSettings, Payment, Notification } from '../types';
 import SignaturePad from './SignaturePad';
 import { api } from '../services/api';
 import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SOUND_TONES, playSoundTone } from '../services/soundService';
-import { Volume2, Speaker, Smartphone, MessageSquare, BellRing } from 'lucide-react';
-import { triggerLocalNotification, requestNotificationPermission } from '../services/mobile';
+import { Volume2, Speaker, Smartphone, MessageSquare, BellRing, Activity, Radio, Check, X } from 'lucide-react';
+import { triggerLocalNotification, requestNotificationPermission, checkNativeServiceHealth, NativeServiceHealth, pingVoipBridge, VoipBridgeStatus } from '../services/mobile';
 
 const formatReleaseDateTime = (isoString?: string) => {
   if (!isoString) return '';
@@ -52,12 +53,16 @@ interface SettingsModuleProps {
   settings: BusinessSettings;
   onSaveSettings: (settings: Partial<BusinessSettings>) => Promise<void>;
   onImportBackup?: (backup: any) => Promise<void>;
+  onTriggerDemoCall?: (payment: Partial<Payment>) => void;
+  onTriggerVoipDiagnostic?: (notification: Notification) => void;
 }
 
 export default function SettingsModule({
   settings,
   onSaveSettings,
-  onImportBackup
+  onImportBackup,
+  onTriggerDemoCall,
+  onTriggerVoipDiagnostic
 }: SettingsModuleProps) {
   const [success, setSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -272,8 +277,69 @@ export default function SettingsModule({
   const [incomingCallAlertEnabled, setIncomingCallAlertEnabled] = useState<boolean>(settings?.incomingCallAlertEnabled ?? true);
   const [ttsCallerName, setTtsCallerName] = useState(settings?.ttsCallerName || 'Karan Sharma');
   const [testNotificationStatus, setTestNotificationStatus] = useState<string>('');
+  const [testCallStatus, setTestCallStatus] = useState<string>('');
+  const [nativeHealth, setNativeHealth] = useState<NativeServiceHealth | null>(null);
+  const [checkingNativeHealth, setCheckingNativeHealth] = useState<boolean>(false);
+  const [voipStatus, setVoipStatus] = useState<VoipBridgeStatus | null>(null);
+  const [checkingVoip, setCheckingVoip] = useState<boolean>(false);
+  const [voipDiagStatus, setVoipDiagStatus] = useState<string>('');
+
+  const handleCheckNativeHealth = async () => {
+    setCheckingNativeHealth(true);
+    try {
+      const health = await checkNativeServiceHealth();
+      setNativeHealth(health);
+    } catch (err) {
+      console.error("Error checking native health:", err);
+    } finally {
+      setCheckingNativeHealth(false);
+    }
+  };
+
+  const handleRunVoipDiagnostic = async () => {
+    setCheckingVoip(true);
+    setVoipDiagStatus('Pinging native VoIP CallScreen bridge...');
+    try {
+      const status = await pingVoipBridge();
+      setVoipStatus(status);
+      
+      setVoipDiagStatus('Launching 3s Ring-Mode simulation...');
+      if (onTriggerVoipDiagnostic) {
+        onTriggerVoipDiagnostic({
+          id: `diag-${Date.now()}`,
+          title: '⚡ VOIP DIAGNOSTIC ALERT',
+          message: 'UPI VoIP transaction alert received from Karan Sharma for ₹18,400.',
+          type: 'success',
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          module: 'payments'
+        });
+      }
+      
+      setTimeout(() => {
+        setVoipDiagStatus('Diagnostic simulation finished.');
+        setTimeout(() => setVoipDiagStatus(''), 4000);
+      }, 3000);
+    } catch (err: any) {
+      console.error("VoIP Diagnostic failed:", err);
+      setVoipDiagStatus(`VoIP Diagnostic error: ${err?.message || err}`);
+    } finally {
+      setCheckingVoip(false);
+    }
+  };
+
+  React.useEffect(() => {
+    handleCheckNativeHealth();
+    pingVoipBridge().then(status => setVoipStatus(status)).catch(() => {});
+  }, []);
 
   const handleTestNotification = async () => {
+    const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    if (!isAndroidApp) {
+      setTestNotificationStatus('Skipped: Notifications are only triggered inside the Android App.');
+      setTimeout(() => setTestNotificationStatus(''), 5000);
+      return;
+    }
     try {
       setTestNotificationStatus('Requesting permissions...');
       const hasPermission = await requestNotificationPermission();
@@ -291,6 +357,28 @@ export default function SettingsModule({
     } catch (error: any) {
       console.error("Test notification failed:", error);
       setTestNotificationStatus(`Failed: ${error.message || error}`);
+    }
+  };
+
+  const handleTestCall = () => {
+    const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    if (!isAndroidApp) {
+      setTestCallStatus('Skipped: Call screens are only triggered inside the Android App.');
+      setTimeout(() => setTestCallStatus(''), 5000);
+      return;
+    }
+    if (onTriggerDemoCall) {
+      onTriggerDemoCall({
+        id: `p-demo-${Date.now()}`,
+        amount: 18400,
+        clientName: ttsCallerName || 'Karan Sharma',
+        paymentMode: 'UPI',
+        paymentDate: new Date().toISOString(),
+        referenceNum: `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+        remarks: 'Simulated trial test trigger via Settings Panel'
+      });
+      setTestCallStatus('Test call triggered!');
+      setTimeout(() => setTestCallStatus(''), 5000);
     }
   };
 
@@ -1859,7 +1947,7 @@ export default function SettingsModule({
               </div>
 
               {/* Test System Permissions & Local Notifications */}
-              <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="pt-3 border-t border-slate-100 space-y-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
@@ -1885,6 +1973,188 @@ export default function SettingsModule({
                     <span>{testNotificationStatus}</span>
                   </div>
                 )}
+
+                <div className="flex items-center justify-between gap-4 pt-2 border-t border-slate-100/60">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                      <Phone className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                      <span>Test Call Alert</span>
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                      Simulates a full-screen high-priority incoming transaction call with instant TTS voice synthesis.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestCall}
+                    className="shrink-0 px-4 py-2 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-slate-700 rounded-xl transition border border-slate-200 font-sans font-bold text-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
+                    <span>Test Call</span>
+                  </button>
+                </div>
+                {testCallStatus && (
+                  <div className="text-[10px] bg-slate-50/50 p-2 rounded-xl text-slate-500 border border-slate-100 font-medium animate-fade-in flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span>
+                    <span>{testCallStatus}</span>
+                  </div>
+                )}
+
+                {/* Native Service Status Component */}
+                <div className="pt-3 border-t border-slate-100 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                        <Radio className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Native Service Bridge Status</span>
+                      </span>
+                      <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                        Verifies background listeners, permission level mappings, and the native bridge for the Android application.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCheckNativeHealth}
+                      disabled={checkingNativeHealth}
+                      className="shrink-0 px-4 py-2 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-slate-700 rounded-xl transition border border-slate-200 font-sans font-bold text-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${checkingNativeHealth ? 'animate-spin' : ''}`} />
+                      <span>{checkingNativeHealth ? 'Checking...' : 'Check Status'}</span>
+                    </button>
+                  </div>
+
+                  {nativeHealth && (
+                    <div className="p-3.5 rounded-2xl border bg-slate-50/50 border-slate-100 space-y-2.5 text-xs animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-500 text-[10px] uppercase font-sans tracking-wider">Overall Bridge Status:</span>
+                        <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 leading-none ${
+                          nativeHealth.status === 'OK' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {nativeHealth.status === 'OK' ? (
+                            <>
+                              <Check className="w-3 h-3 shrink-0" />
+                              <span>OK / ACTIVE</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3 h-3 shrink-0" />
+                              <span>FAIL / INACTIVE</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-sans">
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${nativeHealth.isAndroidNative ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">Android Host:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{nativeHealth.isAndroidNative ? 'YES' : 'NO (Web)'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${nativeHealth.fcmConfigured ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">FCM Config:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{nativeHealth.fcmConfigured ? 'LOADED' : 'MISSING'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${nativeHealth.pushPluginActive ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">Push Plugin:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{nativeHealth.pushPluginActive ? 'BOUND' : 'UNBOUND'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${nativeHealth.permissionsGranted ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">Permissions:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{nativeHealth.permissionsGranted ? 'GRANTED' : 'DENIED'}</strong>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-white border border-slate-100 rounded-xl">
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Diagnostic Logs</div>
+                        <p className="text-[10px] text-slate-600 font-sans leading-relaxed">{nativeHealth.details}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* VoIP Diagnostics tool */}
+                <div className="pt-3 border-t border-slate-100 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                        <Phone className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                        <span>VoIP CallScreen Diagnostics</span>
+                      </span>
+                      <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                        Pings the native Android CallScreen bridge & simulates a 3s high-priority ring mode to verify notification channel routing.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRunVoipDiagnostic}
+                      disabled={checkingVoip}
+                      className="shrink-0 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 rounded-xl transition border border-indigo-200/50 font-sans font-bold text-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Smartphone className={`w-3.5 h-3.5 shrink-0 ${checkingVoip ? 'animate-bounce' : ''}`} />
+                      <span>{checkingVoip ? 'Simulating...' : 'Run Diagnostics'}</span>
+                    </button>
+                  </div>
+
+                  {voipDiagStatus && (
+                    <div className="text-[10px] bg-indigo-50/50 p-2 rounded-xl text-indigo-600 border border-indigo-100 font-medium animate-fade-in flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span>
+                      <span>{voipDiagStatus}</span>
+                    </div>
+                  )}
+
+                  {voipStatus && (
+                    <div className="p-3.5 rounded-2xl border bg-slate-50/50 border-slate-100 space-y-2.5 text-xs animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-500 text-[10px] uppercase font-sans tracking-wider">CallScreen Bridge Health:</span>
+                        <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 leading-none ${
+                          voipStatus.status === 'OK' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {voipStatus.status === 'OK' ? (
+                            <>
+                              <Check className="w-3 h-3 shrink-0" />
+                              <span>BRIDGE OK</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3 h-3 shrink-0" />
+                              <span>BRIDGE FAIL</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-sans">
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${voipStatus.isAndroid ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">Android Native:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{voipStatus.isAndroid ? 'YES' : 'NO (Web)'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${voipStatus.pluginAvailable ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">Plugin Available:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{voipStatus.pluginAvailable ? 'YES' : 'NO'}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-slate-100 col-span-2">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${voipStatus.channelRegistered ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                          <span className="text-slate-500">VoIP Notification Channel Registered:</span>
+                          <strong className="text-slate-700 ml-auto font-bold">{voipStatus.channelRegistered ? 'YES' : 'NO'}</strong>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-white border border-slate-100 rounded-xl">
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Bridge Diagnostics</div>
+                        <p className="text-[10px] text-slate-600 font-sans leading-relaxed">{voipStatus.details}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
