@@ -846,7 +846,8 @@ async function performSelfHealingAudit() {
   }
 
   // Sweep invoices to keep their paidAmount, dueAmount and status dynamically aligned with their actual payment receipts
-  console.log("[Self-Healing] Running systematic invoice status and due amounts alignment audit...");
+  console.log("[Self-Healing] Skipping aggressive automatic invoice status and due amounts alignment audit on startup to protect manual modifications.");
+  /*
   for (let i = 0; i < db_invoices.length; i++) {
     const inv = db_invoices[i];
     const invPayments = db_payments.filter(p => p.invoiceId === inv.id);
@@ -879,8 +880,11 @@ async function performSelfHealingAudit() {
       }
     }
   }
+  */
 
   // Sweep client outstanding balances to keep them tight and aligned
+  console.log("[Self-Healing] Skipping aggressive client outstanding balance recalculation sweep on startup to protect custom modified invoice/client balances.");
+  /*
   for (let i = 0; i < db_clients.length; i++) {
     const client = db_clients[i];
     const clientInvoices = db_invoices.filter(v => v.clientId === client.id);
@@ -916,6 +920,7 @@ async function performSelfHealingAudit() {
       }
     }
   }
+  */
 
   console.log(`[Self-Healing] Audit sweep completed. Active ledger count: ${db_ledger.length}`);
 }

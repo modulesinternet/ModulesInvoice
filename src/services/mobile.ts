@@ -196,7 +196,7 @@ export const setupPushNotifications = async (
   }
 
   try {
-    // Check permission
+    // Check and request Push Notification permission
     let status = await PushNotifications.checkPermissions();
     if (status.receive !== 'granted') {
       const requested = await PushNotifications.requestPermissions();
@@ -204,6 +204,16 @@ export const setupPushNotifications = async (
         console.warn("FCM Push notification permission denied by user.");
         return;
       }
+    }
+
+    // Check and request Local Notification permission for overlay alerts on Android 13+
+    try {
+      const localStatus = await LocalNotifications.checkPermissions();
+      if (localStatus.display !== 'granted') {
+        await LocalNotifications.requestPermissions();
+      }
+    } catch (localErr) {
+      console.warn("Could not request LocalNotifications permission:", localErr);
     }
 
     // Explicitly create high priority notification channel for Android (Crucial for background / locked screen delivery)
@@ -226,9 +236,7 @@ export const setupPushNotifications = async (
       }
     }
 
-    // Register with Apple / Google push services
-    await PushNotifications.register();
-
+    // CRITICAL RACE CONDITION FIX: Listeners MUST be registered before calling PushNotifications.register()
     // Listen for FCM token generation
     await PushNotifications.addListener('registration', async (token) => {
       console.log('Mobile device registered with FCM. Token:', token.value);
@@ -271,6 +279,9 @@ export const setupPushNotifications = async (
         onRouteNeeded('');
       }
     });
+
+    // Register with Apple / Google push services
+    await PushNotifications.register();
 
   } catch (err) {
     console.error("Capacitor PushNotifications invocation failure:", err);

@@ -2197,7 +2197,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-snug flex flex-col justify-center">
-                  <h1 className="text-[14.5px] xs:text-[15.5px] md:text-[16px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[145px] xs:max-w-[170px]">
+                  <h1 className="text-[9px] font-bold tracking-tight text-slate-900 font-display select-none">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2334,7 +2334,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[16px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[185px] leading-tight select-none">
+              <span className="text-[9px] font-bold tracking-tight text-slate-900 font-display leading-tight select-none">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);
