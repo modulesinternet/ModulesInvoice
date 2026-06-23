@@ -294,8 +294,9 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 const recentNotifications = new Map<string, number>();
 
 export const triggerLocalNotification = async (title: string, body: string): Promise<void> => {
-  if (Capacitor.getPlatform() !== 'android') {
-    console.log("[Notification Guard] Suppressed duplicate local notification on non-Android platform.");
+  const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  if (!isAndroidApp) {
+    console.log("[Notification Guard] Suppressed local notification on non-Android natively installed app.");
     return;
   }
   try {

@@ -257,7 +257,7 @@ export default function App() {
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | null>(null);
   const triggerIncomingCall = (pay: Payment) => {
-    const isAndroid = Capacitor.getPlatform() === 'android' || (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
+    const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
     if (!isAndroid) {
       console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform.");
       return;
@@ -362,7 +362,7 @@ export default function App() {
 
     // 1. Search Invoices
     invoices.forEach(inv => {
-      if (inv.invoiceNumber.toLowerCase().includes(query) || inv.clientName.toLowerCase().includes(query)) {
+      if (inv.invoiceNumber?.toLowerCase().includes(query) || inv.clientName?.toLowerCase().includes(query)) {
         results.push({
           type: 'Invoice',
           title: inv.invoiceNumber,
@@ -376,11 +376,11 @@ export default function App() {
 
     // 2. Search Clients (Customers)
     clients.forEach(c => {
-      if (c.name.toLowerCase().includes(query) || c.email.toLowerCase().includes(query) || (c.gstIn || '').toLowerCase().includes(query)) {
+      if (c.name?.toLowerCase().includes(query) || c.email?.toLowerCase().includes(query) || (c.gstIn || '').toLowerCase().includes(query)) {
         results.push({
           type: 'Customer',
           title: c.name,
-          subtitle: `Email: ${c.email} | Outstanding: ${formatRuleCurrency(c.outstandingBalance)}`,
+          subtitle: `Email: ${c.email || 'N/A'} | Outstanding: ${formatRuleCurrency(c.outstandingBalance)}`,
           action: () => {
             setActiveTab('clients');
           }
@@ -390,11 +390,11 @@ export default function App() {
 
     // 3. Search Products
     products.forEach(p => {
-      if (p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query)) {
+      if (p.name?.toLowerCase().includes(query) || p.category?.toLowerCase().includes(query)) {
         results.push({
           type: 'Product',
           title: p.name,
-          subtitle: `Rate: ${formatRuleCurrency(p.price)} | Segment: ${p.category}`,
+          subtitle: `Rate: ${formatRuleCurrency(p.price)} | Segment: ${p.category || 'N/A'}`,
           action: () => {
             setActiveTab('products');
           }
@@ -404,11 +404,11 @@ export default function App() {
 
     // 4. Search Ledger logs
     ledger.forEach(led => {
-      if (led.description.toLowerCase().includes(query) || led.clientName.toLowerCase().includes(query)) {
+      if (led.description?.toLowerCase().includes(query) || led.clientName?.toLowerCase().includes(query)) {
         results.push({
           type: 'Ledger',
           title: led.description,
-          subtitle: `Partner: ${led.clientName} | ${led.type.toUpperCase()}: ${formatRuleCurrency(led.amount)}`,
+          subtitle: `Partner: ${led.clientName || 'N/A'} | ${led.type.toUpperCase()}: ${formatRuleCurrency(led.amount)}`,
           action: () => {
             setActiveTab('ledger');
           }
@@ -646,7 +646,7 @@ export default function App() {
 
       // Auto-synchronize currentUser with latest profile to prevent stale names/roles/avatars loaded from localStorage on page refresh
       if (currentUser) {
-        const latestProfile = usersFinal.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
+        const latestProfile = usersFinal.find(u => u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.userId === currentUser.userId);
         if (latestProfile) {
           const hasChanges = latestProfile.name !== currentUser.name || 
                              latestProfile.role !== currentUser.role || 
@@ -1042,7 +1042,7 @@ export default function App() {
     const unsubNotifications = registerSafeSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
       const rawList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
       const list = rawList
-                     .filter(n => n.userId === currentUser.userId)
+                     .filter(n => currentUser && n.userId === currentUser.userId)
                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotifications(prev => {
         const nextStr = JSON.stringify(list);
@@ -1070,14 +1070,14 @@ export default function App() {
             if (!isFirstNotificationsSnapshot || isRecent) {
               localStorage.setItem(triggeredKey, 'true');
               
-              // Guard sounds, voice announcements, and call alert overlays to run on any Android environment (native or browser)
-              const isAndroid = Capacitor.getPlatform() === 'android' || (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
+              // Guard sounds, voice announcements, and call alert overlays to run ONLY on actual native Android App platforms (suppressed on generic web URL)
+              const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
               if (isAndroid) {
                 // Play configured tone
                 const soundId = businessSettings?.notificationSound || 'crystal';
                 playSoundTone(soundId);
 
-                // Speak configured voice announcement template
+                 // Speak configured voice announcement template
                 if (businessSettings?.voiceAnnounceEnabled) {
                   const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
                   const amtMatched = docData.message.match(/₹[\d,]+/);
@@ -1125,8 +1125,8 @@ export default function App() {
         localStorage.setItem('db_users', nextStr);
         
         // Auto-sanitize session
-        const latestProfile = list.find(u => u.email.toLowerCase() === currentUser.email.toLowerCase() || u.userId === currentUser.userId);
-        if (latestProfile) {
+        const latestProfile = currentUser && list.find(u => u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.userId === currentUser.userId);
+        if (currentUser && latestProfile) {
           const hasChanges = latestProfile.name !== currentUser.name || 
                              latestProfile.role !== currentUser.role || 
                              latestProfile.status !== currentUser.status ||
@@ -2142,7 +2142,7 @@ export default function App() {
         id="erp-sidebar"
       >
         {/* Upper Brand Info */}
-        <div className="p-5 pt-[calc(1.25rem+env(safe-area-inset-top,24px))] md:p-5 border-b border-[#E5E7EB]">
+        <div className="p-5 pt-[calc(1.25rem+env(safe-area-inset-top,14px))] md:p-5 border-b border-[#E5E7EB]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {businessSettings?.logoUrl ? (
@@ -2178,7 +2178,7 @@ export default function App() {
                     })()}
                   </h1>
                   {(businessSettings?.gstIn || (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && !/Android/i.test(navigator.userAgent))) && (
-                    <span className="text-[10.5px] xs:text-[12px] font-mono text-purple-600 block leading-none font-semibold truncate max-w-[155px] xs:max-w-[190px] mt-0.5">
+                    <span className="text-[11px] xs:text-[12px] font-mono text-purple-600 block leading-none font-semibold truncate max-w-[155px] xs:max-w-[190px] mt-0.5">
                       {businessSettings?.gstIn || "Active Portal"}
                     </span>
                   )}
@@ -2228,7 +2228,8 @@ export default function App() {
                     setIsSidebarOpen(false);
                   }
                 }}
-                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[11px] md:text-sm font-semibold transition tracking-wide cursor-pointer ${
+                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[13
+                px] md:text-sm font-semibold transition tracking-wide cursor-pointer ${
                   isActive 
                     ? 'bg-[#F3F0FF] text-[#5B21FF] font-bold shadow-sm' 
                     : 'text-slate-500 hover:text-slate-905 hover:bg-slate-50'
