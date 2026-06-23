@@ -578,7 +578,7 @@ if (fs.existsSync(apkHistoryPath)) {
 }
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = true) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 

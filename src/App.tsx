@@ -841,6 +841,8 @@ export default function App() {
 
     let isFirstPaymentsSnapshot = true;
     let isFirstNotificationsSnapshot = true;
+    let isFirstInvoicesSnapshot = true;
+    let isFirstCashbookSnapshot = true;
 
     // Safe, unauthenticated-client-aware subscription helper that auto-disconnects on permission/auth errors
     const registerSafeSnapshot = (
@@ -896,41 +898,34 @@ export default function App() {
     const unsubInvoices = registerSafeSnapshot(collection(firestoreDb, 'invoices'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))
                      .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+      
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added" || change.type === "modified") {
+          const inv = { id: change.doc.id, ...change.doc.data() } as Invoice;
+          const invTime = inv.createdAt ? new Date(inv.createdAt).getTime() : 0;
+          const isRecent = invTime && (Math.abs(Date.now() - invTime) < 30 * 60 * 1000);
+
+          if (!isFirstInvoicesSnapshot || isRecent) {
+            const processedKey = `notified_invoice_${inv.id}_${change.type}_${inv.status}`;
+            if (!localStorage.getItem(processedKey)) {
+              localStorage.setItem(processedKey, 'true');
+              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total);
+              
+              const title = change.type === "added" ? "📄 New Invoice Dispatched" : "🔄 Invoice Modified";
+              const body = change.type === "added"
+                ? `Invoice ${inv.invoiceNumber} created for ${inv.clientName} worth ${formattedAmt}.`
+                : `Invoice ${inv.invoiceNumber} for ${inv.clientName} updated to status: ${inv.status.replace('_', ' ').toUpperCase()}.`;
+              
+              triggerLocalNotification(title, body);
+            }
+          }
+        }
+      });
+      isFirstInvoicesSnapshot = false;
+
       setInvoices(prev => {
         const nextStr = JSON.stringify(list);
         if (JSON.stringify(prev) === nextStr) return prev;
-
-        // Detect dynamic additions or modifications for lockscreen and system status bar notifications
-        try {
-          if (prev && prev.length > 0) {
-            const prevIds = new Set(prev.map(i => i.id));
-            const newInvoices = list.filter(i => !prevIds.has(i.id));
-
-            const prevMap = new Map(prev.map(i => [i.id, i]));
-            const updatedInvoices = list.filter(i => {
-              const old = prevMap.get(i.id);
-              return old && JSON.stringify(old) !== JSON.stringify(i);
-            });
-
-            newInvoices.forEach(inv => {
-              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total);
-              triggerLocalNotification(
-                "📄 New Invoice Dispatched",
-                `Invoice ${inv.invoiceNumber} created for ${inv.clientName} worth ${formattedAmt}.`
-              );
-            });
-
-            updatedInvoices.forEach(inv => {
-              triggerLocalNotification(
-                "🔄 Invoice Modified",
-                `Invoice ${inv.invoiceNumber} for ${inv.clientName} updated to status: ${inv.status.replace('_', ' ').toUpperCase()}.`
-              );
-            });
-          }
-        } catch (e) {
-          console.error("Local notification dispatcher error: ", e);
-        }
-
         localStorage.setItem('db_invoices', nextStr);
         return list;
       });
@@ -999,30 +994,38 @@ export default function App() {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
       const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
                            .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+      
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added" || change.type === "modified") {
+          const entry = { id: change.doc.id, ...change.doc.data() } as CashbookEntry;
+          const entryTime = entry.createdAt ? new Date(entry.createdAt).getTime() : 0;
+          const isRecent = entryTime && (Math.abs(Date.now() - entryTime) < 30 * 60 * 1000);
+
+          if (!isFirstCashbookSnapshot || isRecent) {
+            const processedKey = `notified_cashbook_${entry.id}_${change.type}_${entry.amount}`;
+            if (!localStorage.getItem(processedKey)) {
+              localStorage.setItem(processedKey, 'true');
+              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount);
+              if (entry.type === 'expense') {
+                triggerLocalNotification(
+                  "💸 Payment Cash Out",
+                  `Registered payout of ${formattedAmt}: ${entry.description || 'General expense'}.`
+                );
+              } else if (entry.type === 'income') {
+                triggerLocalNotification(
+                  "📈 Cashbook Cash In",
+                  `Registered receipt of ${formattedAmt}: ${entry.description || 'General income'}.`
+                );
+              }
+            }
+          }
+        }
+      });
+      isFirstCashbookSnapshot = false;
+
       setCashbook(prev => {
         const nextStr = JSON.stringify(filtered);
         if (JSON.stringify(prev) === nextStr) return prev;
-
-        // Trigger local notification for manual cash out / expense recorded (real-time sync)
-        try {
-          if (prev && prev.length > 0) {
-            const prevIds = new Set(prev.map(c => c.id));
-            const newEntries = filtered.filter(c => !prevIds.has(c.id));
-
-            newEntries.forEach(entry => {
-              if (entry.type === 'expense') {
-                const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount);
-                triggerLocalNotification(
-                  "💸 Payment Cash Out",
-                  `Registered payout of ${formattedAmt} structure: ${entry.description || 'General expense'}.`
-                );
-              }
-            });
-          }
-        } catch (e) {
-          console.error("Local cashbook notification runner error: ", e);
-        }
-
         localStorage.setItem('db_cashbook', nextStr);
         return filtered;
       });
@@ -1042,7 +1045,14 @@ export default function App() {
     const unsubNotifications = registerSafeSnapshot(collection(firestoreDb, 'notifications'), (snapshot) => {
       const rawList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
       const list = rawList
-                     .filter(n => currentUser && n.userId === currentUser.userId)
+                     .filter(n => currentUser && (
+                       n.userId === currentUser.userId ||
+                       currentUser.role === 'Admin' ||
+                       currentUser.role === 'Accountant' ||
+                       currentUser.role === 'Manager' ||
+                       n.userId === 'all' ||
+                       n.userId === 'demo-admin'
+                     ))
                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotifications(prev => {
         const nextStr = JSON.stringify(list);
@@ -1060,7 +1070,11 @@ export default function App() {
           const isUserMatch = currentUser && (
             docData.userId === currentUser.userId ||
             currentUser.role === 'Admin' ||
-            currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com'
+            currentUser.role === 'Accountant' ||
+            currentUser.role === 'Manager' ||
+            currentUser.email?.toLowerCase() === 'modulesinternet@gmail.com' ||
+            docData.userId === 'all' ||
+            docData.userId === 'demo-admin'
           );
           if (isUserMatch && !docData.isRead && !localStorage.getItem(triggeredKey)) {
             const notifTime = docData.createdAt ? new Date(docData.createdAt).getTime() : 0;
