@@ -2197,7 +2197,7 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-snug flex flex-col justify-center">
-                  <h1 className="text-[12.5px] xs:text-[13.5px] md:text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[145px] xs:max-w-[170px]">
+                  <h1 className="text-[14.5px] xs:text-[15.5px] md:text-[16px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[145px] xs:max-w-[170px]">
                     {(() => {
                       if (companyNameText.includes('Modules')) {
                         const parts = companyNameText.split(/(Modules)/g);
@@ -2259,8 +2259,7 @@ export default function App() {
                     setIsSidebarOpen(false);
                   }
                 }}
-                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[13
-                px] md:text-sm font-semibold transition tracking-wide cursor-pointer ${
+                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[12px] md:text-[12px] font-semibold transition tracking-wide cursor-pointer ${
                   isActive 
                     ? 'bg-[#F3F0FF] text-[#5B21FF] font-bold shadow-sm' 
                     : 'text-slate-500 hover:text-slate-905 hover:bg-slate-50'
@@ -2313,7 +2312,7 @@ export default function App() {
       </aside>
 
       {/* MOBILE BAR TOP NAVIGATION */}
-      <div className="bg-white border-b border-[#E5E7EB] text-slate-900 px-4 pb-3.5 pt-[calc(14px+env(safe-area-inset-top,0px))] flex items-center justify-between md:hidden no-print font-sans sticky top-0 z-40 shadow-sm">
+      <div className="bg-white border-b border-[#E5E7EB] text-slate-900 px-4 pb-[9px] pt-[calc(9px+env(safe-area-inset-top,0px))] flex items-center justify-between md:hidden no-print font-sans sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -2335,7 +2334,7 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[14px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[185px] leading-tight select-none">
+              <span className="text-[16px] font-bold tracking-tight text-slate-900 font-display truncate max-w-[185px] leading-tight select-none">
                 {(() => {
                   if (companyNameText.includes('Modules')) {
                     const parts = companyNameText.split(/(Modules)/g);
