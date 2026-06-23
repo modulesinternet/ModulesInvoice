@@ -2114,7 +2114,14 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
     `Invoice #${newInvoice.invoiceNumber} for ₹${Number(newInvoice.total).toLocaleString()} has been generated`,
     "success",
     "invoices",
-    { invoiceId: newInvoice.id, route: '/invoices', tab: 'invoices' }
+    { 
+      invoiceId: newInvoice.id, 
+      route: '/invoices', 
+      tab: 'invoices',
+      amount: String(newInvoice.total),
+      clientName: newInvoice.clientName,
+      paymentMode: 'GST Billing'
+    }
   ).catch(err => console.error("Notification trigger caught error:", err));
 
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
@@ -2179,7 +2186,14 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
         `Invoice #${db_invoices[index].invoiceNumber} has been modified`,
         "info",
         "invoices",
-        { invoiceId: id, route: '/invoices', tab: 'invoices' }
+        { 
+          invoiceId: id, 
+          route: '/invoices', 
+          tab: 'invoices',
+          amount: String(db_invoices[index].total),
+          clientName: db_invoices[index].clientName,
+          paymentMode: 'GST Billing'
+        }
       ).catch(err => console.error("Notification trigger caught error:", err));
 
       logUserActivity(req, "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
@@ -2259,7 +2273,14 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), async (re
       `Invoice #${inv.invoiceNumber} for ₹${Number(inv.total).toLocaleString()} has been permanently deleted`,
       "warning",
       "invoices",
-      { tab: 'invoices' }
+      { 
+        invoiceId: id,
+        route: '/invoices', 
+        tab: 'invoices',
+        amount: String(inv.total),
+        clientName: inv.clientName,
+        paymentMode: 'GST Billing'
+      }
     ).catch(err => console.error("Notification trigger caught error:", err));
 
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber} and updated ledger ties`);
@@ -2790,7 +2811,13 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
         `Payment of ₹${Number(p.amount).toLocaleString()} from ${p.clientName} has been permanently deleted by ${performerName}`,
         "warning",
         "payments",
-        { tab: 'payments' }
+        { 
+          paymentId: id,
+          amount: String(p.amount),
+          clientName: p.clientName,
+          paymentMode: p.paymentMode,
+          tab: 'payments' 
+        }
       ).catch(err => console.error("Notification trigger caught error:", err));
 
       logUserActivity(req, "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName} (Deleted by ${performerName})`);
@@ -2884,7 +2911,14 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Requ
     `₹${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} transaction (${newEntry.description}) has been recorded`,
     newEntry.type === 'expense' ? "warning" : "success",
     "cashbook",
-    { cashbookId: newEntry.id, tab: 'cashbook' }
+    { 
+      cashbookId: newEntry.id, 
+      route: '/cashbook', 
+      tab: 'cashbook',
+      amount: String(newEntry.amount),
+      clientName: newEntry.description || 'Cashbook Transaction',
+      paymentMode: payModeLabel
+    }
   ).catch(err => console.error("Notification trigger caught error:", err));
 
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
@@ -2911,7 +2945,14 @@ app.put('/api/cashbook/:id', checkPermission('cashbook', 'write'), async (req: R
       `Cashbook entry (${db_cashbook[index].description}) modified to ₹${Number(db_cashbook[index].amount).toLocaleString()}`,
       "info",
       "cashbook",
-      { cashbookId: id, tab: 'cashbook' }
+      { 
+        cashbookId: id, 
+        route: '/cashbook', 
+        tab: 'cashbook',
+        amount: String(db_cashbook[index].amount),
+        clientName: db_cashbook[index].description || 'Cashbook Entry',
+        paymentMode: db_cashbook[index].paymentMode || 'Cash'
+      }
     ).catch(err => console.error("Notification trigger caught error:", err));
 
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_UPDATE", `Updated manual transactional log: ${db_cashbook[index].description}`);
@@ -2936,7 +2977,14 @@ app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), async (re
       `Cashbook entry (${item.description}) of ₹${Number(item.amount).toLocaleString()} has been permanently deleted`,
       "warning",
       "cashbook",
-      { tab: 'cashbook' }
+      { 
+        cashbookId: id, 
+        route: '/cashbook', 
+        tab: 'cashbook',
+        amount: String(item.amount),
+        clientName: item.description || 'Cashbook Entry',
+        paymentMode: item.paymentMode || 'Cash'
+      }
     ).catch(err => console.error("Notification trigger caught error:", err));
 
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_DELETE", `Deleted transactional log: ${item.description}`);

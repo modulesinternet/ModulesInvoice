@@ -29,7 +29,8 @@ import { api } from '../services/api';
 import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SOUND_TONES, playSoundTone } from '../services/soundService';
-import { Volume2, Speaker, Smartphone, MessageSquare } from 'lucide-react';
+import { Volume2, Speaker, Smartphone, MessageSquare, BellRing } from 'lucide-react';
+import { triggerLocalNotification, requestNotificationPermission } from '../services/mobile';
 
 const formatReleaseDateTime = (isoString?: string) => {
   if (!isoString) return '';
@@ -270,6 +271,28 @@ export default function SettingsModule({
   const [voiceAnnounceTemplate, setVoiceAnnounceTemplate] = useState(settings?.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
   const [incomingCallAlertEnabled, setIncomingCallAlertEnabled] = useState<boolean>(settings?.incomingCallAlertEnabled ?? true);
   const [ttsCallerName, setTtsCallerName] = useState(settings?.ttsCallerName || 'Karan Sharma');
+  const [testNotificationStatus, setTestNotificationStatus] = useState<string>('');
+
+  const handleTestNotification = async () => {
+    try {
+      setTestNotificationStatus('Requesting permissions...');
+      const hasPermission = await requestNotificationPermission();
+      if (!hasPermission) {
+        setTestNotificationStatus('Permission Denied / Not Granted.');
+        return;
+      }
+      setTestNotificationStatus('Triggering test notification...');
+      await triggerLocalNotification(
+        "🔔 System Notification Test",
+        "Permission active! If you see this, real-time push and billing alerts are fully enabled on this device."
+      );
+      setTestNotificationStatus('Test notification triggered!');
+      setTimeout(() => setTestNotificationStatus(''), 5000);
+    } catch (error: any) {
+      console.error("Test notification failed:", error);
+      setTestNotificationStatus(`Failed: ${error.message || error}`);
+    }
+  };
 
   // Field/Section Level Visibility States
   const [showInvoiceGst, setShowInvoiceGst] = useState<boolean>(settings?.showInvoiceGst ?? true);
@@ -1831,6 +1854,35 @@ export default function SettingsModule({
                         <div><strong className="text-slate-700 font-bold">{'{date}'}</strong> - Time/Date stamp</div>
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Test System Permissions & Local Notifications */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] text-slate-700 font-semibold flex items-center gap-1.5 leading-none">
+                      <BellRing className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                      <span>Test Device Notifications</span>
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-sans leading-normal">
+                      Triggers a direct test notification to check FCM registration and lockscreen / vibration permissions on this device.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestNotification}
+                    className="shrink-0 px-4 py-2 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-slate-700 rounded-xl transition border border-slate-200 font-sans font-bold text-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <BellRing className="w-3.5 h-3.5 shrink-0" />
+                    <span>Send Test</span>
+                  </button>
+                </div>
+                {testNotificationStatus && (
+                  <div className="text-[10px] bg-slate-50/50 p-2 rounded-xl text-slate-500 border border-slate-100 font-medium animate-fade-in flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span>
+                    <span>{testNotificationStatus}</span>
                   </div>
                 )}
               </div>

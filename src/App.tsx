@@ -757,23 +757,32 @@ export default function App() {
             setActiveTab('cashbook');
           }
 
-          // If the tapped notification contains payment creation / modification metadata, ring!
-          if (data && (data.paymentId || data.topic === 'payments' || route.includes('payments'))) {
+          // If the tapped notification contains payment, invoice, or cashbook metadata, ring!
+          if (data && (
+            data.paymentId || data.invoiceId || data.cashbookId ||
+            data.topic === 'payments' || data.topic === 'invoices' || data.topic === 'cashbook' ||
+            route.includes('payments') || route.includes('invoices') || route.includes('cashbook')
+          )) {
             try {
               const paymentAmount = data.amount ? parseFloat(data.amount) : 0;
               if (paymentAmount > 0) {
+                const isInvoice = !!data.invoiceId || route.includes('invoices');
+                const isCashbook = !!data.cashbookId || route.includes('cashbook');
+                const defaultName = isInvoice ? 'Invoice Client' : (isCashbook ? 'Cashbook Entry' : 'Client');
+                const defaultMode = isInvoice ? 'GST Billing' : (isCashbook ? 'Cash' : 'UPI/Bank Transfer');
+
                 const mockPayment: Payment = {
-                  id: data.paymentId || `pay-${Date.now()}`,
+                  id: data.paymentId || data.invoiceId || data.cashbookId || `pay-${Date.now()}`,
                   invoiceId: data.invoiceId || '',
                   invoiceNumber: data.invoiceId || '',
                   clientId: data.clientId || '',
-                  clientName: data.clientName || 'Client',
+                  clientName: data.clientName || defaultName,
                   amount: paymentAmount,
-                  paymentMode: (data.paymentMode || 'UPI/Bank Transfer') as any,
+                  paymentMode: (data.paymentMode || defaultMode) as any,
                   paymentDate: new Date().toISOString(),
                   createdAt: new Date().toISOString(),
                   referenceNum: '',
-                  remarks: 'Tapped push notification alert call',
+                  remarks: `Tapped push notification: ${isInvoice ? 'Invoice' : (isCashbook ? 'Cashbook' : 'Payment')}`,
                 };
                 console.log("Launching auto WhatsApp VoIP call screen from tapped message:", mockPayment);
                 triggerIncomingCall(mockPayment);
@@ -794,23 +803,31 @@ export default function App() {
             notification.body || "New update registered."
           );
 
-          // If it is a payment alert, launch the VoIP ring screen immediately
-          if (data && (data.paymentId || data.topic === 'payments')) {
+          // If it is a payment, invoice, or cashbook alert, launch the VoIP ring screen immediately
+          if (data && (
+            data.paymentId || data.invoiceId || data.cashbookId ||
+            data.topic === 'payments' || data.topic === 'invoices' || data.topic === 'cashbook'
+          )) {
             try {
               const paymentAmount = data.amount ? parseFloat(data.amount) : 0;
               if (paymentAmount > 0) {
+                const isInvoice = !!data.invoiceId || data.topic === 'invoices';
+                const isCashbook = !!data.cashbookId || data.topic === 'cashbook';
+                const defaultName = isInvoice ? 'Invoice Client' : (isCashbook ? 'Cashbook Entry' : 'Client');
+                const defaultMode = isInvoice ? 'GST Billing' : (isCashbook ? 'Cash' : 'UPI/Bank Transfer');
+
                 const mockPayment: Payment = {
-                  id: data.paymentId || `pay-${Date.now()}`,
+                  id: data.paymentId || data.invoiceId || data.cashbookId || `pay-${Date.now()}`,
                   invoiceId: data.invoiceId || '',
                   invoiceNumber: data.invoiceId || '',
                   clientId: data.clientId || '',
-                  clientName: data.clientName || 'Client',
+                  clientName: data.clientName || defaultName,
                   amount: paymentAmount,
-                  paymentMode: (data.paymentMode || 'UPI/Bank Transfer') as any,
+                  paymentMode: (data.paymentMode || defaultMode) as any,
                   paymentDate: new Date().toISOString(),
                   createdAt: new Date().toISOString(),
                   referenceNum: '',
-                  remarks: 'Foreground push notification alert call',
+                  remarks: `Foreground push notification: ${isInvoice ? 'Invoice' : (isCashbook ? 'Cashbook' : 'Payment')}`,
                 };
                 console.log("Launching auto WhatsApp VoIP call screen in foreground:", mockPayment);
                 triggerIncomingCall(mockPayment);
@@ -3055,25 +3072,45 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-slate-405 text-slate-400 text-xs font-semibold uppercase tracking-wider">Payments Entry Synced Successfully</p>
+              <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                {showIncomingCallAlert.module === 'invoices' 
+                  ? 'Invoice Registered Successfully' 
+                  : showIncomingCallAlert.module === 'cashbook' 
+                    ? 'Cashbook Entry Synced Successfully' 
+                    : 'Payments Entry Synced Successfully'}
+              </p>
               <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white font-display drop-shadow-[0_4px_12px_rgba(255,255,255,0.08)]">
-                {showIncomingCallAlert.message.match(/₹[\d,]+/)?.[0] || 'Payment Received'}
+                {showIncomingCallAlert.message.match(/₹[\d,]+/)?.[0] || 'Transaction Alert'}
               </h1>
             </div>
 
             <div className="w-full bg-white/[0.03] border border-white/[0.06] backdrop-blur-md rounded-3xl p-5 text-left space-y-3.5 shadow-xl">
               <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Corporate Payee client</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase block block leading-none mb-1">
+                  {showIncomingCallAlert.module === 'invoices'
+                    ? 'Invoice Reference / Client'
+                    : showIncomingCallAlert.module === 'cashbook'
+                      ? 'Transaction Details'
+                      : 'Corporate Payee client'}
+                </span>
                 <span className="text-sm font-bold text-slate-100 leading-snug">
-                  {showIncomingCallAlert.message.match(/from\s+([^\svia\.]+)/)?.[1]?.trim() || 'N/A'}
+                  {showIncomingCallAlert.module === 'invoices'
+                    ? ((showIncomingCallAlert.message.match(/Invoice\s+(#[^\s]+)/)?.[1] || '') + ' ' + (showIncomingCallAlert.message.match(/for\s+([^\svia\.]+)/)?.[1] || '').trim()).trim() || showIncomingCallAlert.message
+                    : showIncomingCallAlert.module === 'cashbook'
+                      ? showIncomingCallAlert.message.match(/\(([^\)]+)\)/)?.[1] || showIncomingCallAlert.message
+                      : showIncomingCallAlert.message.match(/from\s+([^\svia\.]+)/)?.[1]?.trim() || 'N/A'}
                 </span>
               </div>
               <div className="h-px bg-white/[0.06]" />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Receipt Mode</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block block leading-none mb-1">Receipt Mode</span>
                   <span className="text-xs font-bold text-indigo-300">
-                    ⚡ {showIncomingCallAlert.message.match(/via\s+([^\s\.]+)/)?.[1]?.trim() || 'Real-time'}
+                    ⚡ {showIncomingCallAlert.module === 'invoices'
+                      ? 'GST Billing'
+                      : showIncomingCallAlert.module === 'cashbook'
+                        ? 'Cashbook Ledger'
+                        : showIncomingCallAlert.message.match(/via\s+([^\s\.]+)/)?.[1]?.trim() || 'Real-time'}
                   </span>
                 </div>
                 <div>
