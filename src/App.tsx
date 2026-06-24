@@ -73,7 +73,7 @@ import SplashAnimation from './components/SplashAnimation';
 import NotificationsModule from './components/NotificationsModule';
 import WorkflowModule from './components/WorkflowModule';
 import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications' | 'workflow';
 
@@ -224,37 +224,54 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.05,
-      ease: "easeOut"
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
     }
   }
 };
 
 const sidebarVariants = {
-  hidden: { opacity: 0, x: -20 },
+  hidden: { opacity: 0, x: -30, filter: "blur(4px)" },
   visible: { 
     opacity: 1, 
     x: 0,
-    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+    filter: "blur(0px)",
+    transition: { 
+      type: "spring", 
+      stiffness: 100, 
+      damping: 20, 
+      mass: 0.8
+    }
   }
 };
 
 const headerVariants = {
-  hidden: { opacity: 0, y: -12 },
+  hidden: { opacity: 0, y: -20, filter: "blur(4px)" },
   visible: { 
     opacity: 1, 
     y: 0,
-    transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] }
+    filter: "blur(0px)",
+    transition: { 
+      type: "spring", 
+      stiffness: 110, 
+      damping: 20,
+      mass: 0.8
+    }
   }
 };
 
 const stageVariants = {
-  hidden: { opacity: 0, y: 16 },
+  hidden: { opacity: 0, y: 30, filter: "blur(6px)" },
   visible: { 
     opacity: 1, 
     y: 0,
-    transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] }
+    filter: "blur(0px)",
+    transition: { 
+      type: "spring", 
+      stiffness: 90, 
+      damping: 18,
+      mass: 1
+    }
   }
 };
 
@@ -273,10 +290,7 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(() => {
-    // Show splash animation on native Android App platform only when first opened as requested
-    return typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-  });
+  const [showSplash, setShowSplash] = useState(true);
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
@@ -1494,9 +1508,11 @@ export default function App() {
 
       const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
       if (isAndroid) {
+        const existing = invoices.find(item => item.id === id);
+        const mergedInvoice = existing ? { ...existing, ...inv } : inv;
         triggerLocalNotification(
           "🔄 Invoice Modified",
-          `Invoice ${inv.invoiceNumber || ''} for ${inv.clientName || ''} has been updated.`
+          `Invoice ${mergedInvoice.invoiceNumber || ''} for ${mergedInvoice.clientName || ''} has been updated.`
         ).catch(() => {});
       }
 
@@ -1572,11 +1588,12 @@ export default function App() {
 
       const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
       if (isAndroid) {
-        triggerIncomingCall(created || p);
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.amount || 0);
+        const merged = created || p;
+        triggerIncomingCall(merged);
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(merged.amount || 0);
         triggerLocalNotification(
           "💰 Payment Received",
-          `Received ${formattedAmt} from ${p.clientName || 'N/A'} via ${p.paymentMode || 'N/A'}.`
+          `Received ${formattedAmt} from ${merged.clientName || 'N/A'} via ${merged.paymentMode || 'N/A'}.`
         ).catch(() => {});
       }
 
@@ -1593,11 +1610,13 @@ export default function App() {
 
       const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
       if (isAndroid) {
-        triggerIncomingCall(p);
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.amount || 0);
+        const existing = payments.find(item => item.id === id);
+        const mergedPayment = existing ? { ...existing, ...p } : p;
+        triggerIncomingCall(mergedPayment);
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(mergedPayment.amount || 0);
         triggerLocalNotification(
           "🔄 Payment Updated",
-          `Payment of INR ${p.amount} from ${p.clientName || 'N/A'} has been updated.`
+          `Payment of ${formattedAmt} from ${mergedPayment.clientName || 'N/A'} has been updated.`
         ).catch(() => {});
       }
 
@@ -1651,10 +1670,12 @@ export default function App() {
 
       const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
       if (isAndroid) {
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount || 0);
+        const existing = cashbook.find(item => item.id === id);
+        const mergedEntry = existing ? { ...existing, ...entry } : entry;
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(mergedEntry.amount || 0);
         triggerLocalNotification(
           "🔄 Cashbook Entry Modified",
-          `Transaction entry of ${formattedAmt} (${entry.description || ''}) has been updated.`
+          `Transaction entry of ${formattedAmt} (${mergedEntry.description || ''}) has been updated.`
         ).catch(() => {});
       }
 
@@ -1902,7 +1923,7 @@ export default function App() {
 
         <motion.div 
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
+          animate={showSplash ? { opacity: 0, scale: 0.96, y: 16 } : { opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.08, ease: "easeOut" }}
           className="bg-white border border-slate-200 rounded-[32px] shadow-xl p-8 max-w-md w-full relative z-10 space-y-7"
         >
@@ -2211,13 +2232,15 @@ export default function App() {
           </div>
         )}
 
-        {showSplash && (
-          <SplashAnimation 
-            companyName={businessSettings?.companyName || 'iModules'} 
-            logoUrl={businessSettings?.logoUrl || ''} 
-            onComplete={() => setShowSplash(false)}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {showSplash && (
+            <SplashAnimation 
+              companyName={businessSettings?.companyName || 'iModules'} 
+              logoUrl={businessSettings?.logoUrl || ''} 
+              onComplete={() => setShowSplash(false)}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
     );
   }
@@ -2226,7 +2249,7 @@ export default function App() {
     <motion.div 
       variants={containerVariants}
       initial="hidden"
-      animate="visible"
+      animate={showSplash ? "hidden" : "visible"}
       className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative"
     >
       
@@ -3324,13 +3347,15 @@ export default function App() {
         />
       )}
 
-      {showSplash && (
-        <SplashAnimation 
-          companyName={businessSettings?.companyName || 'iModules'} 
-          logoUrl={businessSettings?.logoUrl || ''} 
-          onComplete={() => setShowSplash(false)}
-        />
-      )}
+      <AnimatePresence mode="wait">
+        {showSplash && (
+          <SplashAnimation 
+            companyName={businessSettings?.companyName || 'iModules'} 
+            logoUrl={businessSettings?.logoUrl || ''} 
+            onComplete={() => setShowSplash(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

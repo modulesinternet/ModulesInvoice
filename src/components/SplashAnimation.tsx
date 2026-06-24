@@ -11,7 +11,6 @@ interface SplashAnimationProps {
 export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Booting system');
-  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
     // Beautiful smooth simulated loader
@@ -22,25 +21,21 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
           return 100;
         }
         const remaining = 100 - p;
-        const speed = Math.max(3, Math.floor(remaining * 0.12));
+        const speed = Math.max(3, Math.floor(remaining * 0.15));
         return Math.min(p + speed, 100);
       });
-    }, 100);
+    }, 90);
 
-    const t1 = setTimeout(() => setStatusText('Verifying credentials'), 500);
-    const t2 = setTimeout(() => setStatusText('Connecting to cloud database'), 1100);
-    const t3 = setTimeout(() => setStatusText('Synchronizing workspace'), 1700);
+    const t1 = setTimeout(() => setStatusText('Verifying credentials'), 450);
+    const t2 = setTimeout(() => setStatusText('Connecting to cloud database'), 1000);
+    const t3 = setTimeout(() => setStatusText('Synchronizing workspace'), 1550);
 
-    // Fade out and close after 2.6 seconds
+    // Fade out and close after 2.3 seconds
     const exitTimer = setTimeout(() => {
-      setIsExiting(true);
-      const completeTimer = setTimeout(() => {
-        if (onComplete) {
-          onComplete();
-        }
-      }, 500);
-      return () => clearTimeout(completeTimer);
-    }, 2500);
+      if (onComplete) {
+        onComplete();
+      }
+    }, 2300);
 
     return () => {
       clearInterval(interval);
@@ -55,10 +50,15 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
   const cleanLogo = logoUrl ? logoUrl.trim() : fallbackLogo;
 
   return (
-    <div 
-      className={`fixed inset-0 bg-[#EFF2F9] flex flex-col items-center justify-center p-8 select-none z-[10000] overflow-hidden transition-all duration-500 ease-in-out ${
-        isExiting ? 'opacity-0 scale-[1.04] pointer-events-none' : 'opacity-100 scale-100'
-      }`}
+    <motion.div 
+      initial={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+      exit={{ 
+        opacity: 0, 
+        scale: 1.06, 
+        filter: "blur(12px)",
+        transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] } 
+      }}
+      className="fixed inset-0 bg-[#EFF2F9] flex flex-col items-center justify-center p-8 select-none z-[10000] overflow-hidden"
       id="app-splash-screen"
     >
       {/* Soft elegant ambient lighting backglow */}
@@ -73,18 +73,18 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
         <div className="flex flex-col items-center justify-center flex-1">
           {/* White highly-rounded Card container exactly as in screenshot */}
           <motion.div 
-            initial={{ scale: 0.75, opacity: 0, y: 30 }}
+            initial={{ scale: 0.8, opacity: 0, y: 40 }}
             animate={{ 
               scale: 1, 
               opacity: 1, 
-              y: [0, -10, 0] 
+              y: [0, -8, 0] 
             }}
             transition={{
-              scale: { type: "spring", stiffness: 120, damping: 14, delay: 0.05 },
-              opacity: { duration: 0.5, ease: "easeOut" },
+              scale: { type: "spring", stiffness: 140, damping: 16, delay: 0.05 },
+              opacity: { duration: 0.4, ease: "easeOut" },
               y: {
                 repeat: Infinity,
-                duration: 4,
+                duration: 4.5,
                 ease: "easeInOut",
                 delay: 0.5
               }
@@ -95,7 +95,7 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
             <motion.div
               initial={{ scale: 0.85, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.25, duration: 0.5, ease: "easeOut" }}
+              transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
               className="w-full h-full flex items-center justify-center overflow-hidden rounded-[28px]"
             >
               <img 
@@ -116,7 +116,7 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.6 }}
+          transition={{ delay: 0.35, duration: 0.5 }}
           className="w-full max-w-[220px] flex flex-col items-center space-y-5"
         >
           {/* Sleek, thin elegant progress tracking */}
@@ -137,6 +137,6 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
           </div>
         </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
