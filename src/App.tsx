@@ -230,7 +230,10 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    // Show splash animation on native Android App platform only when first opened as requested
+    return typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  });
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
@@ -761,6 +764,7 @@ export default function App() {
           if (data && (
             data.paymentId || data.invoiceId || data.cashbookId ||
             data.topic === 'payments' || data.topic === 'invoices' || data.topic === 'cashbook' ||
+            data.tab === 'payments' || data.tab === 'invoices' || data.tab === 'cashbook' ||
             route.includes('payments') || route.includes('invoices') || route.includes('cashbook')
           )) {
             try {
@@ -806,7 +810,8 @@ export default function App() {
           // If it is a payment, invoice, or cashbook alert, launch the VoIP ring screen immediately
           if (data && (
             data.paymentId || data.invoiceId || data.cashbookId ||
-            data.topic === 'payments' || data.topic === 'invoices' || data.topic === 'cashbook'
+            data.topic === 'payments' || data.topic === 'invoices' || data.topic === 'cashbook' ||
+            data.tab === 'payments' || data.tab === 'invoices' || data.tab === 'cashbook'
           )) {
             try {
               const paymentAmount = data.amount ? parseFloat(data.amount) : 0;
@@ -1009,7 +1014,19 @@ export default function App() {
 
     const unsubCashbook = registerSafeSnapshot(collection(firestoreDb, 'cashbook'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
-      const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
+      const seenRefs = new Set<string>();
+      const dedupedList: CashbookEntry[] = [];
+      list.forEach(item => {
+        if (item.referenceId && (item.referenceId.startsWith('pay-') || item.referenceId.startsWith('cb-pay-'))) {
+          if (!seenRefs.has(item.referenceId)) {
+            seenRefs.add(item.referenceId);
+            dedupedList.push(item);
+          }
+        } else {
+          dedupedList.push(item);
+        }
+      });
+      const filtered = dedupedList.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
                            .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
       
       snapshot.docChanges().forEach((change) => {
@@ -2197,16 +2214,12 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-snug flex flex-col justify-center">
-                  <h1 className="text-[9px] font-bold tracking-tight text-slate-900 font-display select-none">
-                    {(() => {
-                      if (companyNameText.includes('Modules')) {
-                        const parts = companyNameText.split(/(Modules)/g);
-                        return parts.map((part, i) => 
-                          part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
-                        );
-                      }
-                      return companyNameText;
-                    })()}
+                  <h1 className="text-[12px] font-bold tracking-tight text-slate-900 font-display select-none">
+                    { companyNameText.includes('Modules') ? (
+                      companyNameText.split(/(Modules)/g).map((part, i) => 
+                        part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                      )
+                    ) : companyNameText }
                   </h1>
                   {(businessSettings?.gstIn || (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() !== 'android' && !/Android/i.test(navigator.userAgent))) && (
                     <span className="text-[11px] xs:text-[12px] font-mono text-purple-600 block leading-none font-semibold truncate max-w-[155px] xs:max-w-[190px] mt-0.5">
@@ -2334,16 +2347,12 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[9px] font-bold tracking-tight text-slate-900 font-display leading-tight select-none">
-                {(() => {
-                  if (companyNameText.includes('Modules')) {
-                    const parts = companyNameText.split(/(Modules)/g);
-                    return parts.map((part, i) => 
-                      part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
-                    );
-                  }
-                  return companyNameText;
-                })()}
+              <span className="text-[12px] font-bold tracking-tight text-slate-900 font-display leading-tight select-none">
+                { companyNameText.includes('Modules') ? (
+                  companyNameText.split(/(Modules)/g).map((part, i) => 
+                    part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                  )
+                ) : companyNameText }
               </span>
           </div>
         </div>
@@ -2739,7 +2748,7 @@ export default function App() {
                   )}
                 </div>
                 <div className="hidden sm:flex flex-col text-left font-sans">
-                  <span className="text-[11px] font-bold text-slate-800 group-hover:text-indigo-900 leading-none">{currentUser.name}</span>
+                  <span className="text-[12px] font-bold text-slate-800 group-hover:text-indigo-900 leading-none">{currentUser.name}</span>
                   <span className="text-[8.5px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">Settings Clearance</span>
                 </div>
               </button>

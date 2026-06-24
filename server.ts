@@ -1119,6 +1119,41 @@ async function bootstrapFromFirestore() {
       }
     }
 
+    // Programmatic deduplication of payment-related cashbook entries to avoid any duplicates in Firestore
+    const seenRefs = new Set<string>();
+    const uniqueCashbook: CashbookEntry[] = [];
+    const duplicatesToDelete: CashbookEntry[] = [];
+    
+    // Sort so newest is first to keep the latest transaction update
+    const sortedForDedup = [...db_cashbook].sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date).getTime();
+      const dateB = new Date(b.createdAt || b.date).getTime();
+      return dateB - dateA;
+    });
+
+    sortedForDedup.forEach(entry => {
+      if (entry.referenceId && (entry.referenceId.startsWith('pay-') || entry.referenceId.startsWith('cb-pay-'))) {
+        if (!seenRefs.has(entry.referenceId)) {
+          seenRefs.add(entry.referenceId);
+          uniqueCashbook.push(entry);
+        } else {
+          duplicatesToDelete.push(entry);
+        }
+      } else {
+        uniqueCashbook.push(entry);
+      }
+    });
+    db_cashbook = uniqueCashbook;
+    
+    if (duplicatesToDelete.length > 0) {
+      console.log(`[DEDUPLICATOR] Found ${duplicatesToDelete.length} duplicate cashbook entries on startup. Initiating permanent Firestore deletion...`);
+      for (const item of duplicatesToDelete) {
+        if (item.id) {
+          deleteDoc(doc(db, 'cashbook', item.id)).catch(() => null);
+        }
+      }
+    }
+
     // 11. Activity Logs
     db_logs = await syncCollectionOnStartup('activityLogs', db_logs, DEMO_LOGS);
 
@@ -1459,7 +1494,19 @@ function registerBackendRealtimeListeners() {
 
   onSnapshot(collection(db, 'cashbook'), (snapshot) => {
     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CashbookEntry));
-    const filtered = list.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
+    const seenRefs = new Set<string>();
+    const dedupedList: CashbookEntry[] = [];
+    list.forEach(item => {
+      if (item.referenceId && (item.referenceId.startsWith('pay-') || item.referenceId.startsWith('cb-pay-'))) {
+        if (!seenRefs.has(item.referenceId)) {
+          seenRefs.add(item.referenceId);
+          dedupedList.push(item);
+        }
+      } else {
+        dedupedList.push(item);
+      }
+    });
+    const filtered = dedupedList.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
                          .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_cashbook = mergeRecentUpdates('cashbook', filtered, 'id');
   }, (error) => {
@@ -2557,7 +2604,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     }
 
     const newCashbook: CashbookEntry = {
-      id: `cb-${Date.now()}`,
+      id: `cb-pay-${payId}`,
       date: newPayment.paymentDate,
       description: `Invoiced Collection [${newPayment.clientName}] Ref ${newPayment.referenceNum}`,
       type: "income",
@@ -2717,7 +2764,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
       const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
 
       const newCashbook: CashbookEntry = {
-        id: `cb-${Date.now()}`,
+        id: `cb-pay-${oldP.id}`,
         date: oldP.paymentDate,
         description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
         type: "income",
@@ -2893,7 +2940,7 @@ app.post('/api/cashbook', checkPermission('cashbook', 'write'), async (req: Requ
   }
 
   const newEntry: CashbookEntry = {
-    id: `cb-${Date.now()}`,
+    id: `cb-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
     date: data.date || new Date().toISOString().split('T')[0],
     description: data.description || "Cashbook Transaction Entry",
     type,

@@ -1061,7 +1061,7 @@ export const api = {
       }
 
       const newCashbook: CashbookEntry = {
-        id: `cb-${Date.now()}`,
+        id: `cb-pay-${payId}`,
         date: newPayment.paymentDate,
         description: `Invoiced Collection [${newPayment.clientName}] Ref ${newPayment.referenceNum}`,
         type: "income",
@@ -1181,7 +1181,7 @@ export const api = {
         const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
 
         const newCashbook: CashbookEntry = {
-          id: `cb-${Date.now()}`,
+          id: `cb-pay-${oldP.id}`,
           date: oldP.paymentDate,
           description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
           type: "income",
@@ -1318,7 +1318,7 @@ export const api = {
       }
 
       const newEntry: CashbookEntry = {
-        id: `cb-${Date.now()}`,
+        id: `cb-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
         date: entry.date || new Date().toISOString().split('T')[0],
         description: entry.description || "Cashbook Transaction Entry",
         type,
