@@ -219,6 +219,45 @@ function getCachedItem<T>(key: string, fallback: T): T {
   }
 }
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.05,
+      ease: "easeOut"
+    }
+  }
+};
+
+const sidebarVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: { 
+    opacity: 1, 
+    x: 0,
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+  }
+};
+
+const headerVariants = {
+  hidden: { opacity: 0, y: -12 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] }
+  }
+};
+
+const stageVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] }
+  }
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem('active_tab');
@@ -1430,8 +1469,18 @@ export default function App() {
 
   const handleAddInvoice = async (inv: Partial<Invoice>) => {
     try {
-      await api.createInvoice(inv);
+      const created = await api.createInvoice(inv);
       showToast(`Authorized & dispatched invoice!`);
+      
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total || 0);
+        triggerLocalNotification(
+          "📄 New Invoice Dispatched",
+          `Invoice ${inv.invoiceNumber || created?.invoiceNumber || ''} created for ${inv.clientName || ''} worth ${formattedAmt}.`
+        ).catch(() => {});
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1442,6 +1491,15 @@ export default function App() {
     try {
       await api.updateInvoice(id, inv);
       showToast(`Maturity/bill items updated successfully!`);
+
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        triggerLocalNotification(
+          "🔄 Invoice Modified",
+          `Invoice ${inv.invoiceNumber || ''} for ${inv.clientName || ''} has been updated.`
+        ).catch(() => {});
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1509,8 +1567,19 @@ export default function App() {
 
   const handleAddPayment = async (p: Partial<Payment>) => {
     try {
-      await api.createPayment(p);
+      const created = await api.createPayment(p);
       showToast(`Cleared: Added ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.amount!)} deposit to client ledger!`);
+
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        triggerIncomingCall(created || p);
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.amount || 0);
+        triggerLocalNotification(
+          "💰 Payment Received",
+          `Received ${formattedAmt} from ${p.clientName || 'N/A'} via ${p.paymentMode || 'N/A'}.`
+        ).catch(() => {});
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1521,6 +1590,17 @@ export default function App() {
     try {
       await api.updatePayment(id, p);
       showToast("Approved: Modified payment receipt references successfully.");
+
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        triggerIncomingCall(p);
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.amount || 0);
+        triggerLocalNotification(
+          "🔄 Payment Updated",
+          `Payment of INR ${p.amount} from ${p.clientName || 'N/A'} has been updated.`
+        ).catch(() => {});
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1541,6 +1621,23 @@ export default function App() {
     try {
       await api.createCashbookEntry(entry);
       showToast("Approved: Recorded Cashbook operating voucher.");
+
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount || 0);
+        if (entry.type === 'expense') {
+          triggerLocalNotification(
+            "💸 Payment Cash Out",
+            `Registered payout of ${formattedAmt}: ${entry.description || 'General expense'}.`
+          ).catch(() => {});
+        } else {
+          triggerLocalNotification(
+            "📈 Cashbook Cash In",
+            `Registered receipt of ${formattedAmt}: ${entry.description || 'General income'}.`
+          ).catch(() => {});
+        }
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1551,6 +1648,16 @@ export default function App() {
     try {
       await api.updateCashbookEntry(id, entry);
       showToast("Approved: Updated cashbook operating voucher.");
+
+      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+      if (isAndroid) {
+        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount || 0);
+        triggerLocalNotification(
+          "🔄 Cashbook Entry Modified",
+          `Transaction entry of ${formattedAmt} (${entry.description || ''}) has been updated.`
+        ).catch(() => {});
+      }
+
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -2117,9 +2224,9 @@ export default function App() {
 
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
       className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative"
     >
       
@@ -2203,7 +2310,11 @@ export default function App() {
         }`}
         id="erp-sidebar"
       >
-        {/* Upper Brand Info */}
+        <motion.div 
+          variants={sidebarVariants}
+          className="h-full flex flex-col justify-between"
+        >
+          {/* Upper Brand Info */}
         <div className="p-5 pt-[calc(1.25rem+env(safe-area-inset-top,14px))] md:p-5 border-b border-[#E5E7EB]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -2340,10 +2451,14 @@ export default function App() {
             </button>
           </div>
         )}
+        </motion.div>
       </aside>
 
       {/* MOBILE BAR TOP NAVIGATION */}
-      <div className="bg-white border-b border-[#E5E7EB] text-slate-900 px-4 pb-[9px] pt-[calc(9px+env(safe-area-inset-top,0px))] flex items-center justify-between md:hidden no-print font-sans sticky top-0 z-40 shadow-sm">
+      <motion.div 
+        variants={headerVariants}
+        className="bg-white border-b border-[#E5E7EB] text-slate-900 px-4 pb-[9px] pt-[calc(9px+env(safe-area-inset-top,0px))] flex items-center justify-between md:hidden no-print font-sans sticky top-0 z-40 shadow-sm"
+      >
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -2504,7 +2619,7 @@ export default function App() {
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* MOBILE DYNAMIC SEARCH DROPDOWN DRAWER */}
       {showMobileSearch && (
@@ -2598,7 +2713,10 @@ export default function App() {
         )}
 
         {/* Top Operational Status Bar */}
-        <header className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-40 animate-fade-in gap-4">
+        <motion.header 
+          variants={headerVariants}
+          className="bg-white border-b border-[#E5E7EB] p-4 shrink-0 hidden md:flex items-center justify-between no-print shadow-sm sticky top-0 z-40 gap-4"
+        >
           <div className="flex items-center gap-4 flex-1 max-w-md">
             {/* High-visibility toggle for desktop */}
             <button 
@@ -2776,10 +2894,14 @@ export default function App() {
               </button>
             )}
           </div>
-        </header>
+        </motion.header>
 
         {/* DYNAMIC COMPONENT PANEL CANVAS */}
-        <div className="p-3 sm:p-6 md:p-8 pb-24 md:pb-8 flex-1 max-w-7xl w-full mx-auto" id="dynamic-element-stage">
+        <motion.div 
+          variants={stageVariants}
+          className="p-3 sm:p-6 md:p-8 pb-24 md:pb-8 flex-1 max-w-7xl w-full mx-auto" 
+          id="dynamic-element-stage"
+        >
           {loading && !dashboardMetrics ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
               <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
@@ -3016,7 +3138,7 @@ export default function App() {
               )}
             </div>
           )}
-        </div>
+        </motion.div>
       </main>
 
       {/* MOBILE FRIENDLY BOTTOM PORTAL NAVIGATION */}
