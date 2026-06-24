@@ -77,6 +77,10 @@ import { motion } from 'motion/react';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications' | 'workflow';
 
+// Global session caches to prevent duplicate alerts/notifications or historical notifications triggers
+const processedNotificationIds = new Set<string>();
+const processedPaymentIds = new Set<string>();
+
 export function computeLocalDashboardMetrics(
   clients: Client[],
   invoices: Invoice[],
@@ -968,26 +972,31 @@ export default function App() {
        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
                       .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
        
+       // Populate session set on first snapshot to prevent historical triggers
+       if (isFirstPaymentsSnapshot) {
+         snapshot.docs.forEach(doc => {
+           processedPaymentIds.add(doc.id);
+         });
+       }
+
        snapshot.docChanges().forEach((change) => {
          if (change.type === "added" || change.type === "modified") {
            const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
-           const payTime = ((currPay as any).updatedAt || currPay.createdAt) ? new Date((currPay as any).updatedAt || currPay.createdAt).getTime() : 0;
-           // 10 minutes leeway, using Math.abs to protect against client-server clock drift
-           const isRecent = payTime && (Math.abs(Date.now() - payTime) < 30 * 60 * 1000);
+           
+           const isNew = !processedPaymentIds.has(currPay.id);
+           const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
 
-           if (!isFirstPaymentsSnapshot || isRecent) {
-             const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
-             if (!localStorage.getItem(processedKey)) {
-               localStorage.setItem(processedKey, 'true');
-               triggerIncomingCall(currPay);
-               const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
-               triggerLocalNotification(
-                 change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
-                 change.type === "added"
-                   ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
-                   : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
-               );
-             }
+           if (isNew || (change.type === "modified" && !localStorage.getItem(processedKey))) {
+             processedPaymentIds.add(currPay.id);
+             localStorage.setItem(processedKey, 'true');
+             triggerIncomingCall(currPay);
+             const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
+             triggerLocalNotification(
+               change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
+               change.type === "added"
+                 ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
+                 : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
+             );
            }
          }
        });
@@ -1095,6 +1104,13 @@ export default function App() {
         return list;
       });
 
+      // Populate session set on first snapshot to prevent historical triggers
+      if (isFirstNotificationsSnapshot) {
+        snapshot.docs.forEach(doc => {
+          processedNotificationIds.add(doc.id);
+        });
+      }
+
       // Trigger high-priority alerts in real time for newly added unread notifications
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
@@ -1110,54 +1126,52 @@ export default function App() {
             docData.userId === 'all' ||
             docData.userId === 'demo-admin'
           );
-          if (isUserMatch && !docData.isRead && !localStorage.getItem(triggeredKey)) {
-            const notifTime = docData.createdAt ? new Date(docData.createdAt).getTime() : 0;
-            // 30 minutes leeway, protecting against clock drift with Math.abs
-            const isRecent = notifTime && (Math.abs(Date.now() - notifTime) < 30 * 60 * 1000);
+          
+          const isNew = !processedNotificationIds.has(docData.id);
 
-            if (!isFirstNotificationsSnapshot || isRecent) {
-              localStorage.setItem(triggeredKey, 'true');
-              
-              // Guard sounds, voice announcements, and call alert overlays to run ONLY on actual native Android App platforms (suppressed on generic web URL)
-              const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-              if (isAndroid) {
-                // Play configured tone
-                const soundId = businessSettings?.notificationSound || 'crystal';
-                playSoundTone(soundId);
+          if (isUserMatch && !docData.isRead && (isNew || !localStorage.getItem(triggeredKey))) {
+            processedNotificationIds.add(docData.id);
+            localStorage.setItem(triggeredKey, 'true');
+            
+            // Guard sounds, voice announcements, and call alert overlays to run ONLY on actual native Android App platforms (suppressed on generic web URL)
+            const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+            if (isAndroid) {
+              // Play configured tone
+              const soundId = businessSettings?.notificationSound || 'crystal';
+              playSoundTone(soundId);
 
-                 // Speak configured voice announcement template
-                if (businessSettings?.voiceAnnounceEnabled) {
-                  const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-                  const amtMatched = docData.message.match(/₹[\d,]+/);
-                  const amount = amtMatched ? amtMatched[0] : "some amount";
-                  
-                  const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
-                  const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-                  
-                  const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-                  const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+               // Speak configured voice announcement template
+              if (businessSettings?.voiceAnnounceEnabled) {
+                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+                const amtMatched = docData.message.match(/₹[\d,]+/);
+                const amount = amtMatched ? amtMatched[0] : "some amount";
+                
+                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
+                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+                
+                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
 
-                  playVoiceAnnouncement(tmpl, {
-                    amount,
-                    hotelName,
-                    paymentMode,
-                    date: new Date(docData.createdAt).toLocaleDateString()
-                  });
-                }
-
-                // Show incoming call alert on Android app for: Invoice, Cashbook, Entry, or Payment (Created or Updated)
-                if (businessSettings?.incomingCallAlertEnabled) {
-                  const allowedModules = ['invoices', 'cashbook', 'payments'];
-                  if (allowedModules.includes(docData.module || '')) {
-                    setShowIncomingCallAlert(docData);
-                  }
-                }
-
-                // Trigger real system pull-down local notification banner on Android
-                triggerLocalNotification(docData.title, docData.message).catch(err => {
-                  console.warn("[Local Notif Fail] Suppressed banner error:", err);
+                playVoiceAnnouncement(tmpl, {
+                  amount,
+                  hotelName,
+                  paymentMode,
+                  date: new Date(docData.createdAt).toLocaleDateString()
                 });
               }
+
+              // Show incoming call alert on Android app for: Invoice, Cashbook, Entry, or Payment (Created or Updated)
+              if (businessSettings?.incomingCallAlertEnabled) {
+                const allowedModules = ['invoices', 'cashbook', 'payments'];
+                if (allowedModules.includes(docData.module || '')) {
+                  setShowIncomingCallAlert(docData);
+                }
+              }
+
+              // Trigger real system pull-down local notification banner on Android
+              triggerLocalNotification(docData.title, docData.message).catch(err => {
+                console.warn("[Local Notif Fail] Suppressed banner error:", err);
+              });
             }
           }
         }
@@ -2214,7 +2228,11 @@ export default function App() {
               )}
               {isSidebarOpen && (
                 <div className="overflow-hidden leading-snug flex flex-col justify-center">
-                  <h1 className="text-[12px] font-bold tracking-tight text-slate-900 font-display select-none">
+                  <h1 className={`font-bold tracking-tight text-slate-900 font-display select-none ${
+                    typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+                      ? 'text-[14px]'
+                      : 'text-[13px] md:text-[13px]'
+                  }`}>
                     { companyNameText.includes('Modules') ? (
                       companyNameText.split(/(Modules)/g).map((part, i) => 
                         part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
@@ -2272,7 +2290,7 @@ export default function App() {
                     setIsSidebarOpen(false);
                   }
                 }}
-                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[12px] md:text-[12px] font-semibold transition tracking-wide cursor-pointer ${
+                className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[13px] md:text-[13px] font-semibold transition tracking-wide cursor-pointer ${
                   isActive 
                     ? 'bg-[#F3F0FF] text-[#5B21FF] font-bold shadow-sm' 
                     : 'text-slate-500 hover:text-slate-905 hover:bg-slate-50'
@@ -2347,7 +2365,11 @@ export default function App() {
                 {companyInitials}
               </div>
             )}
-              <span className="text-[12px] font-bold tracking-tight text-slate-900 font-display leading-tight select-none">
+              <span className={`font-bold tracking-tight text-slate-900 font-display leading-tight select-none ${
+                typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+                  ? 'text-[14px]'
+                  : 'text-[12px]'
+              }`}>
                 { companyNameText.includes('Modules') ? (
                   companyNameText.split(/(Modules)/g).map((part, i) => 
                     part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
