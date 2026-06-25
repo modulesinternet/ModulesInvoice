@@ -1130,44 +1130,44 @@ export default function App() {
             processedNotificationIds.add(docData.id);
             localStorage.setItem(triggeredKey, 'true');
             
-            // Play configured tone on ALL devices (Android, Web, Desktop)
-            const soundId = businessSettings?.notificationSound || 'crystal';
-            playSoundTone(soundId);
+            // ** do not send notifications and call for web app and desktop view only send notification and calls for android app only
+            const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+            if (isAndroidApp) {
+              // Play configured tone on Android device
+              const soundId = businessSettings?.notificationSound || 'crystal';
+              playSoundTone(soundId);
 
-            // Speak configured voice announcement template on ALL devices
-            if (businessSettings?.voiceAnnounceEnabled) {
-              const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-              const amtMatched = docData.message.match(/₹[\d,]+/);
-              const amount = amtMatched ? amtMatched[0] : "some amount";
-              
-              const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
-              const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-              
-              const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-              const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
-
-              playVoiceAnnouncement(tmpl, {
-                amount,
-                hotelName,
-                paymentMode,
-                date: new Date(docData.createdAt).toLocaleDateString()
-              });
-            }
-
-            // Vibration feedback on ALL supporting devices
-            if (typeof navigator !== 'undefined' && navigator.vibrate) {
-              navigator.vibrate([300, 100, 300]);
-            }
-
-            // Show incoming call alert overlay on ALL devices for: Invoice, Cashbook, Entry, or Payment
-            if (businessSettings?.incomingCallAlertEnabled) {
-              const allowedModules = ['invoices', 'cashbook', 'payments'];
-              if (allowedModules.includes(docData.module || '')) {
-                setShowIncomingCallAlert(docData);
+              // Speak configured voice announcement template on Android device
+              if (businessSettings?.voiceAnnounceEnabled) {
+                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+                const amtMatched = docData.message.match(/₹[\d,]+/);
+                const amount = amtMatched ? amtMatched[0] : "some amount";
                 
-                // For Android, ALSO launch the WhatsApp-style full VoIP call overlay screen
-                const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-                if (isAndroid) {
+                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
+                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+                
+                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+
+                playVoiceAnnouncement(tmpl, {
+                  amount,
+                  hotelName,
+                  paymentMode,
+                  date: new Date(docData.createdAt).toLocaleDateString()
+                });
+              }
+
+              // Vibration feedback on Android device
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                navigator.vibrate([300, 100, 300]);
+              }
+
+              // Show incoming call alert overlay on Android device for: Invoice, Cashbook, Entry, or Payment
+              if (businessSettings?.incomingCallAlertEnabled) {
+                const allowedModules = ['invoices', 'cashbook', 'payments'];
+                if (allowedModules.includes(docData.module || '')) {
+                  setShowIncomingCallAlert(docData);
+                  
                   try {
                     const amtMatched = docData.message.match(/₹[\d,]+/);
                     const amountStr = amtMatched ? amtMatched[0].replace(/[^0-9]/g, '') : "0";
@@ -1193,11 +1193,8 @@ export default function App() {
                   }
                 }
               }
-            }
 
-            // Trigger real system pull-down local notification banner on Android
-            const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-            if (isAndroid) {
+              // Trigger real system pull-down local notification banner on Android
               triggerLocalNotification(docData.title, docData.message).catch(err => {
                 console.warn("[Local Notif Fail] Suppressed banner error:", err);
               });
@@ -2104,39 +2101,19 @@ export default function App() {
         {toast && (
           <div 
             onClick={() => setToast(null)}
-            className={`fixed top-6 right-6 z-[100] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-4 transition-all duration-500 transform translate-y-0 scale-100 flex items-start gap-3.5 cursor-pointer overflow-hidden group select-none ${
-              toast.type === 'error' ? 'border-l-4 border-l-rose-500' : 
-              toast.type === 'info' ? 'border-l-4 border-l-indigo-500' : 'border-l-4 border-l-emerald-500'
-            }`}
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-[1000] max-w-sm w-[calc(100%-2rem)] md:w-auto md:min-w-[300px] bg-slate-900 text-white rounded-xl shadow-lg px-4 py-3 border border-slate-800 flex items-center gap-2.5 cursor-pointer select-none transition-all duration-300"
             id="system-professional-toast-login"
           >
-            <div className={`shrink-0 rounded-full p-2 flex items-center justify-center ${
-              toast.type === 'error' ? 'bg-rose-50 text-rose-600' :
-              toast.type === 'info' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'
-            } group-hover:scale-110 transition duration-300`}>
+            <div className="shrink-0">
               {toast.type === 'error' ? (
-                <AlertCircle className="w-5 h-5 animate-pulse" />
+                <AlertCircle className="w-4 h-4 text-rose-400" />
               ) : toast.type === 'info' ? (
-                <Clock className="w-5 h-5" />
+                <Info className="w-4 h-4 text-sky-400" />
               ) : (
-                <CheckCircle className="w-5 h-5 animate-bounce text-emerald-600" />
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
               )}
             </div>
-            
-            <div className="flex-1 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-slate-900 font-sans tracking-wide uppercase select-none flex items-center gap-1 select-none">
-                {toast.type === 'error' ? 'System Error' : toast.type === 'info' ? 'Status Alert' : 'Sync Saved Successfully'}
-                <Sparkles className={`w-3.5 h-3.5 ${toast.type === 'error' ? 'text-rose-400' : toast.type === 'info' ? 'text-indigo-400' : 'text-emerald-500'} animate-pulse`} />
-              </h4>
-              <p className="text-[11.5px] leading-relaxed font-semibold text-slate-700">{toast.message}</p>
-            </div>
-
-            <div 
-              className={`absolute bottom-0 left-0 h-1 animate-progress-drain ${
-                toast.type === 'error' ? 'bg-rose-500' :
-                toast.type === 'info' ? 'bg-indigo-500' : 'bg-emerald-500'
-              }`} 
-            />
+            <p className="text-[12px] font-semibold text-slate-100 flex-1 leading-tight">{toast.message}</p>
           </div>
         )}
 
@@ -2158,12 +2135,13 @@ export default function App() {
   }
 
   return (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate={showSplash ? "hidden" : "visible"}
-      className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative"
-    >
+    <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] relative">
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate={showSplash ? "hidden" : "visible"}
+        className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col md:flex-row relative"
+      >
       
       {/* PROFESSIONAL SYSTEM LOADERS - CENTERED CIRCULAR REFRESH OVERLAY TO PREVENT OLD DATA GLITCHES */}
       {fullScreenLoading && !dashboardMetrics && (
@@ -2192,39 +2170,19 @@ export default function App() {
       {toast && (
         <div 
           onClick={() => setToast(null)}
-          className={`fixed top-6 right-6 z-[100] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-4 transition-all duration-500 transform translate-y-0 scale-100 flex items-start gap-3.5 cursor-pointer overflow-hidden group select-none ${
-            toast.type === 'error' ? 'border-l-4 border-l-rose-500' : 
-            toast.type === 'info' ? 'border-l-4 border-l-indigo-500' : 'border-l-4 border-l-emerald-500'
-          }`}
+          className="fixed top-5 left-1/2 -translate-x-1/2 z-[1000] max-w-sm w-[calc(100%-2rem)] md:w-auto md:min-w-[300px] bg-slate-900 text-white rounded-xl shadow-lg px-4 py-3 border border-slate-800 flex items-center gap-2.5 cursor-pointer select-none transition-all duration-300"
           id="system-professional-toast"
         >
-          <div className={`shrink-0 rounded-full p-2 flex items-center justify-center ${
-            toast.type === 'error' ? 'bg-rose-50 text-rose-600' :
-            toast.type === 'info' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'
-          } group-hover:scale-110 transition duration-300`}>
+          <div className="shrink-0">
             {toast.type === 'error' ? (
-              <AlertCircle className="w-5 h-5 animate-pulse" />
+              <AlertCircle className="w-4 h-4 text-rose-400" />
             ) : toast.type === 'info' ? (
-              <Clock className="w-5 h-5" />
+              <Info className="w-4 h-4 text-sky-400" />
             ) : (
-              <CheckCircle className="w-5 h-5 animate-bounce text-emerald-600" />
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
             )}
           </div>
-          
-          <div className="flex-1 space-y-0.5">
-            <h4 className="text-[10px] font-bold text-slate-900 font-sans tracking-wide uppercase select-none flex items-center gap-1 select-none">
-              {toast.type === 'error' ? 'System Error' : toast.type === 'info' ? 'Status Alert' : 'Sync Saved Successfully'}
-              <Sparkles className={`w-3.5 h-3.5 ${toast.type === 'error' ? 'text-rose-400' : toast.type === 'info' ? 'text-indigo-400' : 'text-emerald-500'} animate-pulse`} />
-            </h4>
-            <p className="text-[11.5px] leading-relaxed font-semibold text-slate-700">{toast.message}</p>
-          </div>
-
-          <div 
-            className={`absolute bottom-0 left-0 h-1 animate-progress-drain ${
-              toast.type === 'error' ? 'bg-rose-500' :
-              toast.type === 'info' ? 'bg-indigo-500' : 'bg-emerald-500'
-            }`} 
-          />
+          <p className="text-[12px] font-semibold text-slate-100 flex-1 leading-tight">{toast.message}</p>
         </div>
       )}
 
@@ -3262,6 +3220,8 @@ export default function App() {
         />
       )}
 
+      </motion.div>
+
       <AnimatePresence mode="wait">
         {showSplash && (
           <SplashAnimation 
@@ -3271,6 +3231,6 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
