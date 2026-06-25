@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, 
   Plus, 
@@ -568,234 +570,244 @@ export default function QuotationsModule({
       )}
 
       {/* CREATE ESTIMATE SLIDE-OVER WIZARD */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-xl border border-[#E5E7EB] flex flex-col max-h-[90vh]">
-            {/* Wizard Header */}
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-purple-400" />
-                <h3 className="font-bold text-base font-display">{isEditing ? "Edit Proposal Estimate" : "Create Smart Proposal Estimate"}</h3>
-              </div>
-              <button 
-                onClick={() => {
-                  setIsCreateOpen(false);
-                  setAddedItems([]);
-                }} 
-                className="text-slate-400 hover:text-white transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Wizard Body Form */}
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-5 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Client Dropdown */}
-                <div className="space-y-1 md:col-span-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Select Target Client *</label>
-                  <select 
-                    required
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-slate-50"
-                  >
-                    <option value="">-- Choose Client --</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+      <AnimatePresence>
+        {isCreateOpen && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="fixed inset-0" onClick={() => { setIsCreateOpen(false); setAddedItems([]); }} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+            >
+              {/* Wizard Header */}
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-purple-400" />
+                  <h3 className="font-bold text-base font-display">{isEditing ? "Edit Proposal Estimate" : "Create Smart Proposal Estimate"}</h3>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Issue Date *</label>
-                  <input 
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Expiry Valid Date *</label>
-                  <input 
-                    type="date"
-                    required
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
+                <button 
+                  onClick={() => {
+                    setIsCreateOpen(false);
+                    setAddedItems([]);
+                  }} 
+                  className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* DYNAMIC ITEM SCOPE SECTION */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/60 space-y-3">
-                <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider block">Add Line Items to Scope</span>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-                  {/* Item selector */}
-                  <div className="sm:col-span-2 space-y-1">
-                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Select Service / Item</label>
+              {/* Wizard Body Form */}
+              <form onSubmit={handleCreateSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Client Dropdown */}
+                  <div className="space-y-1 md:col-span-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Select Target Client *</label>
                     <select 
-                      value={currentProductId}
-                      onChange={(e) => handleProductSelect(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white"
+                      required
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-slate-50 text-slate-800"
                     >
-                      <option value="">-- Available Catalogue --</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {businessSettings.gstOption === 'zero_tax' ? '' : `(GST ${p.gstPercent}%)`}
-                        </option>
+                      <option value="">-- Choose Client --</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Qty</label>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Issue Date *</label>
                     <input 
-                      type="number"
-                      min={1}
-                      value={currentQty}
-                      onChange={(e) => setCurrentQty(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-xl bg-white"
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleAddItemToWizard}
-                    className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-1.5"
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Expiry Valid Date *</label>
+                    <input 
+                      type="date"
+                      required
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {/* DYNAMIC ITEM SCOPE SECTION */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/60 space-y-3">
+                  <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider block">Add Line Items to Scope</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                    {/* Item selector */}
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-semibold">Select Service / Item</label>
+                      <select 
+                        value={currentProductId}
+                        onChange={(e) => handleProductSelect(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800"
+                      >
+                        <option value="">-- Available Catalogue --</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {businessSettings.gstOption === 'zero_tax' ? '' : `(GST ${p.gstPercent}%)`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-semibold">Qty</label>
+                      <input 
+                        type="number"
+                        min={1}
+                        value={currentQty}
+                        onChange={(e) => setCurrentQty(e.target.value)}
+                        className="w-full text-xs p-2 border border-slate-200 rounded-xl bg-white text-slate-800"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddItemToWizard}
+                      className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Include</span>
+                    </button>
+                  </div>
+
+                  {/* Scope line list table */}
+                  {addedItems.length > 0 ? (
+                    <div className="bg-white rounded-lg border border-slate-100 overflow-hidden mt-3">
+                      <table className="w-full text-left text-[11px]">
+                        <thead className="bg-slate-100/70 text-slate-400 font-bold uppercase truncate border-b border-slate-100">
+                          <tr>
+                            <th className="p-2 pl-3">Item / Service Details</th>
+                            <th className="p-2 text-center">Qty</th>
+                            <th className="p-2 text-right">Extended Base</th>
+                            <th className="p-2 text-center">Taxes</th>
+                            <th className="p-2 text-center">Bin</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {addedItems.map((item, idx) => {
+                            const prod = products.find(p => p.id === item.productId)!;
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/40">
+                                <td className="p-2 pl-3 font-semibold text-slate-700">{prod.name}</td>
+                                <td className="p-2 text-center font-mono font-semibold">{item.qty} {prod.unit}</td>
+                                <td className="p-2 text-right font-mono">{formatCurrency(item.qty * item.price)}</td>
+                                <td className="p-2 text-center font-semibold text-indigo-600">
+                                  {businessSettings.gstOption === 'zero_tax' ? '0% Exempt' : `${prod.gstPercent}%`}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleRemoveItemFromWizard(idx)}
+                                    className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                  >
+                                    <Trash className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 italic block py-2 text-center">No deliverables mapped to proposal scope yet.</span>
+                  )}
+                </div>
+
+                {/* DISCOUNT & STATEMENTS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-100 shrink-0">
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">Apply Promotion Discount (INR)</label>
+                      <input 
+                        type="number"
+                        value={discount}
+                        onChange={(e) => setDiscount(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 bg-white text-slate-800"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">Terms &amp; Deliverables Clause</label>
+                      <textarea 
+                        rows={3}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Running sums */}
+                  <div className="p-4 bg-slate-900 text-slate-100 rounded-xl flex flex-col justify-between font-mono text-xs">
+                    <span className="font-sans text-[11px] font-bold uppercase text-indigo-400 mb-2">Estimate Totalizer Tally</span>
+                    <div className="space-y-2 border-b border-slate-800 pb-3">
+                      <div className="flex justify-between">
+                        <span>Total Net Base:</span>
+                        <span>{formatCurrency(draftSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-indigo-300">
+                        <span>Calculated CGST/SGST/IGST:</span>
+                        <span>+{formatCurrency(draftTax)}</span>
+                      </div>
+                      {draftDiscountNum > 0 && (
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Waver Promo discount:</span>
+                          <span>-{formatCurrency(draftDiscountNum)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-bold pt-3 font-sans">
+                      <span className="text-white">Estimate Total (INR):</span>
+                      <span className="text-xl text-[#8B5CF6] font-mono font-extrabold">{formatCurrency(draftTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-100 shrink-0">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setIsCreateOpen(false);
+                      setAddedItems([]);
+                    }}
+                    className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Include</span>
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-white"
+                  >
+                    {isSaving ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      isEditing ? "Save Proposal Changes" : "Dispatch Proposal Estimate"
+                    )}
                   </button>
                 </div>
-
-                {/* Scope line list table */}
-                {addedItems.length > 0 ? (
-                  <div className="bg-white rounded-lg border border-slate-100 overflow-hidden mt-3">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="bg-slate-100/70 text-slate-400 font-bold uppercase truncate border-b border-slate-100">
-                        <tr>
-                          <th className="p-2 pl-3">Item / Service Details</th>
-                          <th className="p-2 text-center">Qty</th>
-                          <th className="p-2 text-right">Extended Base</th>
-                          <th className="p-2 text-center">Taxes</th>
-                          <th className="p-2 text-center">Bin</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {addedItems.map((item, idx) => {
-                          const prod = products.find(p => p.id === item.productId)!;
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50/40">
-                              <td className="p-2 pl-3 font-semibold text-slate-700">{prod.name}</td>
-                              <td className="p-2 text-center font-mono font-semibold">{item.qty} {prod.unit}</td>
-                              <td className="p-2 text-right font-mono">{formatCurrency(item.qty * item.price)}</td>
-                              <td className="p-2 text-center font-semibold text-indigo-600">
-                                {businessSettings.gstOption === 'zero_tax' ? '0% Exempt' : `${prod.gstPercent}%`}
-                              </td>
-                              <td className="p-2 text-center">
-                                <button 
-                                  type="button"
-                                  onClick={() => handleRemoveItemFromWizard(idx)}
-                                  className="text-rose-500 hover:text-rose-700 p-1"
-                                >
-                                  <Trash className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-slate-400 italic block py-2 text-center">No deliverables mapped to proposal scope yet.</span>
-                )}
-              </div>
-
-              {/* DISCOUNT & STATEMENTS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-100">
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase">Apply Promotion Discount (INR)</label>
-                    <input 
-                      type="number"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase">Terms &amp; Deliverables Clause</label>
-                    <textarea 
-                      rows={3}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Running sums */}
-                <div className="p-4 bg-slate-900 text-slate-100 rounded-xl flex flex-col justify-between font-mono text-xs">
-                  <span className="font-sans text-[11px] font-bold uppercase text-indigo-400 mb-2">Estimate Totalizer Tally</span>
-                  <div className="space-y-2 border-b border-slate-800 pb-3">
-                    <div className="flex justify-between">
-                      <span>Total Net Base:</span>
-                      <span>{formatCurrency(draftSubtotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-indigo-300">
-                      <span>Calculated CGST/SGST/IGST:</span>
-                      <span>+{formatCurrency(draftTax)}</span>
-                    </div>
-                    {draftDiscountNum > 0 && (
-                      <div className="flex justify-between text-emerald-400">
-                        <span>Waver Promo discount:</span>
-                        <span>-{formatCurrency(draftDiscountNum)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-between items-center text-sm font-bold pt-3 font-sans">
-                    <span className="text-white">Estimate Total (INR):</span>
-                    <span className="text-xl text-[#8B5CF6] font-mono font-extrabold">{formatCurrency(draftTotal)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setIsCreateOpen(false);
-                    setAddedItems([]);
-                  }}
-                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSaving}
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    isEditing ? "Save Proposal Changes" : "Dispatch Proposal Estimate"
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 }

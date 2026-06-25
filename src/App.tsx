@@ -1134,32 +1134,44 @@ export default function App() {
             const isAndroidApp = (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android') || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
             if (isAndroidApp) {
               // Play configured tone on Android device
-              const soundId = businessSettings?.notificationSound || 'crystal';
-              playSoundTone(soundId);
+              try {
+                const soundId = businessSettings?.notificationSound || 'crystal';
+                playSoundTone(soundId);
+              } catch (soundErr) {
+                console.warn("[Sound Fail] Playback suppressed gracefully:", soundErr);
+              }
 
               // Speak configured voice announcement template on Android device
-              if (businessSettings?.voiceAnnounceEnabled) {
-                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-                const amtMatched = docData.message.match(/₹[\d,]+/);
-                const amount = amtMatched ? amtMatched[0] : "some amount";
-                
-                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
-                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-                
-                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+              try {
+                if (businessSettings?.voiceAnnounceEnabled) {
+                  const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+                  const amtMatched = docData.message.match(/₹[\d,]+/);
+                  const amount = amtMatched ? amtMatched[0] : "some amount";
+                  
+                  const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
+                  const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+                  
+                  const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                  const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
 
-                playVoiceAnnouncement(tmpl, {
-                  amount,
-                  hotelName,
-                  paymentMode,
-                  date: new Date(docData.createdAt).toLocaleDateString()
-                });
+                  playVoiceAnnouncement(tmpl, {
+                    amount,
+                    hotelName,
+                    paymentMode,
+                    date: new Date(docData.createdAt).toLocaleDateString()
+                  });
+                }
+              } catch (voiceErr) {
+                console.warn("[Voice Fail] TTS announcement suppressed gracefully:", voiceErr);
               }
 
               // Vibration feedback on Android device
-              if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                navigator.vibrate([300, 100, 300]);
+              try {
+                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                  navigator.vibrate([300, 100, 300]);
+                }
+              } catch (vibErr) {
+                console.warn("[Vibration Fail] Vibrate suppressed:", vibErr);
               }
 
               // Show incoming call alert overlay on Android device for: Invoice, Cashbook, Entry, or Payment

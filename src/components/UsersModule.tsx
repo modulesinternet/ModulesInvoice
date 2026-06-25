@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   Plus, 
@@ -624,131 +626,141 @@ export default function UsersModule({
       )}
 
       {/* RE-AUTH/INVITE MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-sm">{editingUser ? "Edit Teammate Clearance" : "Add New Member"}</h3>
-              </div>
-              <button onClick={() => { setIsModalOpen(false); setEditingUser(null); }}>
-                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Operator full Name *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. Satish K. Sharma"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500"
-                />
+      <AnimatePresence>
+        {isModalOpen && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="fixed inset-0" onClick={() => { setIsModalOpen(false); setEditingUser(null); }} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-sm w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+            >
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-bold text-sm">{editingUser ? "Edit Teammate Clearance" : "Add New Member"}</h3>
+                </div>
+                <button onClick={() => { setIsModalOpen(false); setEditingUser(null); }} className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Email Address *</label>
-                <input 
-                  type="email"
-                  required
-                  placeholder="e.g. satish@firm.com"
-                  value={email}
-                  disabled={editingUser?.userId === 'demo-admin'}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`w-full text-xs p-2.5 border rounded-xl focus:border-indigo-500 ${editingUser?.userId === 'demo-admin' ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200' : 'border-slate-200'}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">System Security Role *</label>
-                  <select
-                    value={roleInput}
-                    disabled={editingUser?.userId === 'demo-admin'}
-                    onChange={(e) => setRoleInput(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none animate-none"
-                  >
-                    <option value="Admin">Admin</option>
-                    <option value="Manager">Manager</option>
-                    <option value="Accountant">Accountant</option>
-                    <option value="Staff">Staff</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Account Status *</label>
-                  <select
-                    value={editStatus}
-                    disabled={editingUser?.userId === 'demo-admin'}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none animate-none"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Disabled</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Password Management */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">
-                    {editingUser ? "Reset Password" : "Set Password *"}
-                  </label>
-                  {editingUser && (
-                    <span className="text-[9px] italic text-slate-455 text-slate-500 font-sans">Leave blank if unchanged</span>
-                  )}
-                </div>
-                <div className="relative group">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Operator full Name *</label>
                   <input 
-                    type={showPass ? "text" : "password"}
-                    required={!editingUser}
-                    placeholder={editingUser ? "••••••••••••" : "Type user password"}
-                    value={userPassword}
-                    onChange={(e) => setUserPassword(e.target.value)}
-                    className="w-full text-xs p-2.5 pr-8 border border-slate-200 rounded-xl focus:border-indigo-500"
+                    type="text"
+                    required
+                    placeholder="e.g. Satish K. Sharma"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(!showPass)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Email Address *</label>
+                  <input 
+                    type="email"
+                    required
+                    placeholder="e.g. satish@firm.com"
+                    value={email}
+                    disabled={editingUser?.userId === 'demo-admin'}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`w-full text-xs p-2.5 border rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800 ${editingUser?.userId === 'demo-admin' ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200' : 'border-slate-200'}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">System Security Role *</label>
+                    <select
+                      value={roleInput}
+                      disabled={editingUser?.userId === 'demo-admin'}
+                      onChange={(e) => setRoleInput(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-800 focus:outline-none animate-none"
+                    >
+                      <option value="Admin">Admin</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Accountant">Accountant</option>
+                      <option value="Staff">Staff</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Account Status *</label>
+                    <select
+                      value={editStatus}
+                      disabled={editingUser?.userId === 'demo-admin'}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-800 focus:outline-none animate-none"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Password Management */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">
+                      {editingUser ? "Reset Password" : "Set Password *"}
+                    </label>
+                    {editingUser && (
+                      <span className="text-[9px] italic text-slate-500 font-sans">Leave blank if unchanged</span>
+                    )}
+                  </div>
+                  <div className="relative group">
+                    <input 
+                      type={showPass ? "text" : "password"}
+                      required={!editingUser}
+                      placeholder={editingUser ? "••••••••••••" : "Type user password"}
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      className="w-full text-xs p-2.5 pr-8 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                    >
+                      {showPass ? <Eye className="w-4 h-4 text-slate-500" /> : <Lock className="w-4 h-4 text-slate-400" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsModalOpen(false); setEditingUser(null); }}
+                    className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                   >
-                    {showPass ? <Eye className="w-4 h-4 text-slate-500" /> : <Lock className="w-4 h-4 text-slate-450" />}
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-white"
+                  >
+                    {isSaving ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      editingUser ? "Save Details" : "Grant Access"
+                    )}
                   </button>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => { setIsModalOpen(false); setEditingUser(null); }}
-                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSaving}
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    editingUser ? "Save Details" : "Grant Access"
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 }

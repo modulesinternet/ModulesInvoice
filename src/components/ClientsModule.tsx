@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   Plus, 
@@ -278,133 +280,143 @@ export default function ClientsModule({
       />
 
       {/* SLIDE-OVER FORM MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-xl border border-[#E5E7EB]">
-            {/* Modal Header */}
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Building className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-base font-display">{editingClient ? 'Edit Corporate Partner Profile' : 'Register Corporate Client'}</h3>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Organization Name *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. Tata Steel Limited"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                />
+      <AnimatePresence>
+        {isModalOpen && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="fixed inset-0" onClick={() => setIsModalOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-lg w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+            >
+              {/* Modal Header */}
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Building className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-bold text-base font-display">{editingClient ? 'Edit Corporate Partner Profile' : 'Register Corporate Client'}</h3>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Modal Body */}
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">GSTIN Registration (Optional)</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Organization Name *</label>
                   <input 
                     type="text"
-                    maxLength={15}
-                    placeholder="e.g. 27AAATT1234F1Z1"
-                    value={gstIn}
-                    onChange={(e) => setGstIn(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">PAN Identification Number</label>
-                  <input 
-                    type="text"
-                    maxLength={10}
-                    placeholder="e.g. AAATT1234F"
-                    value={pan}
-                    onChange={(e) => setPan(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Accounts Email</label>
-                  <input 
-                    type="email"
-                    placeholder="accounts@firm.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="e.g. Tata Steel Limited"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">GSTIN Registration (Optional)</label>
+                    <input 
+                      type="text"
+                      maxLength={15}
+                      placeholder="e.g. 27AAATT1234F1Z1"
+                      value={gstIn}
+                      onChange={(e) => setGstIn(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-slate-800 uppercase"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">PAN Identification Number</label>
+                    <input 
+                      type="text"
+                      maxLength={10}
+                      placeholder="e.g. AAATT1234F"
+                      value={pan}
+                      onChange={(e) => setPan(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-slate-800 uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Accounts Email</label>
+                    <input 
+                      type="email"
+                      placeholder="accounts@firm.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Contact Business Phone</label>
+                    <input 
+                      type="text"
+                      placeholder="+91 22 1234 5678"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Contact Business Phone</label>
-                  <input 
-                    type="text"
-                    placeholder="+91 22 1234 5678"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Registered Billing Address *</label>
+                  <textarea 
+                    required
+                    rows={2}
+                    placeholder="Primary headquarters location address details for invoicing CGST/SGST..."
+                    value={billingAddress}
+                    onChange={(e) => setBillingAddress(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Registered Billing Address *</label>
-                <textarea 
-                  required
-                  rows={2}
-                  placeholder="Primary headquarters location address details for invoicing CGST/SGST..."
-                  value={billingAddress}
-                  onChange={(e) => setBillingAddress(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Registered Shipping Address (Defaults to Billing)</label>
+                  <textarea 
+                    rows={2}
+                    placeholder="Specify secondary logistics destination details if different from corporate billing address..."
+                    value={shippingAddress}
+                    onChange={(e) => setShippingAddress(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Registered Shipping Address (Defaults to Billing)</label>
-                <textarea 
-                  rows={2}
-                  placeholder="Specify secondary logistics destination details if different from corporate billing address..."
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSaving}
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    editingClient ? 'Save Changes' : 'Register Corporate Client'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                {/* Form Actions */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-white"
+                  >
+                    {isSaving ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      editingClient ? 'Save Changes' : 'Register Corporate Client'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 }

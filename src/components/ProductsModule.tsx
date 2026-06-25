@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Package, 
   Plus, 
@@ -351,249 +353,269 @@ export default function ProductsModule({
       />
 
       {/* FORM MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-xl border border-[#E5E7EB]">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-base font-display">{editingProduct ? 'Modify Catalog Item' : 'New Catalog Item Listing'}</h3>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Item / Service Name *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. Oracle Database Audit Retainer"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div className={`grid ${businessSettings?.gstOption === 'zero_tax' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase">Price Limit (INR) *</label>
-                  <input 
-                    type="number"
-                    required
-                    placeholder="e.g. 150000"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
-                  />
+      <AnimatePresence>
+        {isModalOpen && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+            <div className="fixed inset-0" onClick={() => setIsModalOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+            >
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-bold text-base font-display">{editingProduct ? 'Modify Catalog Item' : 'New Catalog Item Listing'}</h3>
                 </div>
-                {businessSettings?.gstOption !== 'zero_tax' && (
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase">Applicable GST Rate *</label>
-                    <select 
-                      value={gstPercent}
-                      onChange={(e) => setGstPercent(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                    >
-                      <option value="0">0% (GST Exempt / Nil Rate)</option>
-                      <option value="5">5% (GST Lower rate)</option>
-                      <option value="12">12% (Standard secondary rate)</option>
-                      <option value="18">18% (Standard service rate)</option>
-                      <option value="28">28% (Luxuries and high assets rate)</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase">Product Category</label>
-                <select 
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSaving}
-                  className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    editingProduct ? 'Save Changes' : 'Confirm Catalogue Item'
-                  )}
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* CATEGORY CRUD DIALOG */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" id="category-crud-modal">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-xl border border-[#E5E7EB]">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-base font-display">Category Configuration Master</h3>
-              </div>
-              <button 
-                onClick={() => {
-                  setIsCategoryModalOpen(false);
-                  setEditingCategoryName(null);
-                }} 
-                className="text-slate-400 hover:text-white transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* CREATE ACTION */}
-              <form onSubmit={handleCreateCategorySubmit} className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-400 uppercase block font-sans">Add Product / Service Category</label>
-                <div className="flex gap-2">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Item / Service Name *</label>
                   <input 
                     type="text"
                     required
-                    placeholder="e.g. Consulting Services"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    className="flex-1 text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                    id="new-category-input"
+                    placeholder="e.g. Oracle Database Audit Retainer"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                   />
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="gradient-btn rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    id="submit-new-category-btn"
-                  >
-                    {isSaving ? (
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    ) : (
-                      <Plus className="w-4 h-4" />
-                    )}
-                    <span>{isSaving ? 'Creating...' : 'Create'}</span>
-                  </button>
-                </div>
-              </form>
-
-              {/* READ / UPDATE / DELETE CONTAINER */}
-              <div className="space-y-3">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block font-sans pb-1 border-b border-slate-100">
-                  Active Asset Categories ({categories.length})
                 </div>
 
-                <div className="max-h-64 overflow-y-auto pr-1 space-y-2" id="category-items-list">
-                  {categories.map((cat) => {
-                    const linkedCount = products.filter(p => p.category?.toLowerCase() === cat.toLowerCase()).length;
-                    const isEditing = editingCategoryName === cat;
-
-                    return (
-                      <div 
-                        key={cat} 
-                        className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60 hover:bg-slate-50/80 transition"
+                <div className={`grid ${businessSettings?.gstOption === 'zero_tax' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Price Limit (INR) *</label>
+                    <input 
+                      type="number"
+                      required
+                      placeholder="e.g. 150000"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                  {businessSettings?.gstOption !== 'zero_tax' && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">Applicable GST Rate *</label>
+                      <select 
+                        value={gstPercent}
+                        onChange={(e) => setGstPercent(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
                       >
-                        {isEditing ? (
-                          <div className="flex items-center gap-2 w-full">
-                            <input 
-                              type="text"
-                              value={updatedCategoryName}
-                              onChange={(e) => setUpdatedCategoryName(e.target.value)}
-                              className="flex-1 text-xs p-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              autoFocus
-                            />
-                            <button
-                              onClick={() => handleSaveRenameCategory(cat)}
-                              className="p-1 px-2.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition cursor-pointer"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Save</span>
-                            </button>
-                            <button
-                              onClick={() => setEditingCategoryName(null)}
-                              className="p-1 px-2 text-[10px] font-medium text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg transition cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-semibold text-slate-800">{cat}</span>
-                              <span className="text-[10px] text-slate-400 font-medium font-mono">
-                                {linkedCount} linked catalog {linkedCount === 1 ? 'item' : 'items'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {/* UPDATE ACTION GRID TRIGGER */}
-                              <button 
-                                onClick={() => handleStartRenameCategory(cat)}
-                                className="p-1 px-2 text-[10px] font-medium text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                title="Rename Category"
-                              >
-                                <Edit className="w-3 h-3" />
-                                <span>Rename</span>
-                              </button>
-                              
-                              {/* DELETE ACTION GRID TRIGGER */}
-                              <button 
-                                onClick={() => handleDeleteCategoryClick(cat)}
-                                className="p-1 px-2 text-[10px] font-medium text-rose-600 hover:text-rose-700 border border-rose-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
-                                title="Delete Category"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Delete</span>
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {categories.length === 0 && (
-                    <div className="text-center py-6 text-xs text-slate-400">
-                      No categories registered yet. Use the fields above to align catalog properties.
+                        <option value="0">0% (GST Exempt / Nil Rate)</option>
+                        <option value="5">5% (GST Lower rate)</option>
+                        <option value="12">12% (Standard secondary rate)</option>
+                        <option value="18">18% (Standard service rate)</option>
+                        <option value="28">28% (Luxuries and high assets rate)</option>
+                      </select>
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
 
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end">
-              <button 
-                onClick={() => {
-                  setIsCategoryModalOpen(false);
-                  setEditingCategoryName(null);
-                }}
-                className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-              >
-                Close Panel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Product Category</label>
+                  <select 
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="gradient-btn px-5 py-2 text-xs font-semibold rounded-xl shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-white"
+                  >
+                    {isSaving ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      editingProduct ? 'Save Changes' : 'Confirm Catalogue Item'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
+
+      {/* CATEGORY CRUD DIALOG */}
+      <AnimatePresence>
+        {isCategoryModalOpen && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans" id="category-crud-modal">
+            <div className="fixed inset-0" onClick={() => { setIsCategoryModalOpen(false); setEditingCategoryName(null); }} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+            >
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-bold text-base font-display">Category Configuration Master</h3>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsCategoryModalOpen(false);
+                    setEditingCategoryName(null);
+                  }} 
+                  className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                {/* CREATE ACTION */}
+                <form onSubmit={handleCreateCategorySubmit} className="space-y-2">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase block font-sans">Add Product / Service Category</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. Consulting Services"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="flex-1 text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-slate-800"
+                      id="new-category-input"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="gradient-btn rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                      id="submit-new-category-btn"
+                    >
+                      {isSaving ? (
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span>{isSaving ? 'Creating...' : 'Create'}</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* READ / UPDATE / DELETE CONTAINER */}
+                <div className="space-y-3">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block font-sans pb-1 border-b border-slate-100">
+                    Active Asset Categories ({categories.length})
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto pr-1 space-y-2" id="category-items-list">
+                    {categories.map((cat) => {
+                      const linkedCount = products.filter(p => p.category?.toLowerCase() === cat.toLowerCase()).length;
+                      const isEditing = editingCategoryName === cat;
+
+                      return (
+                        <div 
+                          key={cat} 
+                          className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/60 hover:bg-slate-50/80 transition"
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 w-full">
+                              <input 
+                                type="text"
+                                value={updatedCategoryName}
+                                onChange={(e) => setUpdatedCategoryName(e.target.value)}
+                                className="flex-1 text-xs p-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleSaveRenameCategory(cat)}
+                                className="p-1 px-2.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Save</span>
+                              </button>
+                              <button
+                                onClick={() => setEditingCategoryName(null)}
+                                className="p-1 px-2 text-[10px] font-medium text-slate-500 hover:text-slate-800 border border-slate-200 bg-white rounded-lg transition cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-slate-800">{cat}</span>
+                                <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                  {linkedCount} linked catalog {linkedCount === 1 ? 'item' : 'items'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {/* UPDATE ACTION GRID TRIGGER */}
+                                <button 
+                                  onClick={() => handleStartRenameCategory(cat)}
+                                  className="p-1 px-2 text-[10px] font-medium text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                  title="Rename Category"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  <span>Rename</span>
+                                </button>
+                                
+                                {/* DELETE ACTION GRID TRIGGER */}
+                                <button 
+                                  onClick={() => handleDeleteCategoryClick(cat)}
+                                  className="p-1 px-2 text-[10px] font-medium text-rose-600 hover:text-rose-700 border border-rose-200 bg-white rounded-lg flex items-center gap-1 transition cursor-pointer"
+                                  title="Delete Category"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {categories.length === 0 && (
+                      <div className="text-center py-6 text-xs text-slate-400">
+                        No categories registered yet. Use the fields above to align catalog properties.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end shrink-0">
+                <button 
+                  onClick={() => {
+                    setIsCategoryModalOpen(false);
+                    setEditingCategoryName(null);
+                  }}
+                  className="px-4 py-2 border border-slate-200 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Close Panel
+                </button>
+              </div>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 }

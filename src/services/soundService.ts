@@ -27,11 +27,14 @@ export function playSoundTone(soundId: string) {
 
   try {
     const ctx = new AudioContextClass();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(err => console.warn("AudioContext resume failed or postponed:", err));
+    }
     
     // Master gain node
     const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
     masterGain.connect(ctx.destination);
+    masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
 
     const now = ctx.currentTime;
 
