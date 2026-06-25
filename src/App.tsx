@@ -318,7 +318,7 @@ export default function App() {
   const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
   const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | Partial<Payment> | null>(null);
   const triggerIncomingCall = (pay: Partial<Payment>) => {
-    const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    const isAndroid = (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android') || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
     if (!isAndroid) {
       console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform as requested.");
       return;
@@ -1131,7 +1131,7 @@ export default function App() {
             localStorage.setItem(triggeredKey, 'true');
             
             // ** do not send notifications and call for web app and desktop view only send notification and calls for android app only
-            const isAndroidApp = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+            const isAndroidApp = (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android') || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
             if (isAndroidApp) {
               // Play configured tone on Android device
               const soundId = businessSettings?.notificationSound || 'crystal';

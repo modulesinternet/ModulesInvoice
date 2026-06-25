@@ -26,6 +26,7 @@ import {
   Paperclip,
   Share2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -2629,9 +2630,22 @@ export default function InvoicesModule({
       )}
 
       {/* CREATE INVOICE SLIDE-OVER WIZARD */}
+      <AnimatePresence>
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-[#E5E7EB] flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0" onClick={() => {
+            setIsCreateOpen(false);
+            setIsEditing(false);
+            setEditingInvoiceId(null);
+            setAddedItems([]);
+          }} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
+          >
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-400" />
@@ -2874,14 +2888,23 @@ export default function InvoicesModule({
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* EMAIL FORWARD DIALOG */}
+      <AnimatePresence>
       {isEmailModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-xl border border-[#E5E7EB]">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0" onClick={() => setIsEmailModalOpen(false)} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
+          >
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <h3 className="font-bold text-sm">Dispatched Copy Transmission</h3>
               <button onClick={() => setIsEmailModalOpen(false)}>
@@ -2923,16 +2946,28 @@ export default function InvoicesModule({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* INVOICE SETTLEMENT MODAL */}
+      <AnimatePresence>
       {isSettleModalOpen && settleInvoice && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col animate-fade-in text-slate-800">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0" onClick={() => {
+            setIsSettleModalOpen(false);
+            setSettleInvoice(null);
+          }} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+          >
             {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 flex items-center justify-between shrink-0">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-100 block">Settle Invoice Payment</span>
                 <h3 className="font-bold text-base mt-0.5">Invoice Ref: {settleInvoice.invoiceNumber}</h3>
@@ -2943,13 +2978,13 @@ export default function InvoicesModule({
                   setIsSettleModalOpen(false);
                   setSettleInvoice(null);
                 }}
-                className="p-1 hover:bg-white/10 rounded-lg transition"
+                className="p-1.5 hover:bg-white/10 rounded-lg transition"
               >
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmSettle}>
+            <form onSubmit={handleConfirmSettle} className="flex-1 overflow-y-auto flex flex-col min-h-0">
               <div className="p-6 space-y-4">
                 {/* Invoice Stats Summary */}
                 <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs">
@@ -3224,9 +3259,10 @@ export default function InvoicesModule({
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

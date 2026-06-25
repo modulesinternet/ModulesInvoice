@@ -8,6 +8,7 @@ import {
   Edit2,
   Trash2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Payment, Client, Invoice, formatDisplayDate } from '../types';
 import Pagination from './Pagination';
 
@@ -381,20 +382,28 @@ export default function PaymentsModule({
     </div>
 
       {/* RECORD PAYMENT MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">Log Client Receipt</h3>
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0" onClick={() => setIsModalOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
+            >
+              <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-400 animate-pulse" />
+                  <h3 className="font-bold text-sm">Log Client Receipt</h3>
+                </div>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg p-1.5 hover:bg-slate-800 transition">
+                  <X className="w-4 h-4 text-slate-400 hover:text-white transition" />
+                </button>
               </div>
-              <button onClick={() => setIsModalOpen(false)}>
-                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
-              </button>
-            </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               {/* Select client */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-400 uppercase">Target Client *</label>
@@ -523,25 +532,34 @@ export default function PaymentsModule({
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* EDIT PAYMENT MODAL */}
+      <AnimatePresence>
       {editingPayment && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-[#E5E7EB] shadow-xl">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0" onClick={() => setEditingPayment(null)} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
+          >
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-indigo-400" />
+                <CreditCard className="w-5 h-5 text-indigo-400 animate-pulse" />
                 <h3 className="font-bold text-sm">Modify Client Receipt</h3>
               </div>
-              <button onClick={() => setEditingPayment(null)}>
-                <X className="w-5 h-5 text-slate-400 hover:text-white transition" />
+              <button type="button" onClick={() => setEditingPayment(null)} className="rounded-lg p-1.5 hover:bg-slate-800 transition">
+                <X className="w-4 h-4 text-slate-400 hover:text-white transition" />
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               {/* Select client */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-400 uppercase">Target Client *</label>
@@ -671,9 +689,10 @@ export default function PaymentsModule({
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
