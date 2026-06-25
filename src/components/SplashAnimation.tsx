@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Loader2, ShieldCheck, Cpu } from 'lucide-react';
 
 interface SplashAnimationProps {
   companyName: string;
@@ -10,10 +10,10 @@ interface SplashAnimationProps {
 
 export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('Booting system');
+  const [statusText, setStatusText] = useState('Initializing');
 
   useEffect(() => {
-    // Beautiful smooth simulated loader
+    // Elegant high-performance progress loader simulating database hydration
     const interval = setInterval(() => {
       setProgress(p => {
         if (p >= 100) {
@@ -21,122 +21,172 @@ export default function SplashAnimation({ companyName, logoUrl, onComplete }: Sp
           return 100;
         }
         const remaining = 100 - p;
-        const speed = Math.max(3, Math.floor(remaining * 0.15));
-        return Math.min(p + speed, 100);
+        const step = Math.max(3, Math.floor(remaining * 0.25));
+        return Math.min(p + step, 100);
       });
-    }, 90);
+    }, 60);
 
-    const t1 = setTimeout(() => setStatusText('Verifying credentials'), 450);
-    const t2 = setTimeout(() => setStatusText('Connecting to cloud database'), 1000);
-    const t3 = setTimeout(() => setStatusText('Synchronizing workspace'), 1550);
+    const t1 = setTimeout(() => setStatusText('Verifying'), 250);
+    const t2 = setTimeout(() => setStatusText('Syncing'), 650);
+    const t3 = setTimeout(() => setStatusText('Loading'), 1100);
+    const t4 = setTimeout(() => setStatusText('Ready'), 1450);
 
-    // Fade out and close after 2.3 seconds
+    // Complete loader with soft delay for buttery-smooth transition
     const exitTimer = setTimeout(() => {
       if (onComplete) {
         onComplete();
       }
-    }, 2300);
+    }, 1800);
 
     return () => {
       clearInterval(interval);
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
       clearTimeout(exitTimer);
     };
   }, [onComplete]);
 
   const fallbackLogo = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
   const cleanLogo = logoUrl ? logoUrl.trim() : fallbackLogo;
+  const displayName = companyName || 'iModules';
+
+  // SVG Circular progress configurations
+  const radius = 94;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
     <motion.div 
-      initial={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+      initial={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
       exit={{ 
         opacity: 0, 
-        scale: 1.06, 
-        filter: "blur(12px)",
-        transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] } 
+        scale: 1.03, 
+        filter: 'blur(12px)',
+        transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } 
       }}
-      className="fixed inset-0 bg-[#EFF2F9] flex flex-col items-center justify-center p-8 select-none z-[10000] overflow-hidden"
+      className="fixed inset-0 bg-gradient-to-tr from-[#F1F5F9] via-[#F8FAFC] to-[#EFF2F8] flex flex-col items-center justify-between p-8 select-none z-[10000] overflow-hidden"
       id="app-splash-screen"
     >
-      {/* Soft elegant ambient lighting backglow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/40 rounded-full blur-[120px] pointer-events-none"></div>
+      {/* Background ambient lighting effects */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-[#5B21FF]/4 to-[#8F66FF]/3 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-10 left-10 w-96 h-96 bg-indigo-50/40 rounded-full blur-[80px] pointer-events-none" />
 
-      {/* Main Animated Wrapper */}
-      <div className="flex flex-col items-center justify-between h-full w-full max-w-md py-12 relative z-10">
-        {/* Placeholder spacer at the top */}
-        <div className="h-6"></div>
+      {/* Header element */}
+      <motion.div 
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="text-center z-10 pt-4"
+      >
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/80 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] backdrop-blur-xs">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          <span className="text-[9px] font-bold tracking-[0.15em] text-slate-500 uppercase font-mono">Secured Endpoint</span>
+        </div>
+      </motion.div>
 
-        {/* Centerpiece: Replicating the clean launch screen card */}
-        <div className="flex flex-col items-center justify-center flex-1">
-          {/* White highly-rounded Card container exactly as in screenshot */}
+      {/* Main visual node: Logo enclosed in elegant concentric progress rings */}
+      <div className="flex flex-col items-center justify-center flex-1 w-full max-w-sm z-10">
+        <div className="relative w-[220px] h-[220px] flex items-center justify-center">
+          {/* Outer glowing halo ring */}
           <motion.div 
-            initial={{ scale: 0.8, opacity: 0, y: 40 }}
-            animate={{ 
-              scale: 1, 
-              opacity: 1, 
-              y: [0, -8, 0] 
-            }}
-            transition={{
-              scale: { type: "spring", stiffness: 140, damping: 16, delay: 0.05 },
-              opacity: { duration: 0.4, ease: "easeOut" },
-              y: {
-                repeat: Infinity,
-                duration: 4.5,
-                ease: "easeInOut",
-                delay: 0.5
-              }
-            }}
-            className="w-56 h-56 sm:w-64 sm:h-64 rounded-[48px] sm:rounded-[56px] bg-white flex items-center justify-center p-8 sm:p-10 shadow-[0_25px_60px_-15px_rgba(91,33,255,0.08),0_15px_30px_-10px_rgba(0,0,0,0.04)] border border-white/80"
+            animate={{ scale: [1, 1.03, 1], opacity: [0.3, 0.5, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute inset-0 rounded-full border border-indigo-100/40 bg-white/10 blur-xs shadow-[0_0_30px_rgba(91,33,255,0.01)] pointer-events-none"
+          />
+
+          {/* Svg dynamic loader outline */}
+          <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 200 200">
+            {/* Background static circle track */}
+            <circle
+              cx="100"
+              cy="100"
+              r={radius}
+              className="stroke-slate-100/80 fill-none"
+              strokeWidth="4"
+            />
+            {/* Dynamic animated stroke path */}
+            <motion.circle
+              cx="100"
+              cy="100"
+              r={radius}
+              className="stroke-[#5B21FF] fill-none"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              transition={{ ease: 'easeOut', duration: 0.15 }}
+              style={{
+                filter: 'drop-shadow(0 0 4px rgba(91, 33, 255, 0.15))'
+              }}
+            />
+          </svg>
+
+          {/* Central Logo Panel */}
+          <motion.div 
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 180, damping: 20, delay: 0.1 }}
+            className="absolute w-36 h-36 rounded-[32px] bg-white flex items-center justify-center p-4 shadow-[0_16px_40px_rgba(91,33,255,0.06),0_8px_16px_rgba(0,0,0,0.02)] border border-white/90"
           >
-            {/* Logo Image inside card container */}
-            <motion.div
-              initial={{ scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
-              className="w-full h-full flex items-center justify-center overflow-hidden rounded-[28px]"
-            >
+            {/* Subtle premium frame accent inside */}
+            <div className="absolute inset-1.5 rounded-[26px] border border-slate-50 pointer-events-none" />
+
+            <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-[18px]">
               <img 
                 src={cleanLogo}
-                alt="Corporate Logo"
-                className="w-full h-full object-contain"
+                alt={displayName}
+                className="w-full h-full object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.src = fallbackLogo;
                 }}
               />
-            </motion.div>
+            </div>
           </motion.div>
         </div>
 
-        {/* Bottom Loading and Progress indicator - Elegant, ultra-clean */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.5 }}
-          className="w-full max-w-[220px] flex flex-col items-center space-y-5"
-        >
-          {/* Sleek, thin elegant progress tracking */}
-          <div className="w-full">
-            <div className="w-full h-[3px] bg-slate-200/80 rounded-full overflow-hidden relative">
-              <motion.div 
-                className="h-full bg-[#5B21FF] rounded-full shadow-[0_0_8px_rgba(91,33,255,0.4)]"
-                style={{ width: `${progress}%` }}
-                transition={{ ease: "easeOut" }}
-              />
-            </div>
-          </div>
-
-          {/* Dynamic Status and Spinner */}
-          <div className="flex items-center gap-2 justify-center min-h-[16px]">
-            <Loader2 className="w-3.5 h-3.5 text-[#5B21FF] animate-spin" />
-            <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase font-mono">{statusText}</span>
-          </div>
-        </motion.div>
+        {/* Branded text presentation under logo */}
+        <div className="text-center space-y-2 max-w-xs mt-8">
+          <motion.h1 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="text-2xl font-bold font-display tracking-tight text-slate-800"
+          >
+            {displayName}
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            transition={{ duration: 0.8, delay: 0.35 }}
+            className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.15em] font-sans"
+          >
+            Universal Ledger Platform
+          </motion.p>
+        </div>
       </div>
+
+      {/* Bottom functional status & indicators */}
+      <motion.div 
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-[220px] flex flex-col items-center space-y-4 pb-4 z-10"
+      >
+        {/* Sleek inline loading details */}
+        <div className="flex items-center gap-2 justify-center min-h-[18px]">
+          <Loader2 className="w-3.5 h-3.5 text-[#5B21FF] animate-spin" />
+          <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase font-mono">{statusText}</span>
+        </div>
+
+        {/* Dynamic percentage label */}
+        <span className="text-[11px] font-mono font-semibold text-[#5B21FF]/90">
+          {progress}% Complete
+        </span>
+      </motion.div>
     </motion.div>
   );
 }

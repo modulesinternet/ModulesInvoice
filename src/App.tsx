@@ -291,6 +291,7 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Master database state arrays
   const [dashboardMetrics, setDashboardMetrics] = useState<any>(() => {
@@ -379,6 +380,7 @@ export default function App() {
     setIsPulling(false);
     
     if (pullDistance >= 60) {
+      setShowSplash(true);
       setIsRefreshing(true);
       setPullDistance(40); // hold at 40px during active refreshing state
       try {
@@ -1025,36 +1027,6 @@ export default function App() {
        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
                       .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
        
-       // Populate session set on first snapshot to prevent historical triggers
-       if (isFirstPaymentsSnapshot) {
-         snapshot.docs.forEach(doc => {
-           processedPaymentIds.add(doc.id);
-         });
-       }
-
-       snapshot.docChanges().forEach((change) => {
-         if (change.type === "added" || change.type === "modified") {
-           const currPay = { id: change.doc.id, ...change.doc.data() } as Payment;
-           
-           const isNew = !processedPaymentIds.has(currPay.id);
-           const processedKey = `triggered_${currPay.id}_${change.type}_${currPay.amount}`;
-
-           if (isNew || (change.type === "modified" && !localStorage.getItem(processedKey))) {
-             processedPaymentIds.add(currPay.id);
-             localStorage.setItem(processedKey, 'true');
-             triggerIncomingCall(currPay);
-             const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(currPay.amount);
-             triggerLocalNotification(
-               change.type === "added" ? "💰 Payment Received" : "🔄 Payment Updated",
-               change.type === "added"
-                 ? `Received ${formattedAmt} from ${currPay.clientName || 'N/A'} via ${currPay.paymentMode || 'N/A'}.`
-                 : `Payment of INR ${currPay.amount} from ${currPay.clientName || 'N/A'} has been updated.`
-             );
-           }
-         }
-       });
-       isFirstPaymentsSnapshot = false;
-
        setPayments(prev => {
          const nextStr = JSON.stringify(list);
          if (JSON.stringify(prev) === nextStr) return prev;
@@ -1091,34 +1063,6 @@ export default function App() {
       const filtered = dedupedList.filter(cb => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === 'Cash'))
                            .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
       
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added" || change.type === "modified") {
-          const entry = { id: change.doc.id, ...change.doc.data() } as CashbookEntry;
-          const entryTime = entry.createdAt ? new Date(entry.createdAt).getTime() : 0;
-          const isRecent = entryTime && (Math.abs(Date.now() - entryTime) < 30 * 60 * 1000);
-
-          if (!isFirstCashbookSnapshot || isRecent) {
-            const processedKey = `notified_cashbook_${entry.id}_${change.type}_${entry.amount}`;
-            if (!localStorage.getItem(processedKey)) {
-              localStorage.setItem(processedKey, 'true');
-              const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount);
-              if (entry.type === 'expense') {
-                triggerLocalNotification(
-                  "💸 Payment Cash Out",
-                  `Registered payout of ${formattedAmt}: ${entry.description || 'General expense'}.`
-                );
-              } else if (entry.type === 'income') {
-                triggerLocalNotification(
-                  "📈 Cashbook Cash In",
-                  `Registered receipt of ${formattedAmt}: ${entry.description || 'General income'}.`
-                );
-              }
-            }
-          }
-        }
-      });
-      isFirstCashbookSnapshot = false;
-
       setCashbook(prev => {
         const nextStr = JSON.stringify(filtered);
         if (JSON.stringify(prev) === nextStr) return prev;
@@ -1186,42 +1130,74 @@ export default function App() {
             processedNotificationIds.add(docData.id);
             localStorage.setItem(triggeredKey, 'true');
             
-            // Guard sounds, voice announcements, and call alert overlays to run ONLY on actual native Android App platforms (suppressed on generic web URL)
-            const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-            if (isAndroid) {
-              // Play configured tone
-              const soundId = businessSettings?.notificationSound || 'crystal';
-              playSoundTone(soundId);
+            // Play configured tone on ALL devices (Android, Web, Desktop)
+            const soundId = businessSettings?.notificationSound || 'crystal';
+            playSoundTone(soundId);
 
-               // Speak configured voice announcement template
-              if (businessSettings?.voiceAnnounceEnabled) {
-                const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
-                const amtMatched = docData.message.match(/₹[\d,]+/);
-                const amount = amtMatched ? amtMatched[0] : "some amount";
+            // Speak configured voice announcement template on ALL devices
+            if (businessSettings?.voiceAnnounceEnabled) {
+              const tmpl = businessSettings.voiceAnnounceTemplate || "Payment of {amount} received from {hotelName}";
+              const amtMatched = docData.message.match(/₹[\d,]+/);
+              const amount = amtMatched ? amtMatched[0] : "some amount";
+              
+              const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
+              const hotelName = clientMatched ? clientMatched[1].trim() : "client";
+              
+              const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+              const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+
+              playVoiceAnnouncement(tmpl, {
+                amount,
+                hotelName,
+                paymentMode,
+                date: new Date(docData.createdAt).toLocaleDateString()
+              });
+            }
+
+            // Vibration feedback on ALL supporting devices
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([300, 100, 300]);
+            }
+
+            // Show incoming call alert overlay on ALL devices for: Invoice, Cashbook, Entry, or Payment
+            if (businessSettings?.incomingCallAlertEnabled) {
+              const allowedModules = ['invoices', 'cashbook', 'payments'];
+              if (allowedModules.includes(docData.module || '')) {
+                setShowIncomingCallAlert(docData);
                 
-                const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/);
-                const hotelName = clientMatched ? clientMatched[1].trim() : "client";
-                
-                const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
-                const paymentMode = modeMatched ? modeMatched[1].trim() : "payment Mode";
+                // For Android, ALSO launch the WhatsApp-style full VoIP call overlay screen
+                const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+                if (isAndroid) {
+                  try {
+                    const amtMatched = docData.message.match(/₹[\d,]+/);
+                    const amountStr = amtMatched ? amtMatched[0].replace(/[^0-9]/g, '') : "0";
+                    const paymentAmount = parseFloat(amountStr) || 0;
+                    
+                    const clientMatched = docData.message.match(/from\s+([^\svia\.]+)/) || docData.message.match(/for\s+([^\svia\.]+)/);
+                    const clientName = clientMatched ? clientMatched[1].trim() : "Client";
+                    
+                    const modeMatched = docData.message.match(/via\s+([^\s\.]+)/);
+                    const paymentMode = modeMatched ? modeMatched[1].trim() : "UPI";
 
-                playVoiceAnnouncement(tmpl, {
-                  amount,
-                  hotelName,
-                  paymentMode,
-                  date: new Date(docData.createdAt).toLocaleDateString()
-                });
-              }
-
-              // Show incoming call alert on Android app for: Invoice, Cashbook, Entry, or Payment (Created or Updated)
-              if (businessSettings?.incomingCallAlertEnabled) {
-                const allowedModules = ['invoices', 'cashbook', 'payments'];
-                if (allowedModules.includes(docData.module || '')) {
-                  setShowIncomingCallAlert(docData);
+                    const mockPayment: Partial<Payment> = {
+                      id: docData.id,
+                      clientName,
+                      amount: paymentAmount,
+                      paymentMode: paymentMode as any,
+                      paymentDate: new Date(docData.createdAt).toISOString().split('T')[0],
+                      remarks: docData.message
+                    };
+                    triggerIncomingCall(mockPayment);
+                  } catch (err) {
+                    console.error("Failed to trigger Android VoIP call screen from notification document:", err);
+                  }
                 }
               }
+            }
 
-              // Trigger real system pull-down local notification banner on Android
+            // Trigger real system pull-down local notification banner on Android
+            const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+            if (isAndroid) {
               triggerLocalNotification(docData.title, docData.message).catch(err => {
                 console.warn("[Local Notif Fail] Suppressed banner error:", err);
               });
@@ -1483,18 +1459,8 @@ export default function App() {
 
   const handleAddInvoice = async (inv: Partial<Invoice>) => {
     try {
-      const created = await api.createInvoice(inv);
+      await api.createInvoice(inv);
       showToast(`Authorized & dispatched invoice!`);
-      
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total || 0);
-        triggerLocalNotification(
-          "📄 New Invoice Dispatched",
-          `Invoice ${inv.invoiceNumber || created?.invoiceNumber || ''} created for ${inv.clientName || ''} worth ${formattedAmt}.`
-        ).catch(() => {});
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1505,17 +1471,6 @@ export default function App() {
     try {
       await api.updateInvoice(id, inv);
       showToast(`Maturity/bill items updated successfully!`);
-
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const existing = invoices.find(item => item.id === id);
-        const mergedInvoice = existing ? { ...existing, ...inv } : inv;
-        triggerLocalNotification(
-          "🔄 Invoice Modified",
-          `Invoice ${mergedInvoice.invoiceNumber || ''} for ${mergedInvoice.clientName || ''} has been updated.`
-        ).catch(() => {});
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1583,20 +1538,8 @@ export default function App() {
 
   const handleAddPayment = async (p: Partial<Payment>) => {
     try {
-      const created = await api.createPayment(p);
+      await api.createPayment(p);
       showToast(`Cleared: Added ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.amount!)} deposit to client ledger!`);
-
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const merged = created || p;
-        triggerIncomingCall(merged);
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(merged.amount || 0);
-        triggerLocalNotification(
-          "💰 Payment Received",
-          `Received ${formattedAmt} from ${merged.clientName || 'N/A'} via ${merged.paymentMode || 'N/A'}.`
-        ).catch(() => {});
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1607,19 +1550,6 @@ export default function App() {
     try {
       await api.updatePayment(id, p);
       showToast("Approved: Modified payment receipt references successfully.");
-
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const existing = payments.find(item => item.id === id);
-        const mergedPayment = existing ? { ...existing, ...p } : p;
-        triggerIncomingCall(mergedPayment);
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(mergedPayment.amount || 0);
-        triggerLocalNotification(
-          "🔄 Payment Updated",
-          `Payment of ${formattedAmt} from ${mergedPayment.clientName || 'N/A'} has been updated.`
-        ).catch(() => {});
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1640,23 +1570,6 @@ export default function App() {
     try {
       await api.createCashbookEntry(entry);
       showToast("Approved: Recorded Cashbook operating voucher.");
-
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(entry.amount || 0);
-        if (entry.type === 'expense') {
-          triggerLocalNotification(
-            "💸 Payment Cash Out",
-            `Registered payout of ${formattedAmt}: ${entry.description || 'General expense'}.`
-          ).catch(() => {});
-        } else {
-          triggerLocalNotification(
-            "📈 Cashbook Cash In",
-            `Registered receipt of ${formattedAmt}: ${entry.description || 'General income'}.`
-          ).catch(() => {});
-        }
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1667,18 +1580,6 @@ export default function App() {
     try {
       await api.updateCashbookEntry(id, entry);
       showToast("Approved: Updated cashbook operating voucher.");
-
-      const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-      if (isAndroid) {
-        const existing = cashbook.find(item => item.id === id);
-        const mergedEntry = existing ? { ...existing, ...entry } : entry;
-        const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(mergedEntry.amount || 0);
-        triggerLocalNotification(
-          "🔄 Cashbook Entry Modified",
-          `Transaction entry of ${formattedAmt} (${mergedEntry.description || ''}) has been updated.`
-        ).catch(() => {});
-      }
-
       await loadMasterData();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1795,17 +1696,27 @@ export default function App() {
       if (res && res.success && res.user) {
         const userMatched = res.user;
         
-        // Force premium splash component with custom Starting-Verifying-Synchronizing-Opening boot sequence
+        // Decouple dashboard mounting with a premium 2-second logging-in overlay
+        setIsLoggingIn(true);
         setShowSplash(true);
-
-        // Persist login state immediately so that the authorized layout is mounted under the SplashAnimation overlay
-        localStorage.setItem('current_user', JSON.stringify(userMatched));
-        localStorage.setItem('active_role', userMatched.role);
-        setCurrentUser(userMatched);
-        setActiveRole(userMatched.role);
         
-        showToast(`Access Granted: ${userMatched.name} (${userMatched.role})`, "success");
-        loadMasterData(true, true);
+        // Pre-load the workspace data in the background while the gorgeous login animation plays
+        loadMasterData(true, true).catch(() => {});
+
+        setTimeout(() => {
+          // Mount the dashboard silently underneath the active splash overlay
+          localStorage.setItem('current_user', JSON.stringify(userMatched));
+          localStorage.setItem('active_role', userMatched.role);
+          setCurrentUser(userMatched);
+          setActiveRole(userMatched.role);
+          
+          // Allow 400ms for the dashboard structure and charts to completely render behind the scenes
+          setTimeout(() => {
+            showToast(`Access Granted: ${userMatched.name} (${userMatched.role})`, "success");
+            setIsLoggingIn(false);
+            setShowSplash(false);
+          }, 400);
+        }, 2000);
       } else {
         showToast("Authentication failed. Please verify credentials.", "error");
       }
@@ -1911,11 +1822,8 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      <div 
+        className="min-h-screen bg-gradient-to-tr from-[#F1F5F9] via-[#F8FAFC] to-[#EFF2F8] flex items-center justify-center p-4 relative overflow-hidden font-sans w-full"
       >
         {/* Subtle decorative background textures */}
         <div className="absolute top-0 left-0 w-96 h-96 bg-purple-200/40 rounded-full blur-3xl -translate-x-12 -translate-y-12"></div>
@@ -2233,15 +2141,19 @@ export default function App() {
         )}
 
         <AnimatePresence mode="wait">
-          {showSplash && (
+          {(showSplash || isLoggingIn) && (
             <SplashAnimation 
               companyName={businessSettings?.companyName || 'iModules'} 
               logoUrl={businessSettings?.logoUrl || ''} 
-              onComplete={() => setShowSplash(false)}
+              onComplete={() => {
+                if (!isLoggingIn) {
+                  setShowSplash(false);
+                }
+              }}
             />
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
     );
   }
 
@@ -2820,7 +2732,10 @@ export default function App() {
           <div className="flex items-center gap-4">
             {/* Direct manual cloud recheck button */}
             <button 
-              onClick={loadMasterData}
+              onClick={() => {
+                setShowSplash(true);
+                loadMasterData();
+              }}
               disabled={loading}
               className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none disabled:opacity-50"
               title="Force Real-time Sync with Cloud Firestore"
