@@ -430,7 +430,7 @@ export default function InvoicesModule({
             amount: item.amount,
             paymentMode: item.paymentMode,
             referenceNum: item.referenceNum,
-            notes: `${settleNotes.trim()} (Stage portion)`,
+            remarks: `${settleNotes.trim()} (Stage portion)`,
             paymentDate: settleDate,
             clientName: settleInvoice.clientName,
             invoiceNumber: settleInvoice.invoiceNumber
@@ -460,7 +460,7 @@ export default function InvoicesModule({
           amount: amt,
           paymentMode: settleMode,
           referenceNum: settleRef.trim(),
-          notes: settleNotes.trim(),
+          remarks: settleNotes.trim(),
           paymentDate: settleDate,
           clientName: settleInvoice.clientName,
           invoiceNumber: settleInvoice.invoiceNumber

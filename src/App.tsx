@@ -73,6 +73,7 @@ import SplashAnimation from './components/SplashAnimation';
 import NotificationsModule from './components/NotificationsModule';
 import WorkflowModule from './components/WorkflowModule';
 import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
+import { applyThemeColor } from './lib/themeHelper';
 import { motion, AnimatePresence } from 'motion/react';
 
 type TabType = 'dashboard' | 'invoices' | 'clients' | 'products' | 'quotations' | 'payments' | 'ledger' | 'cashbook' | 'users' | 'settings' | 'profile' | 'notifications' | 'workflow';
@@ -755,6 +756,10 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    applyThemeColor(businessSettings?.themeColor || 'sky-blue');
+  }, [businessSettings?.themeColor]);
 
   useEffect(() => {
     // 1. Ask for local notification permissions on app mount (required for status bar overlays/lockscreen alerts)

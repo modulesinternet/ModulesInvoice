@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { BusinessSettings, Payment, Notification } from '../types';
+import { THEME_PALETTES, applyThemeColor } from '../lib/themeHelper';
 import SignaturePad from './SignaturePad';
 import { api } from '../services/api';
 import { storage } from '../services/firebase';
@@ -276,6 +277,7 @@ export default function SettingsModule({
   const [voiceAnnounceTemplate, setVoiceAnnounceTemplate] = useState(settings?.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
   const [incomingCallAlertEnabled, setIncomingCallAlertEnabled] = useState<boolean>(settings?.incomingCallAlertEnabled ?? true);
   const [ttsCallerName, setTtsCallerName] = useState(settings?.ttsCallerName || 'Karan Sharma');
+  const [themeColor, setThemeColor] = useState(settings?.themeColor || 'sky-blue');
   const [testNotificationStatus, setTestNotificationStatus] = useState<string>('');
   const [testCallStatus, setTestCallStatus] = useState<string>('');
   const [nativeHealth, setNativeHealth] = useState<NativeServiceHealth | null>(null);
@@ -451,6 +453,7 @@ export default function SettingsModule({
       setVoiceAnnounceTemplate(settings.voiceAnnounceTemplate || 'Payment of ₹{amount} has been received from {hotelName} via {paymentMode}.');
       setIncomingCallAlertEnabled(settings.incomingCallAlertEnabled ?? true);
       setTtsCallerName(settings.ttsCallerName || 'Karan Sharma');
+      setThemeColor(settings.themeColor || 'sky-blue');
     }
   }, [settings]);
 
@@ -656,7 +659,8 @@ export default function SettingsModule({
         voiceAnnounceEnabled,
         voiceAnnounceTemplate,
         incomingCallAlertEnabled,
-        ttsCallerName
+        ttsCallerName,
+        themeColor
       };
 
       await onSaveSettings(payload);
@@ -1624,6 +1628,20 @@ export default function SettingsModule({
               </div>
 
               {/* Design Theme selection */}
+              <div className="space-y-1 mb-4">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Universal App Theme Color</label>
+                <select
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-1 focus:ring-primary-purple"
+                >
+                  {Object.keys(THEME_PALETTES).map(key => (
+                    <option key={key} value={key}>{THEME_PALETTES[key].name}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-slate-400">Determines the universal design accent color for the entire application.</p>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Default Invoice Theme Color</label>
                 <select

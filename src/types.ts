@@ -199,6 +199,7 @@ export interface BusinessSettings {
   voiceAnnounceTemplate?: string;
   incomingCallAlertEnabled?: boolean;
   ttsCallerName?: string;
+  themeColor?: string;
 }
 
 export interface ActivityLog {

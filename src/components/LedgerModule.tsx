@@ -205,11 +205,7 @@ export default function LedgerModule({
                             {row.type === 'credit' ? formatCurrency(row.amount) : '-'}
                           </td>
                           <td className="py-2.5 px-5 text-right font-mono font-medium">
-                            {cClosing > 0 ? (
-                              <span className="text-slate-500 font-semibold">{formatCurrency(row.amount)}</span>
-                            ) : (
-                              <span className="text-emerald-500 font-bold uppercase text-[9px]">Reconciled</span>
-                            )}
+                            <span className="text-slate-500 font-semibold">{formatCurrency(row.runningBalance || 0)}</span>
                           </td>
                         </tr>
                       ))}
@@ -300,12 +296,7 @@ export default function LedgerModule({
                       {row.type === 'credit' ? formatCurrency(row.amount) : '-'}
                     </td>
                     <td className="py-3.5 px-5 text-right font-mono font-bold text-slate-800">
-                      {/* Note: In real life this is a running computed balance loop, we match to the total outstanding at end of array */}
-                      {closingBalance > 0 ? (
-                        <span className="text-slate-800">{formatCurrency(row.type === 'debit' ? row.amount : 0)}</span>
-                      ) : (
-                        <span className="text-emerald-600">Reconciled</span>
-                      )}
+                      <span className="text-slate-800">{formatCurrency(row.runningBalance || 0)}</span>
                     </td>
                   </tr>
                 ))}

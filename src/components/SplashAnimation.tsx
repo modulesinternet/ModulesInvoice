@@ -155,14 +155,14 @@ export default function SplashAnimation({ companyName, logoUrl, isLoaded, onComp
               cx="75"
               cy="75"
               r={radius}
-              className="stroke-[#0EA5E9] fill-none"
+              className="stroke-primary-purple fill-none"
               strokeWidth="3.5"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
               transition={{ ease: 'easeOut', duration: 0.15 }}
               style={{
-                filter: 'drop-shadow(0 0 4px rgba(14, 165, 233, 0.25))'
+                filter: 'drop-shadow(0 0 4px var(--theme-primary, #0EA5E9))'
               }}
             />
           </svg>
@@ -172,7 +172,7 @@ export default function SplashAnimation({ companyName, logoUrl, isLoaded, onComp
             initial={{ scale: 0.88, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 22, delay: 0.15 }}
-            className="absolute w-24 h-24 rounded-2xl bg-black flex items-center justify-center p-1.5 shadow-[0_12px_28px_rgba(14,165,233,0.08),0_6px_12px_rgba(0,0,0,0.2)] border border-slate-800/80"
+            className="absolute w-24 h-24 rounded-2xl bg-black flex items-center justify-center p-1.5 shadow-md border border-slate-800/80"
           >
             {/* Subtle premium frame accent inside */}
             <div className="absolute inset-1 rounded-[12px] border border-slate-800/60 pointer-events-none" />
@@ -222,12 +222,12 @@ export default function SplashAnimation({ companyName, logoUrl, isLoaded, onComp
       >
         {/* Sleek inline loading details */}
         <div className="flex items-center gap-2 justify-center min-h-[18px]">
-          <Loader2 className="w-3.5 h-3.5 text-[#0EA5E9] animate-spin" />
+          <Loader2 className="w-3.5 h-3.5 text-primary-purple animate-spin" />
           <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase font-mono">{statusText}</span>
         </div>
 
         {/* Dynamic percentage label */}
-        <span className="text-[11px] font-mono font-semibold text-[#0EA5E9]">
+        <span className="text-[11px] font-mono font-semibold text-primary-purple">
           {progress}% Complete
         </span>
       </motion.div>
