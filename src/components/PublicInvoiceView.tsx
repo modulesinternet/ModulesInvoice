@@ -9,7 +9,8 @@ import {
   Loader2, 
   ArrowLeft,
   Download,
-  Info
+  Info,
+  MessageCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Invoice, BusinessSettings, formatDisplayDate } from '../types';
@@ -133,191 +134,300 @@ export default function PublicInvoiceView({ invoiceNumber }: PublicInvoiceViewPr
   const isPaid = invoice.status === 'paid';
   const outstandingAmount = invoice.dueAmount !== undefined ? invoice.dueAmount : (invoice.total - (invoice.paidAmount || 0));
 
-  // Auto-generate deep UPI intent links for scanners
-  const upiPayload = settings.upiId 
-    ? `upi://pay?pa=${settings.upiId}&pn=${encodeURIComponent(settings.companyName || 'Corporate Seller')}&am=${outstandingAmount}&cu=INR&tn=Inv-${invoice.invoiceNumber}`
-    : null;
-
-  const upiQrSrc = upiPayload 
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiPayload)}`
-    : null;
+  // Determine if we should show tax split (matching InvoicesModule logic)
+  const hasTaxSplit = settings.gstOption !== 'zero_tax' && (settings.showInvoiceTaxSplit ?? true) !== false;
 
   const handlePrint = () => {
     window.print();
   };
 
+  const handleShareWhatsApp = () => {
+    const hostOrigin = window.location.origin;
+    const url = `${hostOrigin}/public/invoice/${encodeURIComponent(invoice.invoiceNumber)}`;
+    
+    let message = `*INVOICE RECEIVED - ${settings.companyName}*\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `*Inv No:* ${invoice.invoiceNumber}\n`;
+    message += `*Total Amount:* ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(invoice.total)}\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    message += `You can view and download the full professional invoice here:\n${url}\n\n`;
+    message += `_Regards, ${settings.companyName}_`;
+
+    const encodedMsg = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans print:bg-white print:p-0">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-12 font-sans print:bg-white print:p-0">
+      <div className="max-w-4xl mx-auto">
         
-        {/* Navigation / Header Brand block */}
-        <div className="flex items-center justify-between class-print-hide pb-2">
-          <div className="flex items-center gap-3">
-            {settings?.logoUrl ? (
-              <img 
-                src={settings.logoUrl} 
-                className="w-10 h-10 rounded-xl object-contain bg-white border border-slate-100 p-1" 
-                alt="Logo" 
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-base">
-                IN
-              </div>
-            )}
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">{settings?.companyName || "Service Provider"}</h2>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">{settings?.tagline || "Scan & Pay Secure Portal"}</span>
+        {/* Actions Bar - Hidden on print */}
+        <div className="flex items-center justify-between mb-6 no-print">
+          <div className="flex items-center gap-2 text-slate-500">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-200">
+              <FileText className="w-4 h-4 text-indigo-600" />
             </div>
+            <span className="text-sm font-bold tracking-tight">Public Invoice Portal</span>
           </div>
 
-          <button 
-            onClick={handlePrint}
-            className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 transition"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Save / Print PDF</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleShareWhatsApp}
+              className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Share WhatsApp</span>
+            </button>
+            <button 
+              onClick={handlePrint}
+              className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download PDF</span>
+            </button>
+          </div>
         </div>
 
-        {/* Invoice Scan summary table card */}
-        <div className="bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-sm pt-8 px-6 md:px-8 pb-8 space-y-6 relative">
+        {/* MAIN INVOICE CANVAS */}
+        <div className="bg-white rounded-[40px] shadow-2xl shadow-slate-200/60 overflow-hidden border border-slate-200 print:shadow-none print:border-none print:rounded-none">
           
-          {/* Tag status badge */}
-          <div className="absolute top-6 right-6 md:right-8">
-            <span className={`px-3 py-1 rounded-full text-[11px] font-extrabold border ${
-              isPaid 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
-            } uppercase tracking-wider`}>
-              {invoice.status}
-            </span>
-          </div>
+          {/* Header Section */}
+          <div className="p-8 md:p-12 border-b border-slate-100 relative">
+            {/* Status Stamp */}
+            <div className="absolute top-12 right-12 hidden md:block">
+              <div className={`px-6 py-2 rounded-2xl border-2 rotate-12 flex flex-col items-center justify-center ${
+                isPaid 
+                  ? 'border-emerald-500/30 text-emerald-600 bg-emerald-50/50' 
+                  : 'border-rose-500/30 text-rose-600 bg-rose-50/50'
+              }`}>
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Payment Status</span>
+                <span className="text-2xl font-black uppercase tracking-tighter leading-none">{invoice.status.replace('_', ' ')}</span>
+              </div>
+            </div>
 
-          <div className="space-y-1">
-            <span className="text-[10px] font-extrabold text-[#5B21FF] tracking-wider uppercase">Scanned Invoice Details</span>
-            <h1 className="text-xl md:text-2xl font-bold font-display text-slate-900">
-              Transaction Ref #{invoice.invoiceNumber}
-            </h1>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+              <div className="space-y-6">
+                {/* Logo & Company Name */}
+                <div className="flex items-center gap-4">
+                  {settings.logoUrl ? (
+                    <img src={settings.logoUrl} alt="Logo" className="w-16 h-16 object-contain rounded-2xl bg-slate-50 p-2 border border-slate-100" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white font-black text-2xl">
+                      {settings.companyName?.substring(0, 2).toUpperCase() || 'IM'}
+                    </div>
+                  )}
+                  <div>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-900">{settings.companyName}</h1>
+                    {settings.gstIn && (settings.showInvoiceGst ?? true) !== false && (
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">GSTIN: {settings.gstIn}</span>
+                    )}
+                  </div>
+                </div>
 
-          {/* Secure auto-capture verification notice */}
-          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-            <div className="text-[11px] text-slate-500 leading-relaxed">
-              <b>System check verified:</b> Core billing databases resolved successfully on <b>{new Date().toLocaleDateString()}</b>. Data fetched corresponds to the direct digital receipts of corporate firm: <b>{settings.companyName}</b>.
+                {/* Company Address */}
+                <div className="space-y-1">
+                  {settings.address && (settings.showInvoiceAddress ?? true) !== false && (
+                    <p className="text-sm text-slate-500 max-w-xs leading-relaxed">{settings.address}</p>
+                  )}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-xs text-slate-400 font-medium">
+                    {settings.email && (settings.showInvoiceEmail ?? true) !== false && (
+                      <span className="flex items-center gap-1.5"><Info className="w-3 h-3" /> {settings.email}</span>
+                    )}
+                    {settings.phone && (settings.showInvoicePhone ?? true) !== false && (
+                      <span className="flex items-center gap-1.5"><Info className="w-3 h-3" /> {settings.phone}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:text-right space-y-4 pt-4 md:pt-0">
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600 mb-1">Tax Invoice</h2>
+                  <p className="text-3xl font-black text-slate-900 tracking-tighter">#{invoice.invoiceNumber}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 md:flex md:flex-col md:items-end md:gap-2">
+                  <div className="flex flex-col md:items-end">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date of Issue</span>
+                    <span className="text-sm font-bold text-slate-700">{formatDisplayDate(invoice.date)}</span>
+                  </div>
+                  <div className="flex flex-col md:items-end">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Due Date</span>
+                    <span className="text-sm font-bold text-rose-600">{formatDisplayDate(invoice.dueDate)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Elegant Table displaying requested metadata */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden mt-4">
-            <table className="w-full border-collapse text-left text-xs text-slate-600">
-              <tbody>
-                <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider w-1/3 bg-slate-50/50">Invoice Number</td>
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-950">{invoice.invoiceNumber}</td>
-                </tr>
-                <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Company Name</td>
-                  <td className="py-3.5 px-4 text-slate-800 font-semibold">{settings.companyName}</td>
-                </tr>
-                <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Date of Issue</td>
-                  <td className="py-3.5 px-4 text-slate-700">{formatDisplayDate(invoice.date || invoice.createdAt)}</td>
-                </tr>
-                <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Total Amount</td>
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(invoice.total)}
-                  </td>
-                </tr>
-                <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Paid Amount</td>
-                  <td className="py-3.5 px-4 font-mono text-emerald-600 font-semibold">
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(invoice.paidAmount || 0)}
-                  </td>
-                </tr>
-                <tr className="hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Due Amount</td>
-                  <td className="py-3.5 px-4 font-mono font-extrabold text-rose-600 bg-red-50/20 text-sm">
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(outstandingAmount)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          {/* Client & Bank Details Container */}
+          <div className="p-8 md:p-12 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-12 border-b border-slate-100">
+            <div className="space-y-4">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Billed To</span>
+                <h3 className="text-lg font-black text-slate-900 leading-tight">{invoice.clientName}</h3>
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed max-w-xs">{invoice.billingAddress}</p>
+              </div>
+            </div>
+
+            {(settings.showInvoiceBankDetails ?? true) !== false && (
+              <div className="space-y-4">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Banking Particulars</span>
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-slate-800">{settings.bankName || 'N/A'}</p>
+                  <div className="grid grid-cols-1 gap-1 text-xs text-slate-500">
+                    <p className="flex justify-between md:justify-start md:gap-4"><span className="font-medium text-slate-400">Account:</span> <span className="font-bold text-slate-700">{settings.accountNum || 'N/A'}</span></p>
+                    <p className="flex justify-between md:justify-start md:gap-4"><span className="font-medium text-slate-400">IFSC:</span> <span className="font-bold text-slate-700">{settings.ifscCode || 'N/A'}</span></p>
+                    {settings.upiId && (settings.showInvoiceUpiId ?? true) !== false && (
+                      <p className="flex justify-between md:justify-start md:gap-4"><span className="font-medium text-slate-400">UPI ID:</span> <span className="font-bold text-indigo-600">{settings.upiId}</span></p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Payment Section (Render QR or status confirmation) */}
-          <div className="bg-[#5B21FF]/5 rounded-3xl p-6 border border-[#5B21FF]/10 flex flex-col md:flex-row items-center gap-6">
-            
-            {/* If Fully Paid: render clean stamp success */}
-            {isPaid ? (
-              <div className="text-center md:text-left space-y-2 py-4 flex-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Settled &amp; Paid</span>
-                </div>
-                <h3 className="text-base font-bold text-slate-800">No Outstanding Balance Due</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  This transaction is fully cataloged on the server. No further payment processing is requested.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Render Payment QR code */}
-                {upiQrSrc ? (
-                  <div className="bg-white p-3 border border-[#5B21FF]/15 rounded-2xl shadow-sm text-center">
-                    <img 
-                      src={upiQrSrc} 
-                      className="w-40 h-40 object-contain rounded-lg" 
-                      alt="UPI Pay Scan" 
-                    />
-                    <span className="text-[10px] text-slate-400 font-semibold block mt-1">Scan using standard UPI application</span>
-                  </div>
-                ) : (
-                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-                    <CreditCard className="w-8 h-8" />
-                  </div>
-                )}
+          {/* Line Items Table */}
+          <div className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="py-5 px-8 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Line Item / Service Particulars</th>
+                    <th className="py-5 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-center w-24">Qty</th>
+                    <th className="py-5 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-right w-40">Rate</th>
+                    {hasTaxSplit && (
+                      <th className="py-5 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-center w-40">Tax Details</th>
+                    )}
+                    <th className="py-5 px-8 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-right w-48">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoice.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
+                      <td className="py-6 px-8">
+                        <p className="text-sm font-bold text-slate-800 leading-snug">{item.name}</p>
+                        {item.description && <p className="text-xs text-slate-400 mt-1">{item.description}</p>}
+                      </td>
+                      <td className="py-6 px-4 text-center">
+                        <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-sm font-black text-slate-600">
+                          {item.qty}
+                        </span>
+                      </td>
+                      <td className="py-6 px-4 text-right font-mono text-sm text-slate-500">
+                        ₹{(item.price || 0).toLocaleString('en-IN')}
+                      </td>
+                      {hasTaxSplit && (
+                        <td className="py-6 px-4 text-center">
+                          <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md uppercase tracking-wider">
+                            {invoice.taxType === 'CGST_SGST' 
+                              ? `CGST ${(item.gstPercent / 2)}% + SGST ${(item.gstPercent / 2)}%`
+                              : `IGST ${item.gstPercent}%`
+                            }
+                          </span>
+                        </td>
+                      )}
+                      <td className="py-6 px-8 text-right font-mono font-black text-slate-900">
+                        ₹{(item.qty * item.price).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                <div className="text-center md:text-left space-y-4 flex-1">
-                  <div className="space-y-1.5">
-                    <h3 className="text-base font-extrabold text-slate-900">Instant Clearing Payment</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Please use your mobile camera or favorite UPI banking app (Google Pay, PhonePe, Paytm, BHIM) to scan the generated QR. Or click the link below to process payment directly:
+          {/* Totals Section */}
+          <div className="p-8 md:p-12 flex flex-col md:flex-row gap-12">
+            {/* Notes / Terms */}
+            <div className="flex-1 space-y-6">
+              {invoice.notes && (settings.showInvoiceNotes ?? true) !== false && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Operational Notes</span>
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 italic">{invoice.notes}</p>
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Corporate Sign-off</span>
+                <div className="w-48 h-24 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center relative group">
+                  {settings.signatureUrl && (settings.showInvoiceSignature ?? true) !== false ? (
+                    <img src={settings.signatureUrl} alt="Signature" className="max-w-[80%] max-h-[80%] object-contain" />
+                  ) : (
+                    <span className="text-[10px] text-slate-300 font-bold uppercase tracking-tighter">Awaiting Authentication</span>
+                  )}
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-3 py-1 rounded-full border border-slate-200 text-[8px] font-black text-slate-400 uppercase tracking-widest shadow-sm">Authorized Seal</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Calculations Box */}
+            <div className="w-full md:w-96">
+              <div className="bg-slate-900 rounded-[32px] p-8 text-white space-y-6 shadow-2xl shadow-indigo-900/20">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400 font-bold uppercase tracking-widest">Net Ledger Value</span>
+                    <span className="font-mono">₹{invoice.subtotal?.toLocaleString('en-IN')}</span>
+                  </div>
+                  {settings.gstOption !== 'zero_tax' && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 font-bold uppercase tracking-widest">Tax Provision</span>
+                      <span className="font-mono text-indigo-400">+₹{invoice.taxAmount?.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  {invoice.discount > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-emerald-400 font-bold uppercase tracking-widest">Discount applied</span>
+                      <span className="font-mono text-emerald-400">-₹{invoice.discount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  
+                  <div className="h-px bg-white/10 my-2" />
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-black uppercase tracking-tighter">Gross Amount</span>
+                    <span className="text-2xl font-black font-mono">₹{invoice.total.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs pt-2">
+                    <span className="text-emerald-400 font-bold uppercase tracking-widest">Amount Received</span>
+                    <span className="font-mono text-emerald-400">₹{(invoice.paidAmount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                <div className="bg-rose-500 rounded-2xl p-5 flex justify-between items-center shadow-[0_0_30px_rgba(244,63,94,0.3)]">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-50">Pending Due</span>
+                  <span className="text-xl font-black font-mono text-white">₹{outstandingAmount.toLocaleString('en-IN')}</span>
+                </div>
+
+                {!isPaid && settings.upiId && (
+                  <div className="space-y-4 pt-2">
+                    <div className="bg-white p-3 rounded-2xl flex items-center justify-center">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`upi://pay?pa=${settings.upiId}&pn=${encodeURIComponent(settings.companyName)}&am=${outstandingAmount}&cu=INR&tn=Inv-${invoice.invoiceNumber}`)}`} 
+                        alt="UPI QR" 
+                        className="w-32 h-32"
+                      />
+                    </div>
+                    <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest leading-relaxed">
+                      Scan to pay via any UPI App<br/>
+                      (GPay, PhonePe, Paytm)
                     </p>
                   </div>
-
-                  {upiPayload && (
-                    <a 
-                      href={upiPayload}
-                      className="inline-flex items-center gap-2 px-5 py-3 bg-[#5B21FF] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#4a16dc] transition cursor-pointer"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>Pay directly via UPI application</span>
-                    </a>
-                  )}
-                </div>
-              </>
-            )}
-
-          </div>
-
-          {/* Client Reference section */}
-          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Client Recipient</span>
-              <p className="font-bold text-slate-800">{invoice.clientName || "Valued Client"}</p>
-              <p className="text-slate-400 text-[11px]">{invoice.billingAddress || "Billing profile registry records"}</p>
-            </div>
-            
-            <div className="space-y-1 text-slate-400 text-[11px] leading-relaxed md:text-right">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block md:text-right">Portal Security</span>
-              <span>This invoice summary was auto-compiled directly from secure corporate system server hashes and matches online records.</span>
+                )}
+              </div>
             </div>
           </div>
-
+          
+          {/* Footer Disclaimer */}
+          <div className="p-8 text-center bg-slate-50/50 border-t border-slate-100">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Secure Digital Receipt</p>
+            <p className="text-[9px] text-slate-400 leading-relaxed max-w-lg mx-auto">
+              This document is a computer-generated summary retrieved directly from the corporate accounting server. 
+              Internal verification hash matches the physical records at {settings.companyName}.
+            </p>
+          </div>
         </div>
-
       </div>
     </div>
   );

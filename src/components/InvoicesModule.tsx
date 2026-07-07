@@ -25,7 +25,8 @@ import {
   Globe,
   Edit3,
   Paperclip,
-  Share2
+  Share2,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, Client, Product, InvoiceItem, formatDisplayDate } from '../types';
@@ -1694,6 +1695,7 @@ export default function InvoicesModule({
       }
 
       if (action === 'print') {
+        // Primary: Iframe print (silent and professional)
         const existingIframe = document.getElementById('pdf-print-iframe') as HTMLIFrameElement;
         if (existingIframe) {
           existingIframe.remove();
@@ -1702,7 +1704,7 @@ export default function InvoicesModule({
         const iframe = document.createElement('iframe');
         iframe.id = 'pdf-print-iframe';
         iframe.style.position = 'fixed';
-        iframe.style.right = '100vw'; // move out of viewport
+        iframe.style.right = '100vw'; 
         iframe.style.bottom = '100vh';
         iframe.style.width = '0px';
         iframe.style.height = '0px';
@@ -1713,14 +1715,21 @@ export default function InvoicesModule({
         iframe.onload = () => {
           setTimeout(() => {
             try {
-              iframe.contentWindow?.focus();
-              iframe.contentWindow?.print();
+              if (iframe.contentWindow) {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+              } else {
+                throw new Error("No content window");
+              }
             } catch (printErr) {
-              console.warn("Direct PDF print failed, loading with fallback standard window.print()", printErr);
+              console.warn("Iframe print failed, falling back to direct window.print():", printErr);
               window.print();
             }
-          }, 400);
+          }, 600);
         };
+        
+        // Secondary Fallback: If after 3 seconds no print dialog appeared (hard to detect, but we can try)
+        // we can also offer a direct PDF open as a last resort.
         return;
       }
 
@@ -1753,6 +1762,50 @@ export default function InvoicesModule({
     }
   };
 
+  const handleShareWhatsApp = (customInvoice?: Invoice) => {
+    const inv = customInvoice || selectedInvoice;
+    if (!inv) return;
+
+    const hostOrigin = (window.location.origin.includes('capacitor') || window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+      ? 'https://ais-pre-xzpyeswg45bbcghpog5vdx-598615866613.asia-southeast1.run.app'
+      : window.location.origin;
+    
+    const url = `${hostOrigin}/public/invoice/${encodeURIComponent(inv.invoiceNumber)}`;
+    
+    // Formatting a professional text message for WhatsApp
+    let message = `*TAX INVOICE - ${businessSettings.companyName || 'Dispatch'}*\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `*No:* ${inv.invoiceNumber}\n`;
+    message += `*Date:* ${formatDisplayDate(inv.date)}\n`;
+    message += `*Client:* ${inv.clientName}\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    message += `*BILLING SUMMARY:*\n`;
+    
+    // Header for the text table (Monospace font using backticks)
+    message += `\`Item       Qty    Amount\`\n`;
+    message += `\`--------------------------\`\n`;
+    
+    inv.items.forEach(item => {
+      const nameShort = item.name.length > 10 ? item.name.substring(0, 7) + '..' : item.name.padEnd(10);
+      const qtyStr = String(item.qty).padStart(4);
+      const totalStr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(item.totalAmount).padStart(8);
+      message += `\`${nameShort} ${qtyStr}  ₹${totalStr}\`\n`;
+    });
+    
+    message += `\`--------------------------\`\n`;
+    message += `*TOTAL AMOUNT: ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(inv.total)}*\n`;
+    
+    if (inv.dueAmount > 0) {
+      message += `*Outstanding Due: ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(inv.dueAmount)}*\n`;
+    }
+    
+    message += `\n*View Professional Invoice (PDF):*\n${url}\n\n`;
+    message += `_Thank you for your business!_`;
+
+    const encodedMsg = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
+  };
+
   const handleOpenEmail = (inv: Invoice) => {
     const cl = clients.find(c => c.id === inv.clientId);
     setEmailTo(cl?.email || 'accounts@clientcorp.com');
@@ -1765,12 +1818,12 @@ export default function InvoicesModule({
     setIsEmailModalOpen(false);
   };
 
-  const filteredInvoices = invoices.filter(inv => {
+  const filteredInvoices = [...invoices].filter(inv => {
     const matchesSearch = inv.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = statusFilter === 'All' || inv.status === statusFilter;
     return matchesSearch && matchesFilter;
-  });
+  }).sort((a, b) => b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, { numeric: true }));
 
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -1985,6 +2038,14 @@ export default function InvoicesModule({
                   </button>
                 </>
               )}
+              <button 
+                onClick={handleShareWhatsApp}
+                className="p-2 border border-emerald-200 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs font-semibold flex items-center gap-1.5 transition"
+                title="Share Invoice on WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>WhatsApp</span>
+              </button>
               <button 
                 onClick={() => handleOpenEmail(selectedInvoice)}
                 className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5"
@@ -2518,6 +2579,15 @@ export default function InvoicesModule({
                             title="Settle Invoice Payment (Full/Partial)"
                           >
                             Settle
+                          </button>
+                        )}
+                         {canWrite && (
+                          <button 
+                            onClick={() => handleShareWhatsApp(inv)}
+                            className="p-1 px-1.5 border border-emerald-100 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                            title="Share on WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {canWrite && (

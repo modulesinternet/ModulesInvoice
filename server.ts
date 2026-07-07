@@ -578,7 +578,7 @@ if (fs.existsSync(apkHistoryPath)) {
 }
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = true) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 
@@ -809,35 +809,38 @@ async function reconcileClientData(clientId: string) {
   const client = db_clients[clientIndex];
 
   // 2. Filter client's invoices and payments
-  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId);
+  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const clientPayments = db_payments.filter(p => p.clientId === clientId);
 
-  // 3. Reconcile invoice payments
+  // 3. Reconcile invoice payments with intelligent FIFO (First-In-First-Out) auto-allocation
+  const totalClientCredits = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  let pool = totalClientCredits;
+
   for (const inv of clientInvoices) {
-    const paymentsForInv = clientPayments.filter(p => p.invoiceId === inv.id);
-    const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
+    const invTotal = Number(inv.total || 0);
+    const allocated = Math.min(invTotal, pool);
     
+    inv.paidAmount = allocated;
+    inv.dueAmount = Math.max(0, invTotal - allocated);
+    pool -= allocated;
+
     let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
-    if (calculatedDue === 0) {
+    if (inv.dueAmount === 0) {
       calculatedStatus = 'paid';
-    } else if (calculatedPaid > 0) {
+    } else if (inv.paidAmount > 0) {
       calculatedStatus = 'partially_paid';
     }
+    inv.status = calculatedStatus;
 
-    if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
-      inv.paidAmount = calculatedPaid;
-      inv.dueAmount = calculatedDue;
-      inv.status = calculatedStatus;
-      if (db) {
-        await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
-      }
+    if (db) {
+      await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
     }
   }
 
   // 4. Calculate client outstanding balance
   const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-  const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const totalPaid = totalClientCredits;
   const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
 
   if (client.outstandingBalance !== calculatedBalance) {
@@ -884,14 +887,15 @@ async function reconcileClientData(clientId: string) {
     });
   });
 
-  // Sort chronologically by transaction date, then by creation time
+  // Sort strictly: 1. Date, 2. CreatedAt, 3. ID (for absolute stable ordering)
   transactions.sort((a, b) => {
     const dateA = new Date(a.type === 'invoice' ? a.date : a.paymentDate).getTime();
     const dateB = new Date(b.type === 'invoice' ? b.date : b.paymentDate).getTime();
     if (dateA !== dateB) return dateA - dateB;
     const timeA = new Date(a.createdAt).getTime();
     const timeB = new Date(b.createdAt).getTime();
-    return timeA - timeB;
+    if (timeA !== timeB) return timeA - timeB;
+    return a.id.localeCompare(b.id);
   });
 
   // Generate new ledger entries with correct running balance
@@ -910,7 +914,7 @@ async function reconcileClientData(clientId: string) {
         amount: tx.total,
         runningBalance: runningBal,
         referenceType: 'invoice',
-        referenceId: tx.id,
+        referenceId: tx.invoiceNumber, // Voucher-wise display
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
@@ -929,7 +933,7 @@ async function reconcileClientData(clientId: string) {
         amount: tx.amount,
         runningBalance: runningBal,
         referenceType: 'payment',
-        referenceId: tx.id,
+        referenceId: `PAY-${tx.id.split('-').pop()}`, // Clear payment voucher code
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
@@ -1194,8 +1198,54 @@ async function bootstrapFromFirestore() {
     // 8. Payments
     db_payments = await syncCollectionOnStartup('payments', db_payments, DEMO_PAYMENTS);
 
+    // Self-healing payment de-duplication: Ensure physical uniqueness on startup
+    const seenPaymentRefs = new Set<string>();
+    const uniquePayments: Payment[] = [];
+    const duplicatePaymentIds: string[] = [];
+    
+    for (const p of db_payments) {
+      const ref = (p.referenceNum || "").trim().toLowerCase();
+      if (ref && seenPaymentRefs.has(ref)) {
+        duplicatePaymentIds.push(p.id);
+      } else {
+        if (ref) seenPaymentRefs.add(ref);
+        uniquePayments.push(p);
+      }
+    }
+    
+    if (duplicatePaymentIds.length > 0) {
+      console.log(`[Startup Deduplicator] Detected ${duplicatePaymentIds.length} duplicate payment reference document(s). Pruning...`);
+      db_payments = uniquePayments;
+      for (const payId of duplicatePaymentIds) {
+        try {
+          await withTimeout(deleteDoc(doc(db, 'payments', payId)), 15000);
+        } catch (e: any) {
+          console.warn(`[Startup Deduplicator Error] Failed to delete duplicate payment ${payId}:`, e.message);
+        }
+      }
+    }
+
     // 9. Ledger
     db_ledger = await syncCollectionOnStartup('ledger', db_ledger, DEMO_LEDGER);
+
+    // Self-healing ledger de-duplication
+    const seenLedgerIds = new Set<string>();
+    const uniqueLedger: LedgerEntry[] = [];
+    const duplicateLedgerIds: string[] = [];
+    for (const led of db_ledger) {
+      if (seenLedgerIds.has(led.id)) {
+        duplicateLedgerIds.push(led.id);
+      } else {
+        seenLedgerIds.add(led.id);
+        uniqueLedger.push(led);
+      }
+    }
+    if (duplicateLedgerIds.length > 0) {
+      db_ledger = uniqueLedger;
+      for (const lid of duplicateLedgerIds) {
+        try { deleteDoc(doc(db, 'ledger', lid)).catch(() => null); } catch (e) {}
+      }
+    }
 
     // 10. Cashbook
     db_cashbook = await syncCollectionOnStartup('cashbook', db_cashbook, DEMO_CASHBOOK);
@@ -1491,7 +1541,7 @@ function deleteRecentLocalUpdate(collectionName: string, docId: string) {
 function mergeRecentUpdates(collectionName: string, incomingList: any[], idKey: string = 'id'): any[] {
   const collectionUpdates = recentLocalUpdates.get(collectionName);
   const collectionDeletes = recentLocalDeletes.get(collectionName);
-  const cutoffTime = Date.now() - 30000; // Keep items in memory for 30s as a safety replication window
+  const cutoffTime = Date.now() - 600000; // Keep items in memory for 10m as a safety replication window
 
   // Clean up old updates and deletes key records to avoid memory leaks
   if (collectionUpdates) {
@@ -2126,7 +2176,7 @@ app.post('/api/categories', checkPermission('products', 'write'), async (req: Re
     return res.status(400).json({ error: "Category already exists" });
   }
   db_categories.push(trimmed);
-  await syncStateToFirestore('categories');
+  await syncStateToFirestore('categories', undefined, true);
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_CREATE", `Created new product category: ${trimmed}`);
   res.status(201).json({ success: true, categories: db_categories });
 });
@@ -2147,7 +2197,7 @@ app.put('/api/categories', checkPermission('products', 'write'), async (req: Req
       }
       return p;
     });
-    await syncStateToFirestore('categories');
+    await syncStateToFirestore('categories', undefined, true);
     await syncStateToFirestore('products');
     logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_UPDATE", `Renamed category from "${oldName}" to "${trimmedNew}" (affected ${count} product(s))`);
     res.json({ success: true, categories: db_categories });
@@ -2179,7 +2229,7 @@ app.delete('/api/categories', checkPermission('products', 'delete'), async (req:
     db_categories.push('General');
   }
   
-  await syncStateToFirestore('categories');
+  await syncStateToFirestore('categories', undefined, true);
   await syncStateToFirestore('products');
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "${fallbackCat}")`);
   res.json({ success: true, categories: db_categories });
@@ -3172,7 +3222,7 @@ app.put('/api/notifications/read-all', async (req: Request, res: Response) => {
   const filtered = db_notifications.filter(n => n.userId === userId && !n.isRead);
   for (const item of filtered) {
     item.isRead = true;
-    await syncStateToFirestore('notifications', item.id);
+    await syncStateToFirestore('notifications', item.id, true);
   }
   res.json({ success: true, count: filtered.length });
 });
@@ -3209,7 +3259,7 @@ app.get('/api/settings', checkPermission('settings', 'read'), (req: Request, res
 app.post('/api/settings', checkPermission('settings', 'write'), async (req: Request, res: Response) => {
   try {
     db_settings = { ...db_settings, ...req.body };
-    await syncStateToFirestore('settings');
+    await syncStateToFirestore('settings', undefined, true);
 
     // Securely write to local cache file so prebuild has instant disk-level access
     try {
@@ -3809,21 +3859,21 @@ app.post('/api/restore', checkPermission('settings', 'write'), async (req: Reque
     if (backup.categories) db_categories = backup.categories;
 
     // Trigger sequential sync for all collections onto Firestore
-    await syncStateToFirestore('settings');
-    await syncStateToFirestore('categories');
-    await syncStateToFirestore('roles');
+    await syncStateToFirestore('settings', undefined, true);
+    await syncStateToFirestore('categories', undefined, true);
+    await syncStateToFirestore('roles', undefined, true);
 
     if (db) {
       // In case we have db, directly iterate and push to Firestore
-      for (const item of db_clients) await syncStateToFirestore('clients', item.id);
-      for (const item of db_products) await syncStateToFirestore('products', item.id);
-      for (const item of db_invoices) await syncStateToFirestore('invoices', item.id);
-      for (const item of db_quotations) await syncStateToFirestore('quotations', item.id);
-      for (const item of db_payments) await syncStateToFirestore('payments', item.id);
-      for (const item of db_ledger) await syncStateToFirestore('ledger', item.id);
-      for (const item of db_cashbook) await syncStateToFirestore('cashbook', item.id);
-      for (const item of db_notifications) await syncStateToFirestore('notifications', item.id);
-      for (const item of db_users) await syncStateToFirestore('users', item.userId);
+      for (const item of db_clients) await syncStateToFirestore('clients', item.id, true);
+      for (const item of db_products) await syncStateToFirestore('products', item.id, true);
+      for (const item of db_invoices) await syncStateToFirestore('invoices', item.id, true);
+      for (const item of db_quotations) await syncStateToFirestore('quotations', item.id, true);
+      for (const item of db_payments) await syncStateToFirestore('payments', item.id, true);
+      for (const item of db_ledger) await syncStateToFirestore('ledger', item.id, true);
+      for (const item of db_cashbook) await syncStateToFirestore('cashbook', item.id, true);
+      for (const item of db_notifications) await syncStateToFirestore('notifications', item.id, true);
+      for (const item of db_users) await syncStateToFirestore('users', item.userId, true);
     } else {
       saveStateToLocalCache();
     }
