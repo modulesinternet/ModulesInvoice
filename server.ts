@@ -1827,8 +1827,8 @@ app.get('/api/dashboard', checkPermission('dashboard', 'read'), (req: Request, r
   // Let's build invoice and collection records by month
   const monthlyDataMap = new Map<string, { month: string; billed: number; collected: number }>();
   
-  // Fill recent 6 months
-  const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+  // Fill recent 12 months
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   months.forEach(m => {
     monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
   });
@@ -3562,7 +3562,7 @@ app.get('/api/batch-sync', async (req: Request, res: Response) => {
     const pendingInvoicesCount = db_invoices.filter(i => i.status !== 'paid').length;
 
     const monthlyDataMap = new Map<string, { month: string; billed: number; collected: number }>();
-    const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     months.forEach(m => {
       monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
     });
@@ -3572,7 +3572,7 @@ app.get('/api/batch-sync', async (req: Request, res: Response) => {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const m = monthNames[monthIndex];
       const fallbackMonth = m ? m.substring(0, 3) : "Jan";
-      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "May");
+      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "Dec");
       const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
       current.billed += inv.total;
       monthlyDataMap.set(key, current);
@@ -3583,7 +3583,7 @@ app.get('/api/batch-sync', async (req: Request, res: Response) => {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const m = monthNames[monthIndex];
       const fallbackMonth = m ? m.substring(0, 3) : "Jan";
-      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "May");
+      const key = months.includes(fallbackMonth) ? fallbackMonth : (months[months.length - 1] || "Dec");
       const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
       current.collected += pay.amount;
       monthlyDataMap.set(key, current);

@@ -5,9 +5,35 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  --color-primary-purple: #5B21FF;
-  --color-secondary-purple: #7C3AED;
+  --color-primary-purple: #0EA5E9;
+  --color-secondary-purple: #0284C7;
   --color-navy: #0F172A;
+
+  /* Remap indigo utilities to Sky Blue palette */
+  --color-indigo-50: #f0f9ff;
+  --color-indigo-100: #e0f2fe;
+  --color-indigo-200: #bae6fd;
+  --color-indigo-300: #7dd3fc;
+  --color-indigo-400: #38bdf8;
+  --color-indigo-500: #0ea5e9;
+  --color-indigo-600: #0284c7;
+  --color-indigo-700: #0369a1;
+  --color-indigo-800: #075985;
+  --color-indigo-900: #0c4a6e;
+  --color-indigo-950: #082f49;
+
+  /* Remap purple utilities to Sky Blue palette */
+  --color-purple-50: #f0f9ff;
+  --color-purple-100: #e0f2fe;
+  --color-purple-200: #bae6fd;
+  --color-purple-300: #7dd3fc;
+  --color-purple-400: #38bdf8;
+  --color-purple-500: #0ea5e9;
+  --color-purple-600: #0284c7;
+  --color-purple-700: #0369a1;
+  --color-purple-800: #075985;
+  --color-purple-900: #0c4a6e;
+  --color-purple-950: #082f49;
 }
 
 /* Custom scrollbar and backdrop additions */
@@ -37,7 +63,7 @@
 }
 
 .gradient-btn {
-  background: linear-gradient(135deg, #5B21FF 0%, #7C3AED 100%);
+  background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
   color: white;
   transition: all 0.2s ease-in-out;
 }
@@ -45,7 +71,7 @@
 .gradient-btn:hover {
   opacity: 0.95;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(91, 33, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
 }
 
 /* Print optimizations to prevent extra physical blank pages */

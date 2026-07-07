@@ -103,7 +103,7 @@ export default function Dashboard({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="stats-grid">
         {/* Total Billed Revenue */}
         <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-sm flex items-start justify-between relative overflow-hidden" id="stat-revenue">
-          <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-5 text-[#5B21FF]">
+          <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-5 text-[#0EA5E9]">
             <TrendingUp className="w-24 h-24 stroke-[1]" />
           </div>
           <div className="space-y-3">
@@ -228,7 +228,7 @@ export default function Dashboard({
                   contentStyle={{ background: '#0F172A', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12 }}
                 />
                 <Legend verticalAlign="top" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingBottom: 15 }} />
-                <Bar name="Total Billed" dataKey="billed" fill="#5B21FF" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar name="Total Billed" dataKey="billed" fill="#0EA5E9" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 <Bar name="Co-Reconciled Receipts" dataKey="collected" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
@@ -313,7 +313,7 @@ export default function Dashboard({
             </div>
             <button 
               onClick={() => onNavigate('invoices')}
-              className="text-xs text-[#5B21FF] font-semibold hover:underline flex items-center gap-1"
+              className="text-xs text-[#0EA5E9] font-semibold hover:underline flex items-center gap-1"
             >
               <span>Manage Invoices</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -372,7 +372,7 @@ export default function Dashboard({
                     <span className="text-[10px] text-slate-400">Billed Accounts</span>
                   </div>
                 </div>
-                <span className="font-mono text-xs font-bold text-[#5B21FF]">{formatCurrency(client.amount)}</span>
+                <span className="font-mono text-xs font-bold text-[#0EA5E9]">{formatCurrency(client.amount)}</span>
               </div>
             ))}
           </div>

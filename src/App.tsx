@@ -97,7 +97,7 @@ export function computeLocalDashboardMetrics(
   const pendingInvoicesCount = invoices.filter(i => i.status !== 'paid').length;
 
   const monthlyDataMap = new Map<string, { month: string; billed: number; collected: number }>();
-  const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   months.forEach(m => {
     monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
   });
@@ -231,46 +231,46 @@ const containerVariants = {
 };
 
 const sidebarVariants = {
-  hidden: { opacity: 0, x: -30, filter: "blur(4px)" },
+  hidden: { opacity: 0, x: -8, filter: "blur(2px)" },
   visible: { 
     opacity: 1, 
     x: 0,
     filter: "blur(0px)",
     transition: { 
       type: "spring", 
-      stiffness: 100, 
-      damping: 20, 
+      stiffness: 140, 
+      damping: 22, 
       mass: 0.8
     }
   }
 };
 
 const headerVariants = {
-  hidden: { opacity: 0, y: -20, filter: "blur(4px)" },
+  hidden: { opacity: 0, y: -8, filter: "blur(2px)" },
   visible: { 
     opacity: 1, 
     y: 0,
     filter: "blur(0px)",
     transition: { 
       type: "spring", 
-      stiffness: 110, 
-      damping: 20,
+      stiffness: 140, 
+      damping: 22,
       mass: 0.8
     }
   }
 };
 
 const stageVariants = {
-  hidden: { opacity: 0, y: 30, filter: "blur(6px)" },
+  hidden: { opacity: 0, y: 8, filter: "blur(4px)" },
   visible: { 
     opacity: 1, 
     y: 0,
     filter: "blur(0px)",
     transition: { 
       type: "spring", 
-      stiffness: 90, 
-      damping: 18,
-      mass: 1
+      stiffness: 150, 
+      damping: 24,
+      mass: 0.8
     }
   }
 };
@@ -1868,7 +1868,7 @@ export default function App() {
                   alt="Corporate logo" 
                 />
               ) : (
-                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-2xl font-display">
+                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] flex items-center justify-center font-bold text-white text-2xl font-display">
                   {companyInitials}
                 </div>
               )}
@@ -1876,7 +1876,7 @@ export default function App() {
             
             <div className="space-y-1">
               <h1 className="text-[18px] font-bold tracking-tight text-slate-900 font-display">
-                Internet <span className="text-[#5B21FF]">Modules</span>
+                Internet <span className="text-[#0EA5E9]">Modules</span>
               </h1>
               <p className="text-xs text-indigo-600 font-sans font-semibold tracking-wide uppercase">
                 Accounts & Billing System
@@ -2249,7 +2249,7 @@ export default function App() {
                 />
               ) : (
                 <div 
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white shadow-lg shadow-[#5B21FF]/20 font-display cursor-pointer shrink-0"
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] flex items-center justify-center font-bold text-white shadow-lg shadow-[#0EA5E9]/20 font-display cursor-pointer shrink-0"
                   onClick={() => {
                     if (!isSidebarOpen) setIsSidebarOpen(true);
                   }}
@@ -2266,7 +2266,7 @@ export default function App() {
                   }`}>
                     { companyNameText.includes('Modules') ? (
                       companyNameText.split(/(Modules)/g).map((part, i) => 
-                        part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                        part === 'Modules' ? <span key={i} className="text-[#0EA5E9]">Modules</span> : part
                       )
                     ) : companyNameText }
                   </h1>
@@ -2323,11 +2323,11 @@ export default function App() {
                 }}
                 className={`w-full flex items-center gap-2 md:gap-3 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[13px] md:text-[13px] font-semibold transition tracking-wide cursor-pointer ${
                   isActive 
-                    ? 'bg-[#F3F0FF] text-[#5B21FF] font-bold shadow-sm' 
+                    ? 'bg-[#F0F9FF] text-[#0EA5E9] font-bold shadow-sm' 
                     : 'text-slate-500 hover:text-slate-905 hover:bg-slate-50'
                 }`}
               >
-                <Icon className={`w-4 h-4 md:w-4.5 md:h-4.5 shrink-0 ${isActive ? 'text-[#5B21FF]' : 'text-slate-400 group-hover:text-slate-705'}`} />
+                <Icon className={`w-4 h-4 md:w-4.5 md:h-4.5 shrink-0 ${isActive ? 'text-[#0EA5E9]' : 'text-slate-400 group-hover:text-slate-705'}`} />
                 {isSidebarOpen && <span>{item.label}</span>}
               </button>
             );
@@ -2396,7 +2396,7 @@ export default function App() {
                 alt="Logo"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#5B21FF] to-[#7C3AED] flex items-center justify-center font-bold text-white text-xs">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] flex items-center justify-center font-bold text-white text-xs">
                 {companyInitials}
               </div>
             )}
@@ -2407,7 +2407,7 @@ export default function App() {
               }`}>
                 { companyNameText.includes('Modules') ? (
                   companyNameText.split(/(Modules)/g).map((part, i) => 
-                    part === 'Modules' ? <span key={i} className="text-[#5B21FF]">Modules</span> : part
+                    part === 'Modules' ? <span key={i} className="text-[#0EA5E9]">Modules</span> : part
                   )
                 ) : companyNameText }
               </span>
@@ -2532,7 +2532,7 @@ export default function App() {
               {currentUser.avatarUrl ? (
                 <img src={currentUser.avatarUrl} className="w-full h-full object-cover" alt="User Avatar" referrerPolicy="no-referrer" />
               ) : (
-                <div className="w-full h-full bg-[#5B21FF] text-white flex items-center justify-center font-bold font-sans text-[11px]">
+                <div className="w-full h-full bg-[#0EA5E9] text-white flex items-center justify-center font-bold font-sans text-[11px]">
                   {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                 </div>
               )}
@@ -2558,7 +2558,7 @@ export default function App() {
                 setShowGlobalResults(true);
               }}
               onFocus={() => setShowGlobalResults(true)}
-              className="w-full text-xs pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#5B21FF]"
+              className="w-full text-xs pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0EA5E9]"
             />
             {globalSearch && (
               <button 
@@ -2650,7 +2650,7 @@ export default function App() {
             {/* PREMIUM INTUITIVE GLOBAL SEARCH */}
             <div className="relative flex-1 group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-[#5B21FF] transition-colors" />
+                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-[#0EA5E9] transition-colors" />
               </div>
               <input
                 type="text"
@@ -2661,7 +2661,7 @@ export default function App() {
                   setShowGlobalResults(true);
                 }}
                 onFocus={() => setShowGlobalResults(true)}
-                className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#5B21FF] focus:bg-white transition font-sans"
+                className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#0EA5E9] focus:bg-white transition font-sans"
               />
               {showGlobalResults && globalSearch.trim() && (() => {
                 const results = getGlobalResults();
@@ -2805,7 +2805,7 @@ export default function App() {
                   {currentUser.avatarUrl ? (
                     <img src={currentUser.avatarUrl} className="w-full h-full object-cover" alt="User Avatar" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className="w-full h-full bg-[#5B21FF] text-white flex items-center justify-center font-bold font-sans text-[11px]">
+                    <div className="w-full h-full bg-[#0EA5E9] text-white flex items-center justify-center font-bold font-sans text-[11px]">
                       {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                     </div>
                   )}
@@ -2821,6 +2821,7 @@ export default function App() {
 
         {/* DYNAMIC COMPONENT PANEL CANVAS */}
         <motion.div 
+          key={activeTab}
           variants={stageVariants}
           className="p-3 sm:p-6 md:p-8 pb-24 md:pb-8 flex-1 max-w-7xl w-full mx-auto" 
           id="dynamic-element-stage"
