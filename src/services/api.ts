@@ -731,6 +731,7 @@ export const api = {
         runningBalance: startingBalance + newInvoice.total,
         referenceType: "invoice",
         referenceId: id,
+        invoiceNumber: newInvoice.invoiceNumber,
         createdAt: new Date().toISOString()
       };
       db_ledger.unshift(newLedger);
@@ -939,6 +940,7 @@ export const api = {
           runningBalance: outstanding,
           referenceType: "invoice",
           referenceId: invoiceId,
+          invoiceNumber: invoiceNum,
           createdAt: new Date().toISOString()
         };
         db_ledger.unshift(newLedger);
@@ -1036,6 +1038,7 @@ export const api = {
         runningBalance: runningClientBalance,
         referenceType: "payment",
         referenceId: payId,
+        invoiceNumber: newPayment.invoiceNumber,
         createdAt: new Date().toISOString()
       };
       db_ledger.unshift(newLedger);
@@ -1154,6 +1157,7 @@ export const api = {
           runningBalance: runningClientBalance,
           referenceType: "payment",
           referenceId: oldP.id,
+          invoiceNumber: oldP.invoiceNumber,
           createdAt: new Date().toISOString()
         };
         otherLedgers.unshift(newLedger);

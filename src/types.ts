@@ -134,6 +134,7 @@ export interface LedgerEntry {
   runningBalance: number;
   referenceType: "invoice" | "payment" | "opening_balance" | "adjustment";
   referenceId: string;
+  invoiceNumber?: string;
   createdAt: string;
 }
 

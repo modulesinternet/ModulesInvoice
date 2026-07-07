@@ -43,7 +43,11 @@ export default function LedgerModule({
 
   // Filter entries for selected customer
   const clientLedger = ledger.filter(entry => entry.clientId === selectedClientId)
-    .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a,b) => {
+      const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
   // Compute overall columns on the fly
   const totalDebits = clientLedger.filter(l => l.type === 'debit').reduce((s,l) => s + l.amount, 0);
@@ -53,7 +57,11 @@ export default function LedgerModule({
   // Group ledger entries by client for company-wise breakdown inside "All" view
   const companyWiseBreakdown = clients.map(client => {
     const clientEntries = ledger.filter(entry => entry.clientId === client.id)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => {
+        const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
     const debits = clientEntries.filter(l => l.type === 'debit').reduce((s, l) => s + l.amount, 0);
     const credits = clientEntries.filter(l => l.type === 'credit').reduce((s, l) => s + l.amount, 0);
     return {
@@ -173,6 +181,7 @@ export default function LedgerModule({
                     <thead>
                       <tr className="bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                         <th className="py-3 px-5">Date</th>
+                        <th className="py-3 px-5">Invoice No</th>
                         <th className="py-3 px-5">Ref / ID</th>
                         <th className="py-3 px-5">Description Particulars</th>
                         <th className="py-3 px-5 text-right">Debit (+)</th>
@@ -184,6 +193,7 @@ export default function LedgerModule({
                       {/* Base Forward Row */}
                       <tr className="bg-slate-50/20">
                         <td className="py-2.5 px-5 text-slate-400 font-mono">2026-04-01</td>
+                        <td className="py-2.5 px-5 font-mono text-slate-400">N/A</td>
                         <td className="py-2.5 px-5 font-mono text-slate-400">OPB-01</td>
                         <td className="py-2.5 px-5 italic text-slate-450">Opening balance forward</td>
                         <td className="py-2.5 px-5 text-right font-mono text-slate-500">
@@ -196,6 +206,7 @@ export default function LedgerModule({
                       {entries.map((row) => (
                         <tr key={row.id} className="hover:bg-slate-50/10">
                           <td className="py-2.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
+                          <td className="py-2.5 px-5 font-mono font-bold text-indigo-600 uppercase">{row.invoiceNumber || 'N/A'}</td>
                           <td className="py-2.5 px-5 font-mono font-bold text-slate-700 uppercase">{row.referenceId}</td>
                           <td className="py-2.5 px-5 text-slate-605 text-slate-600 font-medium">{row.description}</td>
                           <td className="py-2.5 px-5 text-right font-mono font-bold text-rose-600">
@@ -262,6 +273,7 @@ export default function LedgerModule({
               <thead>
                 <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
                   <th className="py-3 px-5">Entry Date</th>
+                  <th className="py-3 px-5">Invoice No</th>
                   <th className="py-3 px-5">Transactions Code</th>
                   <th className="py-3 px-5">Description Clause</th>
                   <th className="py-3 px-5 text-right">Debit columns (+)</th>
@@ -273,6 +285,7 @@ export default function LedgerModule({
                 {/* Seed opening row */}
                 <tr className="bg-slate-50/50">
                   <td className="py-3.5 px-5 text-slate-400 font-mono">2026-04-01</td>
+                  <td className="py-3.5 px-5 font-mono text-slate-450 uppercase">N/A</td>
                   <td className="py-3.5 px-5 font-mono text-slate-450 uppercase">OPB-001</td>
                   <td className="py-3.5 px-5 font-medium italic text-slate-500">Account Opening Balance Forward</td>
                   <td className="py-3.5 px-5 text-right font-mono font-semibold text-slate-600">
@@ -287,6 +300,7 @@ export default function LedgerModule({
                 {clientLedger.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/20">
                     <td className="py-3.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
+                    <td className="py-3.5 px-5 font-mono font-bold text-indigo-600 uppercase">{row.invoiceNumber || 'N/A'}</td>
                     <td className="py-3.5 px-5 font-mono font-bold text-slate-800 uppercase">{row.referenceId}</td>
                     <td className="py-3.5 px-5 text-slate-600 font-medium">{row.description}</td>
                     <td className="py-3.5 px-5 text-right font-mono font-bold text-rose-600">
