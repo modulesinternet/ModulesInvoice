@@ -1765,12 +1765,12 @@ export default function InvoicesModule({
     setIsEmailModalOpen(false);
   };
 
-  const filteredInvoices = [...invoices].filter(inv => {
+  const filteredInvoices = invoices.filter(inv => {
     const matchesSearch = inv.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = statusFilter === 'All' || inv.status === statusFilter;
     return matchesSearch && matchesFilter;
-  }).sort((a, b) => b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, { numeric: true }));
+  });
 
   const getStatusColor = (status: string) => {
     switch(status) {

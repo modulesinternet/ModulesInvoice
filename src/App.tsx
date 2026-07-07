@@ -1538,7 +1538,6 @@ export default function App() {
     try {
       await api.convertQuotation(id);
       showToast("Approved: Proposal estimate converted to official Tax Invoice successfully!");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1569,7 +1568,6 @@ export default function App() {
     try {
       await api.createPayment(p);
       showToast(`Cleared: Added ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.amount!)} deposit to client ledger!`);
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1580,7 +1578,6 @@ export default function App() {
     try {
       await api.updatePayment(id, p);
       showToast("Approved: Modified payment receipt references successfully.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1591,7 +1588,6 @@ export default function App() {
     try {
       await api.deletePayment(id);
       showToast("Approved: Voided and deleted payment successfully.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1602,7 +1598,6 @@ export default function App() {
     try {
       await api.createCashbookEntry(entry);
       showToast("Approved: Recorded Cashbook operating voucher.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1613,7 +1608,6 @@ export default function App() {
     try {
       await api.updateCashbookEntry(id, entry);
       showToast("Approved: Updated cashbook operating voucher.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1624,7 +1618,6 @@ export default function App() {
     try {
       await api.deleteCashbookEntry(id);
       showToast("Approved: Deleted cashbook operating voucher.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1635,7 +1628,6 @@ export default function App() {
     try {
       await api.saveSettings(settings);
       showToast("Approved: System firm parameters updated.");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -1646,7 +1638,6 @@ export default function App() {
     try {
       await api.importDatabase(backup);
       showToast("Approved: In-browser database backup restored successfully!");
-      await loadMasterData(true, true);
       
     } catch (err: any) {
       showToast(err.message, 'error');

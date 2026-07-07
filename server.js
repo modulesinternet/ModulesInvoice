@@ -1012,7 +1012,7 @@ if (fs.existsSync(apkHistoryPath)) {
     console.error("Failed to load local APK history:", err);
   }
 }
-async function syncStateToFirestore(topic, id, blocking = false) {
+async function syncStateToFirestore(topic, id, blocking = true) {
   saveStateToLocalCache();
   if (!db) return;
   if (!blocking) {
@@ -1783,7 +1783,7 @@ function deleteRecentLocalUpdate(collectionName, docId) {
 function mergeRecentUpdates(collectionName, incomingList, idKey = "id") {
   const collectionUpdates = recentLocalUpdates.get(collectionName);
   const collectionDeletes = recentLocalDeletes.get(collectionName);
-  const cutoffTime = Date.now() - 6e5;
+  const cutoffTime = Date.now() - 3e4;
   if (collectionUpdates) {
     for (const [id, update] of collectionUpdates.entries()) {
       if (update.timestamp < cutoffTime) {
@@ -2308,7 +2308,7 @@ app.post("/api/categories", checkPermission("products", "write"), async (req, re
     return res.status(400).json({ error: "Category already exists" });
   }
   db_categories.push(trimmed);
-  await syncStateToFirestore("categories", void 0, true);
+  await syncStateToFirestore("categories");
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_CREATE", `Created new product category: ${trimmed}`);
   res.status(201).json({ success: true, categories: db_categories });
 });
@@ -2327,7 +2327,7 @@ app.put("/api/categories", checkPermission("products", "write"), async (req, res
       }
       return p;
     });
-    await syncStateToFirestore("categories", void 0, true);
+    await syncStateToFirestore("categories");
     await syncStateToFirestore("products");
     logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_UPDATE", `Renamed category from "${oldName}" to "${trimmedNew}" (affected ${count} product(s))`);
     res.json({ success: true, categories: db_categories });
@@ -2352,7 +2352,7 @@ app.delete("/api/categories", checkPermission("products", "delete"), async (req,
   if (db_categories.length === 0) {
     db_categories.push("General");
   }
-  await syncStateToFirestore("categories", void 0, true);
+  await syncStateToFirestore("categories");
   await syncStateToFirestore("products");
   logUserActivity("demo-admin", "Karan Sharma", "CATEGORY_DELETE", `Removed category "${target}" (reset ${count} product(s) to "${fallbackCat}")`);
   res.json({ success: true, categories: db_categories });
@@ -3169,7 +3169,7 @@ app.put("/api/notifications/read-all", async (req, res) => {
   const filtered = db_notifications.filter((n) => n.userId === userId && !n.isRead);
   for (const item of filtered) {
     item.isRead = true;
-    await syncStateToFirestore("notifications", item.id, true);
+    await syncStateToFirestore("notifications", item.id);
   }
   res.json({ success: true, count: filtered.length });
 });
@@ -3201,7 +3201,7 @@ app.get("/api/settings", checkPermission("settings", "read"), (req, res) => {
 app.post("/api/settings", checkPermission("settings", "write"), async (req, res) => {
   try {
     db_settings = { ...db_settings, ...req.body };
-    await syncStateToFirestore("settings", void 0, true);
+    await syncStateToFirestore("settings");
     try {
       const cachePath = path.join(process.cwd(), "local-db-cache.json");
       let cacheData = {};
@@ -3716,19 +3716,19 @@ app.post("/api/restore", checkPermission("settings", "write"), async (req, res) 
     if (backup.users) db_users = backup.users;
     if (backup.roles) db_roles = backup.roles;
     if (backup.categories) db_categories = backup.categories;
-    await syncStateToFirestore("settings", void 0, true);
-    await syncStateToFirestore("categories", void 0, true);
-    await syncStateToFirestore("roles", void 0, true);
+    await syncStateToFirestore("settings");
+    await syncStateToFirestore("categories");
+    await syncStateToFirestore("roles");
     if (db) {
-      for (const item of db_clients) await syncStateToFirestore("clients", item.id, true);
-      for (const item of db_products) await syncStateToFirestore("products", item.id, true);
-      for (const item of db_invoices) await syncStateToFirestore("invoices", item.id, true);
-      for (const item of db_quotations) await syncStateToFirestore("quotations", item.id, true);
-      for (const item of db_payments) await syncStateToFirestore("payments", item.id, true);
-      for (const item of db_ledger) await syncStateToFirestore("ledger", item.id, true);
-      for (const item of db_cashbook) await syncStateToFirestore("cashbook", item.id, true);
-      for (const item of db_notifications) await syncStateToFirestore("notifications", item.id, true);
-      for (const item of db_users) await syncStateToFirestore("users", item.userId, true);
+      for (const item of db_clients) await syncStateToFirestore("clients", item.id);
+      for (const item of db_products) await syncStateToFirestore("products", item.id);
+      for (const item of db_invoices) await syncStateToFirestore("invoices", item.id);
+      for (const item of db_quotations) await syncStateToFirestore("quotations", item.id);
+      for (const item of db_payments) await syncStateToFirestore("payments", item.id);
+      for (const item of db_ledger) await syncStateToFirestore("ledger", item.id);
+      for (const item of db_cashbook) await syncStateToFirestore("cashbook", item.id);
+      for (const item of db_notifications) await syncStateToFirestore("notifications", item.id);
+      for (const item of db_users) await syncStateToFirestore("users", item.userId);
     } else {
       saveStateToLocalCache();
     }
