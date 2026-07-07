@@ -570,17 +570,19 @@ export default function QuotationsModule({
       )}
 
       {/* CREATE ESTIMATE SLIDE-OVER WIZARD */}
-      <AnimatePresence>
-        {isCreateOpen && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="fixed inset-0" onClick={() => { setIsCreateOpen(false); setAddedItems([]); }} />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
-            >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isCreateOpen && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+              <div className="fixed inset-0" onClick={() => { setIsCreateOpen(false); setAddedItems([]); }} />
+              <motion.div 
+                key="quotation-edit-modal"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
               {/* Wizard Header */}
               <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
@@ -697,14 +699,17 @@ export default function QuotationsModule({
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {addedItems.map((item, idx) => {
-                            const prod = products.find(p => p.id === item.productId)!;
+                            const prod = products.find(p => p.id === item.productId);
+                            const prodName = prod ? prod.name : "Unmapped Item";
+                            const prodUnit = prod ? prod.unit : "units";
+                            const gstPercent = prod ? prod.gstPercent : 18;
                             return (
                               <tr key={idx} className="hover:bg-slate-50/40">
-                                <td className="p-2 pl-3 font-semibold text-slate-700">{prod.name}</td>
-                                <td className="p-2 text-center font-mono font-semibold">{item.qty} {prod.unit}</td>
+                                <td className="p-2 pl-3 font-semibold text-slate-700">{prodName}</td>
+                                <td className="p-2 text-center font-mono font-semibold">{item.qty} {prodUnit}</td>
                                 <td className="p-2 text-right font-mono">{formatCurrency(item.qty * item.price)}</td>
                                 <td className="p-2 text-center font-semibold text-indigo-600">
-                                  {businessSettings.gstOption === 'zero_tax' ? '0% Exempt' : `${prod.gstPercent}%`}
+                                  {businessSettings.gstOption === 'zero_tax' ? '0% Exempt' : `${gstPercent}%`}
                                 </td>
                                 <td className="p-2 text-center">
                                   <button 
@@ -804,10 +809,11 @@ export default function QuotationsModule({
                 </div>
               </form>
             </motion.div>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
     </div>
   );
 }

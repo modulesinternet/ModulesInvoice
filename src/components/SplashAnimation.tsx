@@ -5,48 +5,92 @@ import { Loader2, ShieldCheck, Cpu } from 'lucide-react';
 interface SplashAnimationProps {
   companyName: string;
   logoUrl: string;
+  isLoaded?: boolean;
   onComplete?: () => void;
 }
 
-export default function SplashAnimation({ companyName, logoUrl, onComplete }: SplashAnimationProps) {
+export default function SplashAnimation({ companyName, logoUrl, isLoaded, onComplete }: SplashAnimationProps) {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Initializing');
 
   useEffect(() => {
-    // Elegant high-performance progress loader simulating database hydration
-    const interval = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        const remaining = 100 - p;
-        const step = Math.max(3, Math.floor(remaining * 0.25));
-        return Math.min(p + step, 100);
-      });
-    }, 60);
+    let interval: NodeJS.Timeout;
 
-    const t1 = setTimeout(() => setStatusText('Verifying'), 250);
-    const t2 = setTimeout(() => setStatusText('Syncing'), 650);
-    const t3 = setTimeout(() => setStatusText('Loading'), 1100);
-    const t4 = setTimeout(() => setStatusText('Ready'), 1450);
+    if (isLoaded === undefined) {
+      // Fallback to standard simulated progress if no dynamic isLoaded prop is supplied
+      interval = setInterval(() => {
+        setProgress(p => {
+          if (p >= 100) {
+            clearInterval(interval);
+            return 100;
+          }
+          const remaining = 100 - p;
+          const step = Math.max(3, Math.floor(remaining * 0.25));
+          return Math.min(p + step, 100);
+        });
+      }, 60);
 
-    // Complete loader with soft delay for buttery-smooth transition
-    const exitTimer = setTimeout(() => {
-      if (onComplete) {
-        onComplete();
+      const t1 = setTimeout(() => setStatusText('Verifying'), 250);
+      const t2 = setTimeout(() => setStatusText('Syncing'), 650);
+      const t3 = setTimeout(() => setStatusText('Loading'), 1100);
+      const t4 = setTimeout(() => setStatusText('Ready'), 1450);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+      };
+    } else {
+      // Dynamic progress tied directly to isLoaded state
+      interval = setInterval(() => {
+        setProgress(p => {
+          if (isLoaded) {
+            if (p >= 100) {
+              clearInterval(interval);
+              return 100;
+            }
+            return Math.min(p + 15, 100);
+          } else {
+            if (p >= 88) {
+              return 88;
+            }
+            const remaining = 88 - p;
+            const step = Math.max(2, Math.floor(remaining * 0.15));
+            return Math.min(p + step, 88);
+          }
+        });
+      }, 50);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }
+  }, [isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded !== undefined) {
+      if (!isLoaded) {
+        if (progress < 30) setStatusText('Initializing');
+        else if (progress < 60) setStatusText('Synchronizing');
+        else setStatusText('Hydrating Data');
+      } else {
+        setStatusText('Ready');
       }
-    }, 1800);
+    }
+  }, [progress, isLoaded]);
 
-    return () => {
-      clearInterval(interval);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(exitTimer);
-    };
-  }, [onComplete]);
+  useEffect(() => {
+    if (progress === 100) {
+      const exitTimer = setTimeout(() => {
+        if (onComplete) {
+          onComplete();
+        }
+      }, 350);
+      return () => clearTimeout(exitTimer);
+    }
+  }, [progress, onComplete]);
 
   const fallbackLogo = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80';
   const cleanLogo = logoUrl ? logoUrl.trim() : fallbackLogo;

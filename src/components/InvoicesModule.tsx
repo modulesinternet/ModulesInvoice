@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, 
   Plus, 
@@ -802,18 +803,21 @@ export default function InvoicesModule({
 
     setIsSaving(true);
     try {
-      const clientObj = clients.find(c => c.id === clientId)!;
+      const clientObj = clients.find(c => c.id === clientId);
+      const clientName = clientObj ? clientObj.name : "Unknown Client";
       const isZeroTax = businessSettings.gstOption === 'zero_tax';
 
       const finalItems: InvoiceItem[] = addedItems.map(item => {
-        const prod = products.find(p => p.id === item.productId)!;
+        const prod = products.find(p => p.id === item.productId);
+        const prodName = prod ? prod.name : "Custom Deliverable";
+        const hsn = prod ? (prod.hsnSac || '') : '';
         const base = item.qty * item.price;
-        const rate = isZeroTax ? 0 : prod.gstPercent;
+        const rate = isZeroTax ? 0 : (prod ? prod.gstPercent : 18);
         const tax = base * (rate / 100);
         return {
           productId: item.productId,
-          name: prod.name,
-          hsnSac: prod.hsnSac || '',
+          name: prodName,
+          hsnSac: hsn,
           qty: item.qty,
           price: item.price,
           gstPercent: rate,
@@ -2630,22 +2634,24 @@ export default function InvoicesModule({
       )}
 
       {/* CREATE INVOICE SLIDE-OVER WIZARD */}
-      <AnimatePresence>
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="fixed inset-0" onClick={() => {
-            setIsCreateOpen(false);
-            setIsEditing(false);
-            setEditingInvoiceId(null);
-            setAddedItems([]);
-          }} />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
-          >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isCreateOpen && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+              <div className="fixed inset-0" onClick={() => {
+                setIsCreateOpen(false);
+                setIsEditing(false);
+                setEditingInvoiceId(null);
+                setAddedItems([]);
+              }} />
+              <motion.div 
+                key="invoice-create-modal"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-400" />
@@ -2658,13 +2664,13 @@ export default function InvoicesModule({
                   setEditingInvoiceId(null);
                   setAddedItems([]);
                 }} 
-                className="text-slate-400 hover:text-white transition"
+                className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto">
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               {/* Form details top row */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1">
@@ -2779,14 +2785,17 @@ export default function InvoicesModule({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {addedItems.map((item, idx) => {
-                          const prod = products.find(p => p.id === item.productId)!;
+                          const prod = products.find(p => p.id === item.productId);
+                          const prodName = prod ? prod.name : "Custom Item";
+                          const prodUnit = prod ? prod.unit : "units";
+                          const gstPercent = prod ? prod.gstPercent : 18;
                           return (
                             <tr key={idx} className="hover:bg-slate-50/40">
-                              <td className="p-2 pl-3 font-semibold text-slate-700">{prod.name}</td>
-                              <td className="p-2 text-center font-mono font-semibold">{item.qty} {prod.unit}</td>
+                              <td className="p-2 pl-3 font-semibold text-slate-700">{prodName}</td>
+                              <td className="p-2 text-center font-mono font-semibold">{item.qty} {prodUnit}</td>
                               <td className="p-2 text-right font-mono">{formatCurrency(item.qty * item.price)}</td>
                               <td className="p-2 text-center text-indigo-700 font-bold">
-                                {businessSettings.gstOption === 'zero_tax' ? 'Tax-Exempt (0%)' : (isInterstate ? `IGST ${prod.gstPercent}%` : `CGST/SGST ${(prod.gstPercent/2)}%`)}
+                                {businessSettings.gstOption === 'zero_tax' ? 'Tax-Exempt (0%)' : (isInterstate ? `IGST ${gstPercent}%` : `CGST/SGST ${(gstPercent/2)}%`)}
                               </td>
                               <td className="p-2 text-center">
                                 <button 
@@ -2891,34 +2900,38 @@ export default function InvoicesModule({
           </motion.div>
         </div>
       )}
-      </AnimatePresence>
+    </AnimatePresence>,
+    document.body
+  )}
 
       {/* EMAIL FORWARD DIALOG */}
-      <AnimatePresence>
-      {isEmailModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="fixed inset-0" onClick={() => setIsEmailModalOpen(false)} />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10"
-          >
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isEmailModalOpen && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+              <div className="fixed inset-0" onClick={() => setIsEmailModalOpen(false)} />
+              <motion.div 
+                key="email-forward-modal"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-sm">Dispatched Copy Transmission</h3>
-              <button onClick={() => setIsEmailModalOpen(false)}>
-                <X className="w-4 h-4 text-slate-400" />
+              <button onClick={() => setIsEmailModalOpen(false)} className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800">
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-400">Recipient Email Address</label>
                 <input 
                   type="email"
                   value={emailTo}
                   onChange={(e) => setEmailTo(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none"
                 />
               </div>
               <div className="space-y-1">
@@ -2927,20 +2940,20 @@ export default function InvoicesModule({
                   type="text"
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-100 rounded-xl"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none"
                 />
               </div>
               <p className="text-[11px] text-slate-400 italic">This dispatch bundles a print optimized version of Invoice {selectedInvoice?.invoiceNumber} along with payment instructions.</p>
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button 
                   onClick={() => setIsEmailModalOpen(false)}
-                  className="px-4 py-2 border rounded-xl text-xs"
+                  className="px-4 py-2 border rounded-xl text-xs text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleSendEmailSimulation}
-                  className="gradient-btn px-5 py-2 text-xs font-bold rounded-xl"
+                  className="gradient-btn px-5 py-2 text-xs font-bold rounded-xl text-white cursor-pointer"
                 >
                   Send Copy
                 </button>
@@ -2949,23 +2962,27 @@ export default function InvoicesModule({
           </motion.div>
         </div>
       )}
-      </AnimatePresence>
+    </AnimatePresence>,
+    document.body
+  )}
 
       {/* INVOICE SETTLEMENT MODAL */}
-      <AnimatePresence>
-      {isSettleModalOpen && settleInvoice && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="fixed inset-0" onClick={() => {
-            setIsSettleModalOpen(false);
-            setSettleInvoice(null);
-          }} />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
-          >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isSettleModalOpen && settleInvoice && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+              <div className="fixed inset-0" onClick={() => {
+                setIsSettleModalOpen(false);
+                setSettleInvoice(null);
+              }} />
+              <motion.div 
+                key="invoice-settlement-modal"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 flex items-center justify-between shrink-0">
               <div>
@@ -3262,7 +3279,9 @@ export default function InvoicesModule({
           </motion.div>
         </div>
       )}
-      </AnimatePresence>
+    </AnimatePresence>,
+    document.body
+  )}
     </div>
   );
 }

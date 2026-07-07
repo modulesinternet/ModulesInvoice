@@ -384,7 +384,7 @@ export default function App() {
       setIsRefreshing(true);
       setPullDistance(40); // hold at 40px during active refreshing state
       try {
-        await loadMasterData(true, true);
+        await loadMasterData(true, false);
         showToast("Synchronized central backend registers", "success");
       } catch (err: any) {
         showToast(`Sync failed: ${err.message || err}`, "error");
@@ -1038,11 +1038,25 @@ export default function App() {
     const unsubLedger = registerSafeSnapshot(collection(firestoreDb, 'ledger'), (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry))
                      .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+      
+      const seenPaymentRefs = new Set<string>();
+      const dedupedList: LedgerEntry[] = [];
+      list.forEach(item => {
+        if (item.referenceType === 'payment' && item.referenceId) {
+          if (!seenPaymentRefs.has(item.referenceId)) {
+            seenPaymentRefs.add(item.referenceId);
+            dedupedList.push(item);
+          }
+        } else {
+          dedupedList.push(item);
+        }
+      });
+
       setLedger(prev => {
-        const nextStr = JSON.stringify(list);
+        const nextStr = JSON.stringify(dedupedList);
         if (JSON.stringify(prev) === nextStr) return prev;
         localStorage.setItem('db_ledger', nextStr);
-        return list;
+        return dedupedList;
       });
     }, 'ledger');
 
@@ -2134,6 +2148,7 @@ export default function App() {
             <SplashAnimation 
               companyName={businessSettings?.companyName || 'iModules'} 
               logoUrl={businessSettings?.logoUrl || ''} 
+              isLoaded={!loading}
               onComplete={() => {
                 if (!isLoggingIn) {
                   setShowSplash(false);
@@ -2704,7 +2719,7 @@ export default function App() {
             <button 
               onClick={() => {
                 setShowSplash(true);
-                loadMasterData();
+                loadMasterData(true, false);
               }}
               disabled={loading}
               className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none disabled:opacity-50"
@@ -3239,6 +3254,7 @@ export default function App() {
           <SplashAnimation 
             companyName={businessSettings?.companyName || 'iModules'} 
             logoUrl={businessSettings?.logoUrl || ''} 
+            isLoaded={!loading}
             onComplete={() => setShowSplash(false)}
           />
         )}

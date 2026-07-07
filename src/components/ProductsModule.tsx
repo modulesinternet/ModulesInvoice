@@ -338,7 +338,7 @@ export default function ProductsModule({
 
       {filteredProducts.length === 0 && (
         <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 col-span-full">
-          <package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h4 className="font-semibold text-slate-700 text-sm">No items in chosen catalog</h4>
           <p className="text-xs text-slate-400 mt-1">Refine your search tags or register a fresh product scope directly.</p>
         </div>
@@ -353,17 +353,19 @@ export default function ProductsModule({
       />
 
       {/* FORM MODAL */}
-      <AnimatePresence>
-        {isModalOpen && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
-            <div className="fixed inset-0" onClick={() => setIsModalOpen(false)} />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
-            >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isModalOpen && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
+              <div className="fixed inset-0" onClick={() => setIsModalOpen(false)} />
+              <motion.div 
+                key="product-edit-modal"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-100 shadow-2xl flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
               <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <Package className="w-5 h-5 text-indigo-400" />
@@ -455,23 +457,26 @@ export default function ProductsModule({
                 </div>
               </form>
             </motion.div>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
 
       {/* CATEGORY CRUD DIALOG */}
-      <AnimatePresence>
-        {isCategoryModalOpen && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans" id="category-crud-modal">
-            <div className="fixed inset-0" onClick={() => { setIsCategoryModalOpen(false); setEditingCategoryName(null); }} />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
-            >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isCategoryModalOpen && (
+            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans" id="category-crud-modal">
+              <div className="fixed inset-0" onClick={() => { setIsCategoryModalOpen(false); setEditingCategoryName(null); }} />
+              <motion.div 
+                key="category-crud-modal-content"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[85vh] md:max-h-[90vh] z-10 text-slate-800"
+              >
               <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <Layers className="w-5 h-5 text-indigo-400" />
@@ -612,10 +617,11 @@ export default function ProductsModule({
                 </button>
               </div>
             </motion.div>
-          </div>,
-          document.body
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
     </div>
   );
 }

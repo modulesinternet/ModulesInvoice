@@ -932,11 +932,29 @@ function getCleanLedger(): LedgerEntry[] {
   const initialLen = db_ledger.length;
   
   const originalLedger = [...db_ledger];
-  db_ledger = db_ledger.filter(led => {
+  
+  // Filter out entries referencing deleted invoices or deleted payments
+  const tempLedger = db_ledger.filter(led => {
     if (led.referenceType === 'invoice') return validInvoiceIds.has(led.referenceId);
     if (led.referenceType === 'payment') return validPaymentIds.has(led.referenceId);
     return true;
   });
+
+  // Deduplicate entries referencing the same payment
+  const seenPaymentRefs = new Set<string>();
+  const dedupedLedger: LedgerEntry[] = [];
+  tempLedger.forEach(led => {
+    if (led.referenceType === 'payment' && led.referenceId) {
+      if (!seenPaymentRefs.has(led.referenceId)) {
+        seenPaymentRefs.add(led.referenceId);
+        dedupedLedger.push(led);
+      }
+    } else {
+      dedupedLedger.push(led);
+    }
+  });
+
+  db_ledger = dedupedLedger;
 
   if (db_ledger.length !== initialLen) {
     saveStateToLocalCache();
@@ -2521,9 +2539,16 @@ app.get('/api/payments', checkPermission('payments', 'read'), (req: Request, res
 app.post('/api/payments', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    const payId = `pay-${Date.now()}`;
     const amountPaid = Number(data.amount || 0);
 
+    if (data.referenceNum) {
+      const existing = db_payments.find(pay => pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+      if (existing) {
+        return res.status(400).json({ error: `Payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+      }
+    }
+
+    const payId = `pay-${Date.now()}`;
     const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
 
     const newPayment: Payment & { createdBy?: string } = {
@@ -2573,7 +2598,7 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
       clientId: newPayment.clientId,
       clientName: newPayment.clientName,
       date: newPayment.paymentDate,
-      description: `Payment Receipt: ${newPayment.id} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
+      description: `Payment Receipt Ref ${newPayment.referenceNum} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
       type: "credit",
       amount: amountPaid,
       runningBalance: runningClientBalance,
@@ -2656,6 +2681,13 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
     if (pIndex !== -1) {
       const oldP = db_payments[pIndex];
 
+      if (data.referenceNum && data.referenceNum.trim().toLowerCase() !== oldP.referenceNum?.trim().toLowerCase()) {
+        const existing = db_payments.find(pay => pay.id !== id && pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+        if (existing) {
+          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+        }
+      }
+
       // 1. Revert Old values
       const oldAmount = Number(oldP.amount || 0);
       const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
@@ -2726,7 +2758,7 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         clientId: oldP.clientId,
         clientName: oldP.clientName,
         date: oldP.paymentDate,
-        description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
+        description: `Payment Receipt Ref ${oldP.referenceNum} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
         type: "credit",
         amount: newAmount,
         runningBalance: runningClientBalance,
