@@ -801,9 +801,162 @@ async function runBackgroundFirestoreSync(topic: string, id?: string) {
   }
 }
 
+// Exhaustive data reconciliation and ledger rebuilding routine for a client
+async function reconcileClientData(clientId: string) {
+  // 1. Find client
+  const clientIndex = db_clients.findIndex(c => c.id === clientId);
+  if (clientIndex === -1) return;
+  const client = db_clients[clientIndex];
+
+  // 2. Filter client's invoices and payments
+  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId);
+  const clientPayments = db_payments.filter(p => p.clientId === clientId);
+
+  // 3. Reconcile invoice payments
+  for (const inv of clientInvoices) {
+    const paymentsForInv = clientPayments.filter(p => p.invoiceId === inv.id);
+    const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
+    
+    let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
+    if (calculatedDue === 0) {
+      calculatedStatus = 'paid';
+    } else if (calculatedPaid > 0) {
+      calculatedStatus = 'partially_paid';
+    }
+
+    if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
+      inv.paidAmount = calculatedPaid;
+      inv.dueAmount = calculatedDue;
+      inv.status = calculatedStatus;
+      if (db) {
+        await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
+      }
+    }
+  }
+
+  // 4. Calculate client outstanding balance
+  const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+  const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
+
+  if (client.outstandingBalance !== calculatedBalance) {
+    client.outstandingBalance = calculatedBalance;
+    if (db) {
+      await withTimeout(setDoc(doc(db, 'clients', client.id), client), 10000).catch((e) => console.warn(`[Reconcile] Firestore client sync failed: ${e.message}`));
+    }
+  }
+
+  // 5. Rebuild ledger entries for this client
+  // First, find all existing ledger entries for this client and delete them from Firestore & db_ledger
+  const existingLedgers = db_ledger.filter(l => l.clientId === clientId);
+  db_ledger = db_ledger.filter(l => l.clientId !== clientId);
+  if (db) {
+    for (const led of existingLedgers) {
+      await withTimeout(deleteDoc(doc(db, 'ledger', led.id)), 10000).catch(() => null);
+    }
+  }
+
+  // Next, sort transactions chronologically to generate correct running balance
+  const transactions: ({ type: 'invoice'; id: string; date: string; invoiceNumber: string; total: number; createdAt: string } | { type: 'payment'; id: string; paymentDate: string; referenceNum: string; invoiceNumber: string; paymentMode: string; amount: number; createdAt: string })[] = [];
+
+  clientInvoices.forEach(inv => {
+    transactions.push({
+      type: 'invoice',
+      id: inv.id,
+      date: inv.date || new Date().toISOString().split('T')[0],
+      invoiceNumber: inv.invoiceNumber,
+      total: Number(inv.total || 0),
+      createdAt: inv.createdAt || new Date().toISOString()
+    });
+  });
+
+  clientPayments.forEach(p => {
+    transactions.push({
+      type: 'payment',
+      id: p.id,
+      paymentDate: p.paymentDate || new Date().toISOString().split('T')[0],
+      referenceNum: p.referenceNum || '',
+      invoiceNumber: p.invoiceNumber || '',
+      paymentMode: p.paymentMode || '',
+      amount: Number(p.amount || 0),
+      createdAt: p.createdAt || new Date().toISOString()
+    });
+  });
+
+  // Sort chronologically by transaction date, then by creation time
+  transactions.sort((a, b) => {
+    const dateA = new Date(a.type === 'invoice' ? a.date : a.paymentDate).getTime();
+    const dateB = new Date(b.type === 'invoice' ? b.date : b.paymentDate).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return timeA - timeB;
+  });
+
+  // Generate new ledger entries with correct running balance
+  let runningBal = 0;
+  for (let idx = 0; idx < transactions.length; idx++) {
+    const tx = transactions[idx];
+    if (tx.type === 'invoice') {
+      runningBal += tx.total;
+      const newLed: LedgerEntry = {
+        id: `led-inv-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.date,
+        description: `Invoice Raised: ${tx.invoiceNumber}`,
+        type: 'debit',
+        amount: tx.total,
+        runningBalance: runningBal,
+        referenceType: 'invoice',
+        referenceId: tx.id,
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (db) {
+        await withTimeout(setDoc(doc(db, 'ledger', newLed.id), newLed), 10000).catch((e) => console.warn(`[Reconcile] Firestore ledger invoice sync failed: ${e.message}`));
+      }
+    } else {
+      runningBal -= tx.amount;
+      const newLed: LedgerEntry = {
+        id: `led-pay-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.paymentDate,
+        description: `Payment Receipt Ref ${tx.referenceNum} against ${tx.invoiceNumber} via ${tx.paymentMode}`,
+        type: 'credit',
+        amount: tx.amount,
+        runningBalance: runningBal,
+        referenceType: 'payment',
+        referenceId: tx.id,
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (db) {
+        await withTimeout(setDoc(doc(db, 'ledger', newLed.id), newLed), 10000).catch((e) => console.warn(`[Reconcile] Firestore ledger payment sync failed: ${e.message}`));
+      }
+    }
+  }
+
+  // Commit changes to local cache
+  saveStateToLocalCache();
+}
+
 // Exhaustive global self-healing audit and sweep of ledger/client balances
 async function performSelfHealingAudit() {
-  console.log("[Self-Healing] Running systematic ledger integrity audit and orphan sweep...");
+  console.log("[Self-Healing] Running systematic ledger integrity audit, client balance reconciliation, and orphan sweep...");
+
+  // 1. Reconcile all existing clients
+  for (const client of db_clients) {
+    try {
+      await reconcileClientData(client.id);
+    } catch (err) {
+      console.error(`[Self-Healing] Failed to reconcile client ${client.name} (${client.id}):`, err);
+    }
+  }
+
+  // 2. Find and purge orphan ledger entries referencing deleted objects
   const validInvoiceIds = new Set(db_invoices.map(inv => inv.id));
   const validPaymentIds = new Set(db_payments.map(p => p.id));
   
@@ -844,83 +997,6 @@ async function performSelfHealingAudit() {
       }
     }
   }
-
-  // Sweep invoices to keep their paidAmount, dueAmount and status dynamically aligned with their actual payment receipts
-  console.log("[Self-Healing] Skipping aggressive automatic invoice status and due amounts alignment audit on startup to protect manual modifications.");
-  /*
-  for (let i = 0; i < db_invoices.length; i++) {
-    const inv = db_invoices[i];
-    const invPayments = db_payments.filter(p => p.invoiceId === inv.id);
-    const calculatedPaid = invPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
-    
-    // Status resolution based on dueAmount
-    let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
-    if (calculatedDue === 0) {
-      calculatedStatus = 'paid';
-    } else if (calculatedPaid > 0) {
-      calculatedStatus = 'partially_paid';
-    }
-
-    if (
-      Number(inv.paidAmount || 0) !== calculatedPaid || 
-      Number(inv.dueAmount || 0) !== calculatedDue || 
-      inv.status !== calculatedStatus
-    ) {
-      console.log(`[Self-Healing] Adjusting invoice ${inv.invoiceNumber} (ID: ${inv.id}): paid=${calculatedPaid}, due=${calculatedDue}, status=${calculatedStatus}`);
-      db_invoices[i].paidAmount = calculatedPaid;
-      db_invoices[i].dueAmount = calculatedDue;
-      db_invoices[i].status = calculatedStatus;
-      if (db) {
-        try {
-          await setDoc(doc(db, 'invoices', inv.id), db_invoices[i]);
-        } catch (e) {
-          console.error(`[Self-Healing] Failed to sync aligned invoice ${inv.id}:`, e);
-        }
-      }
-    }
-  }
-  */
-
-  // Sweep client outstanding balances to keep them tight and aligned
-  console.log("[Self-Healing] Skipping aggressive client outstanding balance recalculation sweep on startup to protect custom modified invoice/client balances.");
-  /*
-  for (let i = 0; i < db_clients.length; i++) {
-    const client = db_clients[i];
-    const clientInvoices = db_invoices.filter(v => v.clientId === client.id);
-    const clientPayments = db_payments.filter(p => p.clientId === client.id);
-    
-    const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
-    const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
-    const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
-    
-    if (clientInvoices.length > 0 || clientPayments.length > 0) {
-      if (client.outstandingBalance !== calculatedBalance) {
-        console.log(`[Self-Healing] Adjusting client outstanding balance for ${client.name} to ${calculatedBalance} (Invoices/Payments present).`);
-        db_clients[i].outstandingBalance = calculatedBalance;
-        if (db) {
-          try {
-            await setDoc(doc(db, 'clients', client.id), db_clients[i]);
-          } catch (e) {
-            console.error(`[Self-Healing] Failed to sync aligned outstanding balance for client ${client.id}:`, e);
-          }
-        }
-      }
-    } else {
-      const clientLedgers = db_ledger.filter(l => l.clientId === client.id);
-      if (clientLedgers.length === 0 && client.outstandingBalance !== 0) {
-        const isDemoClient = DEMO_CLIENTS.some(dc => dc.id === client.id);
-        if (!isDemoClient) {
-          console.log(`[Self-Healing] Resetting client outstanding balance for non-demo client ${client.name} with 0 ledger entries.`);
-          db_clients[i].outstandingBalance = 0;
-          if (db) {
-            await setDoc(doc(db, 'clients', client.id), db_clients[i]).catch(() => null);
-          }
-        }
-      }
-    }
-  }
-  */
 
   console.log(`[Self-Healing] Audit sweep completed. Active ledger count: ${db_ledger.length}`);
 }
@@ -2150,32 +2226,10 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
 
   db_invoices.unshift(newInvoice);
 
-  // AUTOMATION 1: Update client outstanding balance & add ledger entry
-  const clientIndex = db_clients.findIndex(c => c.id === newInvoice.clientId);
-  let startingBalance = 0;
-  if (clientIndex !== -1) {
-    startingBalance = db_clients[clientIndex].outstandingBalance;
-    db_clients[clientIndex].outstandingBalance += newInvoice.dueAmount;
-    await syncStateToFirestore('clients', newInvoice.clientId);
-  }
-
-  const newLedger: LedgerEntry = {
-    id: `led-${Date.now()}`,
-    clientId: newInvoice.clientId,
-    clientName: newInvoice.clientName,
-    date: newInvoice.date,
-    description: `Invoice Raised: ${newInvoice.invoiceNumber}`,
-    type: "debit",
-    amount: newInvoice.total,
-    runningBalance: startingBalance + newInvoice.total,
-    referenceType: "invoice",
-    referenceId: id,
-    createdAt: new Date().toISOString()
-  };
-  db_ledger.unshift(newLedger);
+  // AUTOMATION 1: Fully reconcile and rebuild ledger/balances via reconcileClientData helper
+  await reconcileClientData(newInvoice.clientId);
 
   await syncStateToFirestore('invoices', newInvoice.id);
-  await syncStateToFirestore('ledger', newLedger.id);
 
   // Trigger centralized master business notification broadcast
   await triggerBusinessNotification(
@@ -2218,26 +2272,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
       const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
       const newDueAmount = Number(data.dueAmount ?? (newTotal - newPaidAmount));
       
-      // Adjust client outstanding balance safely
-      const clientIndex = db_clients.findIndex(c => c.id === oldInv.clientId);
-      if (clientIndex !== -1) {
-        const oldDue = Number(oldInv.dueAmount || 0);
-        const newDue = Number(newDueAmount || 0);
-        const clientBal = Number(db_clients[clientIndex].outstandingBalance || 0);
-        db_clients[clientIndex].outstandingBalance = Math.max(0, clientBal - oldDue + newDue);
-        await syncStateToFirestore('clients', oldInv.clientId);
-      }
-      
-      // Adjust ledger entry if it exists
-      const ledgerIndex = db_ledger.findIndex(led => led.referenceType === "invoice" && led.referenceId === id);
-      if (ledgerIndex !== -1) {
-        db_ledger[ledgerIndex].amount = newTotal;
-        db_ledger[ledgerIndex].description = `Invoice Modified: ${data.invoiceNumber || oldInv.invoiceNumber}`;
-        if (clientIndex !== -1) {
-          db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
-        }
-        await syncStateToFirestore('ledger', db_ledger[ledgerIndex].id);
-      }
+      const oldClientId = oldInv.clientId;
 
       db_invoices[index] = {
         ...oldInv,
@@ -2246,6 +2281,14 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
         paidAmount: newPaidAmount,
         dueAmount: newDueAmount,
       };
+      
+      const newClientId = db_invoices[index].clientId;
+
+      // Fully reconcile ledger, payments, and outstanding balances for affected clients
+      await reconcileClientData(oldClientId);
+      if (newClientId !== oldClientId) {
+        await reconcileClientData(newClientId);
+      }
       
       await syncStateToFirestore('invoices', id);
 
@@ -2299,42 +2342,12 @@ app.delete('/api/invoices/:id', checkPermission('invoices', 'delete'), async (re
   if (index !== -1) {
     const inv = db_invoices[index];
     
-    // 1. Remove corresponding ledger entries
-    const ledIndices: number[] = [];
-    db_ledger.forEach((led, i) => {
-      if (led.referenceType === "invoice" && led.referenceId === id) {
-        ledIndices.push(i);
-      }
-    });
-    
-    // Remove from Firestore and in-memory list
-    for (const ledIdx of ledIndices) {
-      const ledId = db_ledger[ledIdx].id;
-      if (db) {
-        try {
-          await deleteDoc(doc(db, 'ledger', ledId));
-        } catch (e) {
-          console.error(`Failed to delete doc ledger/${ledId}:`, e);
-        }
-      }
-    }
-    // Filter db_ledger
-    db_ledger = db_ledger.filter(led => !(led.referenceType === "invoice" && led.referenceId === id));
-    
-    // 2. Delete the actual invoice
+    // Delete the actual invoice
     db_invoices.splice(index, 1);
     await syncStateToFirestore('invoices', id);
 
-    // 3. Recalculate Client Outstanding Adjustments (robust full recalculation)
-    const clientIndex = db_clients.findIndex(c => c.id === inv.clientId);
-    if (clientIndex !== -1) {
-      const clientInvoices = db_invoices.filter(v => v.clientId === inv.clientId);
-      const clientPayments = db_payments.filter(p => p.clientId === inv.clientId);
-      const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
-      const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
-      db_clients[clientIndex].outstandingBalance = Math.max(0, totalInvoiced - totalPaid);
-      await syncStateToFirestore('clients', inv.clientId);
-    }
+    // Fully reconcile client data, payments, and rebuild ledger entries
+    await reconcileClientData(inv.clientId);
     
     // Trigger centralized master business notification broadcast
     await triggerBusinessNotification(
@@ -2489,30 +2502,11 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
     q.status = "converted";
     q.convertedInvoiceId = invoiceId;
 
-    // Incremental ledger outstanding
-    if (clientDetails) {
-      clientDetails.outstandingBalance += q.total;
-      await syncStateToFirestore('clients', q.clientId);
-    }
-
-    const newLedger: LedgerEntry = {
-      id: `led-${Date.now()}`,
-      clientId: q.clientId,
-      clientName: q.clientName,
-      date: convertedInvoice.date,
-      description: `Invoice Raised from Proposal: ${invoiceNum}`,
-      type: "debit",
-      amount: convertedInvoice.total,
-      runningBalance: (clientDetails?.outstandingBalance || 0),
-      referenceType: "invoice",
-      referenceId: invoiceId,
-      createdAt: new Date().toISOString()
-    };
-    db_ledger.unshift(newLedger);
+    // Fully reconcile client balances, payments, and rebuild ledger entries
+    await reconcileClientData(q.clientId);
 
     await syncStateToFirestore('invoices', invoiceId);
     await syncStateToFirestore('quotations', id);
-    await syncStateToFirestore('ledger', newLedger.id);
 
     // Trigger centralized master business notification broadcast
     await triggerBusinessNotification(
@@ -2568,45 +2562,8 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
 
     db_payments.unshift(newPayment);
 
-    // AUTOMATION TRIGGER 1: Auto Sync Invoice paid status update with NaN protection
-    const invIndex = db_invoices.findIndex(i => i.id === newPayment.invoiceId);
-    if (invIndex !== -1) {
-      const inv = db_invoices[invIndex];
-      inv.paidAmount = Number(inv.paidAmount || 0) + amountPaid;
-      inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
-      
-      if (inv.dueAmount === 0) {
-        inv.status = 'paid';
-      } else if (inv.paidAmount > 0) {
-        inv.status = 'partially_paid';
-      }
-      await syncStateToFirestore('invoices', newPayment.invoiceId);
-    }
-
-    // AUTOMATION TRIGGER 2: Auto outstanding updates in Client entity with NaN protection
-    const clientIndex = db_clients.findIndex(c => c.id === newPayment.clientId);
-    let runningClientBalance = 0;
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = Math.max(0, Number(db_clients[clientIndex].outstandingBalance || 0) - amountPaid);
-      runningClientBalance = db_clients[clientIndex].outstandingBalance;
-      await syncStateToFirestore('clients', newPayment.clientId);
-    }
-
-    // AUTOMATION TRIGGER 3: Auto ledger record credits
-    const newLedger: LedgerEntry = {
-      id: `led-${Date.now()}`,
-      clientId: newPayment.clientId,
-      clientName: newPayment.clientName,
-      date: newPayment.paymentDate,
-      description: `Payment Receipt Ref ${newPayment.referenceNum} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
-      type: "credit",
-      amount: amountPaid,
-      runningBalance: runningClientBalance,
-      referenceType: "payment",
-      referenceId: payId,
-      createdAt: new Date().toISOString()
-    };
-    db_ledger.unshift(newLedger);
+    // Fully reconcile client balances, invoice dues/payments, and rebuild ledger entries
+    await reconcileClientData(newPayment.clientId);
 
     // AUTOMATION TRIGGER 4: Cashbook auto synchronizer running bank & cash accounts
     const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
@@ -2643,7 +2600,6 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     db_cashbook.unshift(newCashbook);
 
     await syncStateToFirestore('payments', payId);
-    await syncStateToFirestore('ledger', newLedger.id);
     await syncStateToFirestore('cashbook', newCashbook.id);
 
     // Trigger centralized master business notification broadcast
@@ -2688,22 +2644,8 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         }
       }
 
-      // 1. Revert Old values
-      const oldAmount = Number(oldP.amount || 0);
-      const oldInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
-      if (oldInvIndex !== -1) {
-        const inv = db_invoices[oldInvIndex];
-        inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - oldAmount);
-        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
-        inv.status = inv.dueAmount === Number(inv.total || 0) ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-        await syncStateToFirestore('invoices', inv.id);
-      }
-
-      const oldClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
-      if (oldClientIndex !== -1) {
-        db_clients[oldClientIndex].outstandingBalance = Number(db_clients[oldClientIndex].outstandingBalance || 0) + oldAmount;
-        await syncStateToFirestore('clients', db_clients[oldClientIndex].id);
-      }
+      // 1. Revert Old values & apply edits
+      const oldClientId = oldP.clientId;
 
       // Apply edits & update pointers dynamically
       const updatedClientId = data.clientId || oldP.clientId;
@@ -2728,46 +2670,14 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
       }
 
-      // 2. Apply New values
-      const newAmount = Number(oldP.amount || 0);
-      const newInvIndex = db_invoices.findIndex(inv => inv.id === oldP.invoiceId);
-      if (newInvIndex !== -1) {
-        const inv = db_invoices[newInvIndex];
-        inv.paidAmount = Number(inv.paidAmount || 0) + newAmount;
-        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
-        inv.status = inv.dueAmount === 0 ? 'paid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-        await syncStateToFirestore('invoices', inv.id);
-      }
+      const newClientId = oldP.clientId;
+      const newAmount = oldP.amount;
 
-      const newClientIndex = db_clients.findIndex(c => c.id === oldP.clientId);
-      let runningClientBalance = 0;
-      if (newClientIndex !== -1) {
-        db_clients[newClientIndex].outstandingBalance = Math.max(0, Number(db_clients[newClientIndex].outstandingBalance || 0) - newAmount);
-        runningClientBalance = db_clients[newClientIndex].outstandingBalance;
-        await syncStateToFirestore('clients', db_clients[newClientIndex].id);
+      // Fully reconcile balances, dues, and rebuild ledgers for affected clients
+      await reconcileClientData(oldClientId);
+      if (newClientId !== oldClientId) {
+        await reconcileClientData(newClientId);
       }
-
-      // Filter and rebuild Ledger entry
-      const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === oldP.id);
-      db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === oldP.id));
-      for (const led of ledgerToRemove) {
-        await syncStateToFirestore('ledger', led.id);
-      }
-      const newLedger: LedgerEntry = {
-        id: `led-${Date.now()}`,
-        clientId: oldP.clientId,
-        clientName: oldP.clientName,
-        date: oldP.paymentDate,
-        description: `Payment Receipt Ref ${oldP.referenceNum} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
-        type: "credit",
-        amount: newAmount,
-        runningBalance: runningClientBalance,
-        referenceType: "payment",
-        referenceId: oldP.id,
-        createdAt: new Date().toISOString()
-      };
-      db_ledger.unshift(newLedger);
-      await syncStateToFirestore('ledger', newLedger.id);
 
       // Filter and rebuild Cashbook entry
       const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === oldP.id);
@@ -2850,29 +2760,12 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
     if (pIndex !== -1) {
       const p = db_payments[pIndex];
 
-      // Revert Invoice paid amount
-      const invIndex = db_invoices.findIndex(inv => inv.id === p.invoiceId);
-      if (invIndex !== -1) {
-        const inv = db_invoices[invIndex];
-        inv.paidAmount = Math.max(0, Number(inv.paidAmount || 0) - Number(p.amount || 0));
-        inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
-        inv.status = inv.dueAmount === Number(inv.total || 0) ? 'unpaid' : (inv.paidAmount > 0 ? 'partially_paid' : 'unpaid');
-        await syncStateToFirestore('invoices', inv.id);
-      }
+      // Delete payment
+      db_payments.splice(pIndex, 1);
+      await syncStateToFirestore('payments', id);
 
-      // Revert Client outstanding balance
-      const clientIndex = db_clients.findIndex(c => c.id === p.clientId);
-      if (clientIndex !== -1) {
-        db_clients[clientIndex].outstandingBalance = Number(db_clients[clientIndex].outstandingBalance || 0) + Number(p.amount || 0);
-        await syncStateToFirestore('clients', db_clients[clientIndex].id);
-      }
-
-      // Revert Ledger
-      const ledgerToRemove = db_ledger.filter(l => l.referenceType === 'payment' && l.referenceId === p.id);
-      db_ledger = db_ledger.filter(l => !(l.referenceType === 'payment' && l.referenceId === p.id));
-      for (const led of ledgerToRemove) {
-        await syncStateToFirestore('ledger', led.id);
-      }
+      // Fully reconcile client data, payments, and rebuild ledger entries
+      await reconcileClientData(p.clientId);
 
       // Revert Cashbook
       const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === p.id);
@@ -2880,11 +2773,6 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
       for (const cb of cashbookToRemove) {
         await syncStateToFirestore('cashbook', cb.id);
       }
-
-      // Delete payment
-      db_payments.splice(pIndex, 1);
-
-      await syncStateToFirestore('payments', id);
 
       const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
 
