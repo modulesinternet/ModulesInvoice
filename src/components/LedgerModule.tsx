@@ -43,14 +43,7 @@ export default function LedgerModule({
 
   // Filter entries for selected customer
   const clientLedger = ledger.filter(entry => entry.clientId === selectedClientId)
-    .sort((a,b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      if (dateA !== dateB) return dateA - dateB;
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      return timeA - timeB;
-    });
+    .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   // Compute overall columns on the fly
   const totalDebits = clientLedger.filter(l => l.type === 'debit').reduce((s,l) => s + l.amount, 0);
@@ -283,11 +276,11 @@ export default function LedgerModule({
                   <td className="py-3.5 px-5 font-mono text-slate-450 uppercase">OPB-001</td>
                   <td className="py-3.5 px-5 font-medium italic text-slate-500">Account Opening Balance Forward</td>
                   <td className="py-3.5 px-5 text-right font-mono font-semibold text-slate-600">
-                    {formatCurrency(0)}
+                    {formatCurrency(totalDebits - totalCredits - closingBalance > 0 ? (totalDebits - totalCredits - closingBalance) : 0)}
                   </td>
                   <td className="py-3.5 px-5 text-right font-mono text-emerald-600">-</td>
                   <td className="py-3.5 px-5 text-right font-mono font-bold text-slate-700">
-                    {formatCurrency(0)}
+                    {formatCurrency(totalDebits - totalCredits - closingBalance > 0 ? (totalDebits - totalCredits - closingBalance) : 0)}
                   </td>
                 </tr>
 

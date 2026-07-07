@@ -809,38 +809,35 @@ async function reconcileClientData(clientId: string) {
   const client = db_clients[clientIndex];
 
   // 2. Filter client's invoices and payments
-  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId);
   const clientPayments = db_payments.filter(p => p.clientId === clientId);
 
-  // 3. Reconcile invoice payments with intelligent FIFO (First-In-First-Out) auto-allocation
-  const totalClientCredits = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  let pool = totalClientCredits;
-
+  // 3. Reconcile invoice payments
   for (const inv of clientInvoices) {
-    const invTotal = Number(inv.total || 0);
-    const allocated = Math.min(invTotal, pool);
+    const paymentsForInv = clientPayments.filter(p => p.invoiceId === inv.id);
+    const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
     
-    inv.paidAmount = allocated;
-    inv.dueAmount = Math.max(0, invTotal - allocated);
-    pool -= allocated;
-
     let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
-    if (inv.dueAmount === 0) {
+    if (calculatedDue === 0) {
       calculatedStatus = 'paid';
-    } else if (inv.paidAmount > 0) {
+    } else if (calculatedPaid > 0) {
       calculatedStatus = 'partially_paid';
     }
-    inv.status = calculatedStatus;
 
-    if (db) {
-      await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
+    if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
+      inv.paidAmount = calculatedPaid;
+      inv.dueAmount = calculatedDue;
+      inv.status = calculatedStatus;
+      if (db) {
+        await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
+      }
     }
   }
 
   // 4. Calculate client outstanding balance
   const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-  const totalPaid = totalClientCredits;
+  const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
 
   if (client.outstandingBalance !== calculatedBalance) {
@@ -887,15 +884,14 @@ async function reconcileClientData(clientId: string) {
     });
   });
 
-  // Sort strictly: 1. Date, 2. CreatedAt, 3. ID (for absolute stable ordering)
+  // Sort chronologically by transaction date, then by creation time
   transactions.sort((a, b) => {
     const dateA = new Date(a.type === 'invoice' ? a.date : a.paymentDate).getTime();
     const dateB = new Date(b.type === 'invoice' ? b.date : b.paymentDate).getTime();
     if (dateA !== dateB) return dateA - dateB;
     const timeA = new Date(a.createdAt).getTime();
     const timeB = new Date(b.createdAt).getTime();
-    if (timeA !== timeB) return timeA - timeB;
-    return a.id.localeCompare(b.id);
+    return timeA - timeB;
   });
 
   // Generate new ledger entries with correct running balance
@@ -914,7 +910,7 @@ async function reconcileClientData(clientId: string) {
         amount: tx.total,
         runningBalance: runningBal,
         referenceType: 'invoice',
-        referenceId: tx.invoiceNumber, // Voucher-wise display
+        referenceId: tx.id,
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
@@ -933,7 +929,7 @@ async function reconcileClientData(clientId: string) {
         amount: tx.amount,
         runningBalance: runningBal,
         referenceType: 'payment',
-        referenceId: `PAY-${tx.id.split('-').pop()}`, // Clear payment voucher code
+        referenceId: tx.id,
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
@@ -1198,54 +1194,8 @@ async function bootstrapFromFirestore() {
     // 8. Payments
     db_payments = await syncCollectionOnStartup('payments', db_payments, DEMO_PAYMENTS);
 
-    // Self-healing payment de-duplication: Ensure physical uniqueness on startup
-    const seenPaymentRefs = new Set<string>();
-    const uniquePayments: Payment[] = [];
-    const duplicatePaymentIds: string[] = [];
-    
-    for (const p of db_payments) {
-      const ref = (p.referenceNum || "").trim().toLowerCase();
-      if (ref && seenPaymentRefs.has(ref)) {
-        duplicatePaymentIds.push(p.id);
-      } else {
-        if (ref) seenPaymentRefs.add(ref);
-        uniquePayments.push(p);
-      }
-    }
-    
-    if (duplicatePaymentIds.length > 0) {
-      console.log(`[Startup Deduplicator] Detected ${duplicatePaymentIds.length} duplicate payment reference document(s). Pruning...`);
-      db_payments = uniquePayments;
-      for (const payId of duplicatePaymentIds) {
-        try {
-          await withTimeout(deleteDoc(doc(db, 'payments', payId)), 15000);
-        } catch (e: any) {
-          console.warn(`[Startup Deduplicator Error] Failed to delete duplicate payment ${payId}:`, e.message);
-        }
-      }
-    }
-
     // 9. Ledger
     db_ledger = await syncCollectionOnStartup('ledger', db_ledger, DEMO_LEDGER);
-
-    // Self-healing ledger de-duplication
-    const seenLedgerIds = new Set<string>();
-    const uniqueLedger: LedgerEntry[] = [];
-    const duplicateLedgerIds: string[] = [];
-    for (const led of db_ledger) {
-      if (seenLedgerIds.has(led.id)) {
-        duplicateLedgerIds.push(led.id);
-      } else {
-        seenLedgerIds.add(led.id);
-        uniqueLedger.push(led);
-      }
-    }
-    if (duplicateLedgerIds.length > 0) {
-      db_ledger = uniqueLedger;
-      for (const lid of duplicateLedgerIds) {
-        try { deleteDoc(doc(db, 'ledger', lid)).catch(() => null); } catch (e) {}
-      }
-    }
 
     // 10. Cashbook
     db_cashbook = await syncCollectionOnStartup('cashbook', db_cashbook, DEMO_CASHBOOK);

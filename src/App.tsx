@@ -1399,7 +1399,7 @@ export default function App() {
     try {
       await api.createClient(c);
       showToast(`Corporate partner "${c.name}" registered successfully!`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1409,7 +1409,7 @@ export default function App() {
     try {
       await api.updateClient(id, c);
       showToast(`Partner profile updated.`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1419,7 +1419,7 @@ export default function App() {
     try {
       await api.deleteClient(id);
       showToast(`Successfully removed client.`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1429,7 +1429,7 @@ export default function App() {
     try {
       await api.createProduct(p);
       showToast(`Catalogue item "${p.name}" listed successfully!`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1439,7 +1439,7 @@ export default function App() {
     try {
       await api.updateProduct(id, p);
       showToast("Catalogue product description modified.");
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1449,7 +1449,7 @@ export default function App() {
     try {
       await api.deleteProduct(id);
       showToast("Catalogue item removed.");
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1489,7 +1489,7 @@ export default function App() {
     try {
       await api.createInvoice(inv);
       showToast(`Authorized & dispatched invoice!`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1499,7 +1499,7 @@ export default function App() {
     try {
       await api.updateInvoice(id, inv);
       showToast(`Maturity/bill items updated successfully!`);
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
