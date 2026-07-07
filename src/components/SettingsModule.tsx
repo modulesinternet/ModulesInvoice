@@ -1631,15 +1631,41 @@ export default function SettingsModule({
               <div className="space-y-1 mb-4">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Universal App Theme Color</label>
                 <select
-                  value={themeColor}
-                  onChange={(e) => setThemeColor(e.target.value)}
+                  value={themeColor.startsWith('#') ? 'custom' : themeColor}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') {
+                      setThemeColor('#0ea5e9');
+                    } else {
+                      setThemeColor(e.target.value);
+                    }
+                  }}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-1 focus:ring-primary-purple"
                 >
                   {Object.keys(THEME_PALETTES).map(key => (
                     <option key={key} value={key}>{THEME_PALETTES[key].name}</option>
                   ))}
+                  <option value="custom">Manual Custom Color (HEX)</option>
                 </select>
-                <p className="text-[9px] text-slate-400">Determines the universal design accent color for the entire application.</p>
+
+                {themeColor.startsWith('#') && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className="w-8 h-8 rounded cursor-pointer overflow-hidden p-0"
+                    />
+                    <input 
+                      type="text" 
+                      value={themeColor} 
+                      onChange={(e) => setThemeColor(e.target.value)} 
+                      placeholder="#HEXCODE"
+                      className="flex-1 text-xs p-2 border border-slate-200 rounded-lg font-mono focus:ring-1 focus:ring-primary-purple" 
+                    />
+                  </div>
+                )}
+                
+                <p className="text-[9px] text-slate-400 mt-1">Determines the universal design accent color for the entire application.</p>
               </div>
 
               <div className="space-y-1">

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.apex.erp',
-  appName: 'iModules',
+  appName: 'Internet Modules',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

@@ -67,7 +67,12 @@ var DEFAULT_SETTINGS = {
   showInvoiceSignature: true,
   showInvoiceNotes: true,
   qrBesideMohar: false,
-  defaultInvoiceNotes: "Humble warning: Please quote our invoice serial number in all bank payouts."
+  defaultInvoiceNotes: "Humble warning: Please quote our invoice serial number in all bank payouts.",
+  notificationSound: "crystal",
+  voiceAnnounceEnabled: true,
+  voiceAnnounceTemplate: "Payment of \u20B9{amount} has been received from {hotelName} via {paymentMode}.",
+  incomingCallAlertEnabled: true,
+  ttsCallerName: "Karan Sharma"
 };
 var DEMO_USERS = [
   {
@@ -581,18 +586,6 @@ var DEMO_LOGS = [
   { id: "log3", userId: "demo-acc", userName: "Ramanathan Iyer", action: "PAYMENT_POST", details: "Posted reference pay5 of INR 32,800 received from Airtel UPI wallet link.", timestamp: "2026-05-21T09:00:00Z" },
   { id: "log4", userId: "demo-manager", userName: "Sonia Rao", action: "QUOTATION_EXPIRED", details: "Quotation EST/26-27/003 shifted to active transmission state.", timestamp: "2026-05-21T09:12:00Z" }
 ];
-var DEMO_NOTIFICATIONS = [
-  { id: "n1", title: "Enterprise Overdue Alert", message: "Invoice APX/26-27/010 from HDFC Life is pending final validation signoff check.", type: "warning", isRead: false, createdAt: "2026-05-23T07:15:00Z" },
-  { id: "n2", title: "Configuration Update", message: "System metadata and business registration settings fully synchronized with G-Ledger.", type: "info", isRead: false, createdAt: "2026-05-23T05:30:00Z" },
-  { id: "n3", title: "Successful Payment Sync", message: "Infosys Ltd settled APX/26-27/002 fully (INR 3,44,000 auto synced with G-Ledger and Cashbook).", type: "success", isRead: true, createdAt: "2026-05-22T14:02:00Z" },
-  { id: "n4", title: "Quotation Accepted", message: "Hindustan Unilever officially approved quotation EST/26-27/004.", type: "success", isRead: true, createdAt: "2026-05-22T09:05:00Z" },
-  { id: "n5", title: "Client Created", message: "Tata Consultancy Services Ltd registered in client index successfully.", type: "info", isRead: false, createdAt: "2026-05-21T11:00:00Z" },
-  { id: "n6", title: "Invoice Draft Saved", message: "Invoice for Reliance Retail has been securely cached in local storage.", type: "info", isRead: false, createdAt: "2026-05-21T10:15:00Z" },
-  { id: "n7", title: "Security Policy Hardened", message: "All API communication limits checked and restricted to Authorized Roles.", type: "success", isRead: false, createdAt: "2026-05-20T16:00:00Z" },
-  { id: "n8", title: "Weekly Ledger Reconciled", message: "Cashbook entries fully balance with verified bank accounts ledger.", type: "success", isRead: true, createdAt: "2026-05-19T18:30:00Z" },
-  { id: "n9", title: "System Compliance Reconciled", message: "Compliance and taxation validation routines automated for new quotes & billings.", type: "info", isRead: true, createdAt: "2026-05-19T11:45:00Z" },
-  { id: "n10", title: "Team Privileges Aligned", message: "Manager write and delete scopes restricted based on updated security directives.", type: "warning", isRead: false, createdAt: "2026-05-18T14:20:00Z" }
-];
 
 // server.ts
 import admin from "firebase-admin";
@@ -620,12 +613,29 @@ console.warn = function(...args) {
 var requestContext = new AsyncLocalStorage();
 var app = express();
 var PORT = 3e3;
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "150mb" }));
+app.use(express.urlencoded({ limit: "150mb", extended: true }));
+app.use((err, req, res, next) => {
+  if (err) {
+    console.error("[Express Middleware Catch]: Heavy payload parsing error:", err);
+    if (err.status === 413 || err.statusCode === 413) {
+      return res.status(413).json({
+        success: false,
+        error: "File size exceeds the server's single-delivery limits (Max 100MB native binary buffer size)."
+      });
+    }
+    return res.status(err.status || 400).json({
+      success: false,
+      error: err.message || "Bad payload structure: Malformed JSON or Base64 stream."
+    });
+  }
+  next();
+});
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-active-role, x-user-email, x-user-name, x-user-id");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-user-role, x-user-email, x-user-name, x-user-id");
+  res.header("Access-Control-Expose-Headers", "x-user-role, x-user-email, x-user-name, x-user-id");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
@@ -645,9 +655,10 @@ var db_payments = [...DEMO_PAYMENTS];
 var db_ledger = [...DEMO_LEDGER];
 var db_cashbook = [...DEMO_CASHBOOK];
 var db_logs = [...DEMO_LOGS];
-var db_notifications = [...DEMO_NOTIFICATIONS];
+var db_notifications = [];
 var db_users = [...DEMO_USERS];
 var db_fcm_tokens = [];
+var db_apk_releases = [];
 var db_passwords = {
   "modulesinternet@gmail.com": "Admin@123",
   "manager@demo.com": "manager123",
@@ -769,18 +780,6 @@ async function sendFcmNotification(title, body, extraData = {}) {
     console.log("[FCM BROADCAST] No valid FCM registration keys extracted. Skipping.");
     return;
   }
-  const logId = `notif-log-${Date.now()}`;
-  const notifType = extraData.type === "warning" ? "warning" : extraData.type === "success" ? "success" : "info";
-  const newNotif = {
-    id: logId,
-    title,
-    message: body,
-    isRead: false,
-    type: notifType,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  db_notifications.unshift(newNotif);
-  syncStateToFirestore("notifications", logId).catch(() => null);
   if (!isFcmSupported) {
     console.log(`[FCM SIMULATED DELIVERY] Simulated multicast delivery to ${tokens.length} device(s) complete.`);
     return;
@@ -794,12 +793,49 @@ async function sendFcmNotification(title, body, extraData = {}) {
     android: {
       priority: "high",
       notification: {
-        sound: "custom_sound",
-        // Play Custom wav sound configured in Android res/raw
+        sound: "default",
+        // Standard fallback sound ensures it works on all devices without raw resource errors
         channelId: "high_priority_notifications",
-        // Use the custom high-priority notification channel
-        visibility: "public"
-        // Render details on lockscreen securely
+        // Use high-priority notification channel
+        visibility: "public",
+        // Render details securely on lockscreen
+        notificationPriority: "PRIORITY_MAX",
+        // Show heads-up banner with max urgency above general notifications
+        defaultSound: true,
+        // Auto-play system sound
+        defaultVibrateTimings: true,
+        // Auto-vibrate
+        defaultLightSettings: true
+        // Enable indicator LEDs
+      }
+    },
+    apns: {
+      headers: {
+        "apns-priority": "10"
+        // Wake device instantly from sleep state
+      },
+      payload: {
+        aps: {
+          alert: {
+            title,
+            body
+          },
+          sound: "default",
+          "content-available": 1
+          // Let background handlers receive payload
+        }
+      }
+    },
+    webpush: {
+      headers: {
+        Urgency: "high"
+      },
+      notification: {
+        title,
+        body,
+        icon: "/assets/favicon.ico",
+        badge: "/assets/favicon.ico",
+        requireInteraction: true
       }
     },
     data: {
@@ -828,6 +864,57 @@ async function sendFcmNotification(title, body, extraData = {}) {
         }
       }
     }
+  }
+}
+async function triggerBusinessNotification(req, title, message, type, moduleName, extraData = {}) {
+  const performerName = req.headers["x-user-name"] || "Karan Sharma";
+  const fullMessage = `${message} (by ${performerName})`;
+  await sendFcmNotification(title, fullMessage, {
+    ...extraData,
+    route: `/${moduleName}`,
+    tab: moduleName
+  }).catch((err) => {
+    console.warn("[FCM BROADCAST ERROR] FCM payload transmission bypass:", err.message);
+  });
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  if (db_users && db_users.length > 0) {
+    for (const u of db_users) {
+      if (!u.userId) {
+        console.warn("[NOTIFICATION SYNC WARNING] User record skipped due to missing primary key.");
+        continue;
+      }
+      const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const userNotif = {
+        id: notifId,
+        title,
+        message: fullMessage,
+        type,
+        isRead: false,
+        createdAt: timestamp,
+        userId: u.userId,
+        performedBy: performerName,
+        module: moduleName
+      };
+      db_notifications.unshift(userNotif);
+      await syncStateToFirestore("notifications", notifId, false).catch((err) => {
+        console.error(`[NOTIFICATION SYNC FAILED] Could not commit notification ${notifId} replica context:`, err.message);
+      });
+    }
+  } else {
+    const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const systemNotif = {
+      id: notifId,
+      title,
+      message: fullMessage,
+      type,
+      isRead: false,
+      createdAt: timestamp,
+      userId: "demo-admin",
+      performedBy: performerName,
+      module: moduleName
+    };
+    db_notifications.unshift(systemNotif);
+    await syncStateToFirestore("notifications", notifId, false).catch(() => null);
   }
 }
 function withTimeout(promise, timeoutMs = 5e3) {
@@ -910,7 +997,22 @@ function loadStateFromLocalCache(force = false) {
   }
 }
 testConnection();
-async function syncStateToFirestore(topic, id, blocking = false) {
+try {
+  fs.mkdirSync(path.join(process.cwd(), "uploads"), { recursive: true });
+} catch (err) {
+  console.error("Failed to create uploads directory:", err);
+}
+var apkHistoryPath = path.join(process.cwd(), "uploads", "apk-history.json");
+if (fs.existsSync(apkHistoryPath)) {
+  try {
+    const raw = fs.readFileSync(apkHistoryPath, "utf8");
+    db_apk_releases = JSON.parse(raw);
+    console.log(`Loaded ${db_apk_releases.length} APK release records from local history.`);
+  } catch (err) {
+    console.error("Failed to load local APK history:", err);
+  }
+}
+async function syncStateToFirestore(topic, id, blocking = true) {
   saveStateToLocalCache();
   if (!db) return;
   if (!blocking) {
@@ -1125,8 +1227,132 @@ async function runBackgroundFirestoreSync(topic, id) {
     console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
   }
 }
+async function reconcileClientData(clientId) {
+  const clientIndex = db_clients.findIndex((c) => c.id === clientId);
+  if (clientIndex === -1) return;
+  const client = db_clients[clientIndex];
+  const clientInvoices = db_invoices.filter((inv) => inv.clientId === clientId);
+  const clientPayments = db_payments.filter((p) => p.clientId === clientId);
+  for (const inv of clientInvoices) {
+    const paymentsForInv = clientPayments.filter((p) => p.invoiceId === inv.id);
+    const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
+    let calculatedStatus = "unpaid";
+    if (calculatedDue === 0) {
+      calculatedStatus = "paid";
+    } else if (calculatedPaid > 0) {
+      calculatedStatus = "partially_paid";
+    }
+    if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
+      inv.paidAmount = calculatedPaid;
+      inv.dueAmount = calculatedDue;
+      inv.status = calculatedStatus;
+      if (db) {
+        await withTimeout(setDoc(doc(db, "invoices", inv.id), inv), 1e4).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
+      }
+    }
+  }
+  const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+  const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
+  if (client.outstandingBalance !== calculatedBalance) {
+    client.outstandingBalance = calculatedBalance;
+    if (db) {
+      await withTimeout(setDoc(doc(db, "clients", client.id), client), 1e4).catch((e) => console.warn(`[Reconcile] Firestore client sync failed: ${e.message}`));
+    }
+  }
+  const existingLedgers = db_ledger.filter((l) => l.clientId === clientId);
+  db_ledger = db_ledger.filter((l) => l.clientId !== clientId);
+  if (db) {
+    for (const led of existingLedgers) {
+      await withTimeout(deleteDoc(doc(db, "ledger", led.id)), 1e4).catch(() => null);
+    }
+  }
+  const transactions = [];
+  clientInvoices.forEach((inv) => {
+    transactions.push({
+      type: "invoice",
+      id: inv.id,
+      date: inv.date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      invoiceNumber: inv.invoiceNumber,
+      total: Number(inv.total || 0),
+      createdAt: inv.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    });
+  });
+  clientPayments.forEach((p) => {
+    transactions.push({
+      type: "payment",
+      id: p.id,
+      paymentDate: p.paymentDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      referenceNum: p.referenceNum || "",
+      invoiceNumber: p.invoiceNumber || "",
+      paymentMode: p.paymentMode || "",
+      amount: Number(p.amount || 0),
+      createdAt: p.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    });
+  });
+  transactions.sort((a, b) => {
+    const dateA = new Date(a.type === "invoice" ? a.date : a.paymentDate).getTime();
+    const dateB = new Date(b.type === "invoice" ? b.date : b.paymentDate).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return timeA - timeB;
+  });
+  let runningBal = 0;
+  for (let idx = 0; idx < transactions.length; idx++) {
+    const tx = transactions[idx];
+    if (tx.type === "invoice") {
+      runningBal += tx.total;
+      const newLed = {
+        id: `led-inv-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.date,
+        description: `Invoice Raised: ${tx.invoiceNumber}`,
+        type: "debit",
+        amount: tx.total,
+        runningBalance: runningBal,
+        referenceType: "invoice",
+        referenceId: tx.id,
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (db) {
+        await withTimeout(setDoc(doc(db, "ledger", newLed.id), newLed), 1e4).catch((e) => console.warn(`[Reconcile] Firestore ledger invoice sync failed: ${e.message}`));
+      }
+    } else {
+      runningBal -= tx.amount;
+      const newLed = {
+        id: `led-pay-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.paymentDate,
+        description: `Payment Receipt Ref ${tx.referenceNum} against ${tx.invoiceNumber} via ${tx.paymentMode}`,
+        type: "credit",
+        amount: tx.amount,
+        runningBalance: runningBal,
+        referenceType: "payment",
+        referenceId: tx.id,
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (db) {
+        await withTimeout(setDoc(doc(db, "ledger", newLed.id), newLed), 1e4).catch((e) => console.warn(`[Reconcile] Firestore ledger payment sync failed: ${e.message}`));
+      }
+    }
+  }
+  saveStateToLocalCache();
+}
 async function performSelfHealingAudit() {
-  console.log("[Self-Healing] Running systematic ledger integrity audit and orphan sweep...");
+  console.log("[Self-Healing] Running systematic ledger integrity audit, client balance reconciliation, and orphan sweep...");
+  for (const client of db_clients) {
+    try {
+      await reconcileClientData(client.id);
+    } catch (err) {
+      console.error(`[Self-Healing] Failed to reconcile client ${client.name} (${client.id}):`, err);
+    }
+  }
   const validInvoiceIds = new Set(db_invoices.map((inv) => inv.id));
   const validPaymentIds = new Set(db_payments.map((p) => p.id));
   const originalCount = db_ledger.length;
@@ -1162,39 +1388,6 @@ async function performSelfHealingAudit() {
       }
     }
   }
-  for (let i = 0; i < db_clients.length; i++) {
-    const client = db_clients[i];
-    const clientInvoices = db_invoices.filter((v) => v.clientId === client.id);
-    const clientPayments = db_payments.filter((p) => p.clientId === client.id);
-    const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
-    const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
-    const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
-    if (clientInvoices.length > 0 || clientPayments.length > 0) {
-      if (client.outstandingBalance !== calculatedBalance) {
-        console.log(`[Self-Healing] Adjusting client outstanding balance for ${client.name} to ${calculatedBalance} (Invoices/Payments present).`);
-        db_clients[i].outstandingBalance = calculatedBalance;
-        if (db) {
-          try {
-            await setDoc(doc(db, "clients", client.id), db_clients[i]);
-          } catch (e) {
-            console.error(`[Self-Healing] Failed to sync aligned outstanding balance for client ${client.id}:`, e);
-          }
-        }
-      }
-    } else {
-      const clientLedgers = db_ledger.filter((l) => l.clientId === client.id);
-      if (clientLedgers.length === 0 && client.outstandingBalance !== 0) {
-        const isDemoClient = DEMO_CLIENTS.some((dc) => dc.id === client.id);
-        if (!isDemoClient) {
-          console.log(`[Self-Healing] Resetting client outstanding balance for non-demo client ${client.name} with 0 ledger entries.`);
-          db_clients[i].outstandingBalance = 0;
-          if (db) {
-            await setDoc(doc(db, "clients", client.id), db_clients[i]).catch(() => null);
-          }
-        }
-      }
-    }
-  }
   console.log(`[Self-Healing] Audit sweep completed. Active ledger count: ${db_ledger.length}`);
 }
 function getCleanLedger() {
@@ -1202,11 +1395,24 @@ function getCleanLedger() {
   const validPaymentIds = new Set(db_payments.map((p) => p.id));
   const initialLen = db_ledger.length;
   const originalLedger = [...db_ledger];
-  db_ledger = db_ledger.filter((led) => {
+  const tempLedger = db_ledger.filter((led) => {
     if (led.referenceType === "invoice") return validInvoiceIds.has(led.referenceId);
     if (led.referenceType === "payment") return validPaymentIds.has(led.referenceId);
     return true;
   });
+  const seenPaymentRefs = /* @__PURE__ */ new Set();
+  const dedupedLedger = [];
+  tempLedger.forEach((led) => {
+    if (led.referenceType === "payment" && led.referenceId) {
+      if (!seenPaymentRefs.has(led.referenceId)) {
+        seenPaymentRefs.add(led.referenceId);
+        dedupedLedger.push(led);
+      }
+    } else {
+      dedupedLedger.push(led);
+    }
+  });
+  db_ledger = dedupedLedger;
   if (db_ledger.length !== initialLen) {
     saveStateToLocalCache();
     const removed = originalLedger.filter((ol) => !db_ledger.some((dl) => dl.id === ol.id));
@@ -1260,29 +1466,76 @@ async function bootstrapFromFirestore() {
       await withTimeout(setDoc(doc(db, "businessSettings", "roles"), { list: db_roles }), 25e3);
     }
     const syncCollectionOnStartup = async (collectionName, currentList, demoSeedList, idKey = "id") => {
-      const snap = await withTimeout(getDocs(collection(db, collectionName)), 25e3);
-      if (snap.empty) {
-        if (isFirstSeed) {
-          const seedData = currentList.length > 0 ? currentList : demoSeedList;
-          console.log(`Firestore '${collectionName}' collection is empty. First-time seeding with default dataset (${seedData.length} records) to cloud...`);
-          const batch = writeBatch(db);
-          for (const item of seedData) {
-            const docId = idKey === "id" ? item.id : idKey === "userId" ? item.userId : item.tokenId;
-            if (docId) batch.set(doc(db, collectionName, docId), item);
+      try {
+        const snap = await withTimeout(getDocs(collection(db, collectionName)), 25e3);
+        if (snap.empty) {
+          if (currentList && currentList.length > 0) {
+            console.log(`Firestore '${collectionName}' is empty but we have local cache records (${currentList.length}). Syncing local cache to cloud...`);
+            const batch = writeBatch(db);
+            for (const item of currentList) {
+              const docId = idKey === "id" ? item.id : idKey === "userId" ? item.userId : item.tokenId;
+              if (docId) batch.set(doc(db, collectionName, docId), item);
+            }
+            await withTimeout(batch.commit(), 25e3).catch((e) => {
+              console.error(`Failed to commit local cache sync for '${collectionName}' to Firestore:`, e);
+            });
+            return currentList;
+          } else if (isFirstSeed) {
+            console.log(`Firestore '${collectionName}' is empty and no local cache exists. Seeding database with default dataset (${demoSeedList.length} records)...`);
+            const batch = writeBatch(db);
+            for (const item of demoSeedList) {
+              const docId = idKey === "id" ? item.id : idKey === "userId" ? item.userId : item.tokenId;
+              if (docId) batch.set(doc(db, collectionName, docId), item);
+            }
+            await withTimeout(batch.commit(), 25e3).catch((e) => {
+              console.error(`Failed to commit demo seed for '${collectionName}':`, e);
+            });
+            return demoSeedList;
+          } else {
+            console.log(`Firestore '${collectionName}' is empty and no local cache exists. Keeping it empty.`);
+            return [];
           }
-          await withTimeout(batch.commit(), 25e3);
-          return seedData;
         } else {
-          console.log(`Firestore '${collectionName}' is empty (cleared by user). Keeping it empty.`);
-          return [];
+          const firestoreDocs = snap.docs.map((d) => d.data());
+          console.log(`Firestore '${collectionName}' contains ${firestoreDocs.length} records. Trusting Firestore as the definitive source of truth.`);
+          return firestoreDocs;
         }
-      } else {
-        return snap.docs.map((d) => d.data());
+      } catch (err) {
+        console.error(`Error in syncCollectionOnStartup for '${collectionName}':`, err);
+        return currentList;
       }
     };
     db_clients = await syncCollectionOnStartup("clients", db_clients, DEMO_CLIENTS);
     db_products = await syncCollectionOnStartup("products", db_products, DEMO_PRODUCTS);
     db_invoices = await syncCollectionOnStartup("invoices", db_invoices, DEMO_INVOICES);
+    const seenInvoiceNumbers = /* @__PURE__ */ new Set();
+    const uniqueInvoices = [];
+    const duplicateIds = [];
+    for (const inv of db_invoices) {
+      if (!inv.invoiceNumber) {
+        uniqueInvoices.push(inv);
+        continue;
+      }
+      const numTrimmed = inv.invoiceNumber.trim().toLowerCase();
+      if (seenInvoiceNumbers.has(numTrimmed)) {
+        duplicateIds.push(inv.id);
+      } else {
+        seenInvoiceNumbers.add(numTrimmed);
+        uniqueInvoices.push(inv);
+      }
+    }
+    if (duplicateIds.length > 0) {
+      console.log(`[Startup Deduplicator] Detected ${duplicateIds.length} duplicate invoice number document(s). Pruning...`);
+      db_invoices = uniqueInvoices;
+      for (const invId of duplicateIds) {
+        try {
+          await withTimeout(deleteDoc(doc(db, "invoices", invId)), 15e3);
+          console.log(`[Startup Deduplicator] Successfully deleted duplicate invoice document "${invId}" from Firestore.`);
+        } catch (e) {
+          console.warn(`[Startup Deduplicator Error] Failed to delete duplicate invoice ${invId}:`, e.message);
+        }
+      }
+    }
     db_quotations = await syncCollectionOnStartup("quotations", db_quotations, DEMO_QUOTATIONS);
     db_payments = await syncCollectionOnStartup("payments", db_payments, DEMO_PAYMENTS);
     db_ledger = await syncCollectionOnStartup("ledger", db_ledger, DEMO_LEDGER);
@@ -1298,8 +1551,37 @@ async function bootstrapFromFirestore() {
         console.warn("Could not delete Rs 300 Cashbook entry from Firestore directly:", e);
       }
     }
+    const seenRefs = /* @__PURE__ */ new Set();
+    const uniqueCashbook = [];
+    const duplicatesToDelete = [];
+    const sortedForDedup = [...db_cashbook].sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date).getTime();
+      const dateB = new Date(b.createdAt || b.date).getTime();
+      return dateB - dateA;
+    });
+    sortedForDedup.forEach((entry) => {
+      if (entry.referenceId && (entry.referenceId.startsWith("pay-") || entry.referenceId.startsWith("cb-pay-"))) {
+        if (!seenRefs.has(entry.referenceId)) {
+          seenRefs.add(entry.referenceId);
+          uniqueCashbook.push(entry);
+        } else {
+          duplicatesToDelete.push(entry);
+        }
+      } else {
+        uniqueCashbook.push(entry);
+      }
+    });
+    db_cashbook = uniqueCashbook;
+    if (duplicatesToDelete.length > 0) {
+      console.log(`[DEDUPLICATOR] Found ${duplicatesToDelete.length} duplicate cashbook entries on startup. Initiating permanent Firestore deletion...`);
+      for (const item of duplicatesToDelete) {
+        if (item.id) {
+          deleteDoc(doc(db, "cashbook", item.id)).catch(() => null);
+        }
+      }
+    }
     db_logs = await syncCollectionOnStartup("activityLogs", db_logs, DEMO_LOGS);
-    db_notifications = await syncCollectionOnStartup("notifications", db_notifications, DEMO_NOTIFICATIONS);
+    db_notifications = await syncCollectionOnStartup("notifications", db_notifications, []);
     db_users = await syncCollectionOnStartup("users", db_users, DEMO_USERS, "userId");
     db_fcm_tokens = await syncCollectionOnStartup("fcmTokens", db_fcm_tokens, [], "tokenId");
     const finalUsers = [];
@@ -1361,6 +1643,16 @@ async function bootstrapFromFirestore() {
       } else {
         await withTimeout(setDoc(doc(db, "businessSettings", "passwords"), db_passwords), 25e3).catch((e) => null);
       }
+      const apkDoc = await withTimeout(getDoc(doc(db, "businessSettings", "apkReleases")), 25e3).catch((e) => null);
+      if (apkDoc && apkDoc.exists()) {
+        const apkData = apkDoc.data();
+        if (apkData && Array.isArray(apkData.list)) {
+          db_apk_releases = apkData.list;
+          console.log(`Loaded ${db_apk_releases.length} APK release records from Cloud Firestore.`);
+        }
+      } else if (db_apk_releases.length > 0) {
+        await withTimeout(setDoc(doc(db, "businessSettings", "apkReleases"), { list: db_apk_releases }), 25e3).catch((e) => null);
+      }
     }
     await performSelfHealingAudit();
     registerBackendRealtimeListeners();
@@ -1369,6 +1661,99 @@ async function bootstrapFromFirestore() {
     console.warn("WARNING: Firebase Firestore synchronization failed during startup bootstrap:", error);
     console.warn("The server will proceed running using the local in-memory database fallback.");
     console.warn("Keeping active Firestore database reference in case of dynamic recovery.");
+  }
+}
+async function forceTransferLocalCacheToFirestore() {
+  if (!db) {
+    console.warn("[Migration] No db available to transfer.");
+    return;
+  }
+  console.log("[Migration] BEGINNING FORCE TRANSFER OF DATABASE FROM local-db-cache.json TO FIRESTORE...");
+  try {
+    if (fs.existsSync(LOCAL_CACHE_PATH)) {
+      const raw = fs.readFileSync(LOCAL_CACHE_PATH, "utf8");
+      const data = JSON.parse(raw);
+      const collectionsToSync = {
+        "clients": { listName: "db_clients", idKey: "id" },
+        "products": { listName: "db_products", idKey: "id" },
+        "invoices": { listName: "db_invoices", idKey: "id" },
+        "quotations": { listName: "db_quotations", idKey: "id" },
+        "payments": { listName: "db_payments", idKey: "id" },
+        "ledger": { listName: "db_ledger", idKey: "id" },
+        "cashbook": { listName: "db_cashbook", idKey: "id" },
+        "activityLogs": { listName: "db_logs", idKey: "id" },
+        "notifications": { listName: "db_notifications", idKey: "id" },
+        "users": { listName: "db_users", idKey: "userId" }
+      };
+      if (data.db_settings) {
+        console.log("[Migration] Copying businessSettings/global...");
+        await setDoc(doc(db, "businessSettings", "global"), data.db_settings);
+        db_settings = data.db_settings;
+      }
+      if (data.db_categories) {
+        console.log("[Migration] Copying businessSettings/categories...");
+        await setDoc(doc(db, "businessSettings", "categories"), { list: data.db_categories });
+        db_categories = data.db_categories;
+      }
+      if (data.db_roles) {
+        console.log("[Migration] Copying businessSettings/roles...");
+        await setDoc(doc(db, "businessSettings", "roles"), { list: data.db_roles });
+        db_roles = data.db_roles;
+      }
+      if (data.db_passwords) {
+        console.log("[Migration] Copying businessSettings/passwords...");
+        await setDoc(doc(db, "businessSettings", "passwords"), data.db_passwords);
+        db_passwords = data.db_passwords;
+      }
+      for (const [colName, colInfo] of Object.entries(collectionsToSync)) {
+        const items = data[colInfo.listName];
+        if (Array.isArray(items) && items.length > 0) {
+          console.log(`[Migration] Copying collection '${colName}' of size ${items.length}...`);
+          try {
+            const oldDocs = await getDocs(collection(db, colName));
+            if (!oldDocs.empty) {
+              const deleteBatch = writeBatch(db);
+              oldDocs.docs.forEach((oldD) => {
+                deleteBatch.delete(oldD.ref);
+              });
+              await deleteBatch.commit();
+              console.log(`[Migration] Cleaned up ${oldDocs.size} old docs from Firestore collection '${colName}'.`);
+            }
+          } catch (delErr) {
+            console.warn(`[Migration] Warning: Could not clean up old docs in '${colName}':`, delErr);
+          }
+          const batchSize = 400;
+          for (let i = 0; i < items.length; i += batchSize) {
+            const batch = writeBatch(db);
+            const chunk = items.slice(i, i + batchSize);
+            for (const item of chunk) {
+              const docId = colInfo.idKey === "id" ? item.id : colInfo.idKey === "userId" ? item.userId : item.tokenId;
+              if (docId) {
+                batch.set(doc(db, colName, docId), item);
+              }
+            }
+            await batch.commit();
+          }
+          if (colInfo.listName === "db_clients") db_clients = items;
+          if (colInfo.listName === "db_products") db_products = items;
+          if (colInfo.listName === "db_invoices") db_invoices = items;
+          if (colInfo.listName === "db_quotations") db_quotations = items;
+          if (colInfo.listName === "db_payments") db_payments = items;
+          if (colInfo.listName === "db_ledger") db_ledger = items;
+          if (colInfo.listName === "db_cashbook") db_cashbook = items;
+          if (colInfo.listName === "db_logs") db_logs = items;
+          if (colInfo.listName === "db_notifications") db_notifications = items;
+          if (colInfo.listName === "db_users") db_users = items;
+          console.log(`[Migration] Successfully uploaded ${items.length} records into Firestore collection '${colName}'.`);
+        }
+      }
+      console.log("[Migration] FORCE DATABASE TRANSFER COMPLETED SUCCESSFULLY.");
+    } else {
+      console.error("[Migration] local-db-cache.json not found!");
+    }
+  } catch (err) {
+    console.error("[Migration] Error during force transfer of local database cache:", err);
+    throw err;
   }
 }
 var recentLocalUpdates = /* @__PURE__ */ new Map();
@@ -1450,38 +1835,50 @@ function registerBackendRealtimeListeners() {
     console.error("Backend product snapshot error:", error);
   });
   onSnapshot(collection(db, "invoices"), (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_invoices = mergeRecentUpdates("invoices", list, "id");
   }, (error) => {
     console.error("Backend invoice snapshot error:", error);
   });
   onSnapshot(collection(db, "quotations"), (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_quotations = mergeRecentUpdates("quotations", list, "id");
   }, (error) => {
     console.error("Backend quotation snapshot error:", error);
   });
   onSnapshot(collection(db, "payments"), (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
     db_payments = mergeRecentUpdates("payments", list, "id");
   }, (error) => {
     console.error("Backend payment snapshot error:", error);
   });
   onSnapshot(collection(db, "ledger"), (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_ledger = mergeRecentUpdates("ledger", list, "id");
   }, (error) => {
     console.error("Backend ledger snapshot error:", error);
   });
   onSnapshot(collection(db, "cashbook"), (snapshot) => {
     const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const filtered = list.filter((cb) => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === "Cash"));
+    const seenRefs = /* @__PURE__ */ new Set();
+    const dedupedList = [];
+    list.forEach((item) => {
+      if (item.referenceId && (item.referenceId.startsWith("pay-") || item.referenceId.startsWith("cb-pay-"))) {
+        if (!seenRefs.has(item.referenceId)) {
+          seenRefs.add(item.referenceId);
+          dedupedList.push(item);
+        }
+      } else {
+        dedupedList.push(item);
+      }
+    });
+    const filtered = dedupedList.filter((cb) => cb.id !== "cb-1779715467712" && !(cb.amount === 300 && cb.paymentMode === "Cash")).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
     db_cashbook = mergeRecentUpdates("cashbook", filtered, "id");
   }, (error) => {
     console.error("Backend cashbook snapshot error:", error);
   });
   onSnapshot(collection(db, "activityLogs"), (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     db_logs = mergeRecentUpdates("activityLogs", list, "id");
   }, (error) => {
     console.error("Backend logs snapshot error:", error);
@@ -1579,10 +1976,21 @@ bootstrapFromFirestore();
 function checkPermission(module, action) {
   return (req, res, next) => {
     const roleHeader = (req.headers["x-user-role"] || "").trim();
-    const role = roleHeader || "Admin";
+    let role = roleHeader || "Admin";
     const userEmail = (req.headers["x-user-email"] || "").trim().toLowerCase();
+    if (userEmail) {
+      const match = db_users.find((u) => u.email && u.email.trim().toLowerCase() === userEmail);
+      if (match && match.role) {
+        role = match.role;
+      }
+    }
     if (role.toLowerCase() === "admin" || userEmail === "modulesinternet@gmail.com") {
       return next();
+    }
+    if ((module === "users" || module === "settings") && action !== "read") {
+      return res.status(403).json({
+        error: `Access Denied: Only Administrator roles are authorized to perform system user maintenance or settings modifications.`
+      });
     }
     const roleConfig = db_roles.find((r) => r.role.trim().toLowerCase() === role.toLowerCase());
     if (!roleConfig) {
@@ -1649,7 +2057,7 @@ app.get("/api/dashboard", checkPermission("dashboard", "read"), (req, res) => {
   const totalInvoicesCount = db_invoices.length;
   const pendingInvoicesCount = db_invoices.filter((i) => i.status !== "paid").length;
   const monthlyDataMap = /* @__PURE__ */ new Map();
-  const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   months.forEach((m) => {
     monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
   });
@@ -1767,6 +2175,14 @@ app.post("/api/clients", checkPermission("clients", "write"), async (req, res) =
   };
   db_clients.unshift(newClient);
   await syncStateToFirestore("clients", newClient.id);
+  await triggerBusinessNotification(
+    req,
+    "Client Created",
+    `Client directory profile for "${newClient.name}" has been registered`,
+    "success",
+    "clients",
+    { clientId: newClient.id, tab: "clients" }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "CLIENT_CREATE", `Registered new client: ${newClient.name}`);
   res.status(201).json(newClient);
 });
@@ -1776,6 +2192,14 @@ app.put("/api/clients/:id", checkPermission("clients", "write"), async (req, res
   if (index !== -1) {
     db_clients[index] = { ...db_clients[index], ...req.body };
     await syncStateToFirestore("clients", id);
+    await triggerBusinessNotification(
+      req,
+      "Client Updated",
+      `Client profile for "${db_clients[index].name}" has been modified`,
+      "info",
+      "clients",
+      { clientId: id, tab: "clients" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_UPDATE", `Updated client profile: ${db_clients[index].name}`);
     res.json(db_clients[index]);
   } else {
@@ -1789,6 +2213,14 @@ app.delete("/api/clients/:id", checkPermission("clients", "delete"), async (req,
     const deletedName = db_clients[index].name;
     db_clients.splice(index, 1);
     await syncStateToFirestore("clients", id);
+    await triggerBusinessNotification(
+      req,
+      "Client Deleted",
+      `Client "${deletedName}" has been permanently removed from databases`,
+      "warning",
+      "clients",
+      { tab: "clients" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "CLIENT_DELETE", `Removed client database row: ${deletedName}`);
     res.json({ success: true, message: "Client deleted successfully" });
   } else {
@@ -1813,6 +2245,14 @@ app.post("/api/products", checkPermission("products", "write"), async (req, res)
   };
   db_products.unshift(newProduct);
   await syncStateToFirestore("products", newProduct.id);
+  await triggerBusinessNotification(
+    req,
+    "Product Created",
+    `Catalogue item "${newProduct.name}" has been registered`,
+    "success",
+    "products",
+    { productId: newProduct.id, tab: "products" }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_CREATE", `Added catalogue work item: ${newProduct.name} at GST ${newProduct.gstPercent}%`);
   res.status(201).json(newProduct);
 });
@@ -1822,6 +2262,14 @@ app.put("/api/products/:id", checkPermission("products", "write"), async (req, r
   if (index !== -1) {
     db_products[index] = { ...db_products[index], ...req.body };
     await syncStateToFirestore("products", id);
+    await triggerBusinessNotification(
+      req,
+      "Product Updated",
+      `Catalogue item details for "${db_products[index].name}" has been modified`,
+      "info",
+      "products",
+      { productId: id, tab: "products" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_UPDATE", `Updated catalogue item details: ${db_products[index].name}`);
     res.json(db_products[index]);
   } else {
@@ -1835,6 +2283,14 @@ app.delete("/api/products/:id", checkPermission("products", "delete"), async (re
     const deletedName = db_products[index].name;
     db_products.splice(index, 1);
     await syncStateToFirestore("products", id);
+    await triggerBusinessNotification(
+      req,
+      "Product Deleted",
+      `Catalogue item "${deletedName}" has been deleted`,
+      "warning",
+      "products",
+      { tab: "products" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "PRODUCT_DELETE", `Removed catalogue item: ${deletedName}`);
     res.json({ success: true, message: "Product deleted" });
   } else {
@@ -1906,11 +2362,16 @@ app.get("/api/invoices", checkPermission("invoices", "read"), (req, res) => {
 });
 app.post("/api/invoices", checkPermission("invoices", "write"), async (req, res) => {
   const data = req.body;
+  const invoiceNum = (data.invoiceNumber || `${db_settings.invoicePrefix}${String(db_invoices.length + 1).padStart(3, "0")}`).trim();
+  const duplicate = db_invoices.find((inv) => inv.invoiceNumber && inv.invoiceNumber.trim().toLowerCase() === invoiceNum.toLowerCase());
+  if (duplicate) {
+    return res.status(400).json({ error: `An invoice with invoice number "${invoiceNum}" already exists. Duplicate invoice numbers are not allowed.` });
+  }
   const id = `inv-${Date.now()}`;
   const total = Number(data.total || 0);
   const newInvoice = {
     id,
-    invoiceNumber: data.invoiceNumber || `${db_settings.invoicePrefix}${String(db_invoices.length + 1).padStart(3, "0")}`,
+    invoiceNumber: invoiceNum,
     clientId: data.clientId,
     clientName: data.clientName,
     clientGst: data.clientGst || "",
@@ -1930,77 +2391,80 @@ app.post("/api/invoices", checkPermission("invoices", "write"), async (req, res)
     readCount: 0
   };
   db_invoices.unshift(newInvoice);
-  const clientIndex = db_clients.findIndex((c) => c.id === newInvoice.clientId);
-  let startingBalance = 0;
-  if (clientIndex !== -1) {
-    startingBalance = db_clients[clientIndex].outstandingBalance;
-    db_clients[clientIndex].outstandingBalance += newInvoice.dueAmount;
-    await syncStateToFirestore("clients", newInvoice.clientId);
-  }
-  const newLedger = {
-    id: `led-${Date.now()}`,
-    clientId: newInvoice.clientId,
-    clientName: newInvoice.clientName,
-    date: newInvoice.date,
-    description: `Invoice Raised: ${newInvoice.invoiceNumber}`,
-    type: "debit",
-    amount: newInvoice.total,
-    runningBalance: startingBalance + newInvoice.total,
-    referenceType: "invoice",
-    referenceId: id,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  db_ledger.unshift(newLedger);
+  await reconcileClientData(newInvoice.clientId);
   await syncStateToFirestore("invoices", newInvoice.id);
-  await syncStateToFirestore("ledger", newLedger.id);
-  sendFcmNotification(
-    "New Invoice Created",
-    `Invoice #${newInvoice.invoiceNumber} for \u20B9${Number(newInvoice.total).toLocaleString()} has been generated.`,
-    { route: "/invoices", invoiceId: newInvoice.id, tab: "invoices" }
-  ).catch((err) => console.error("FCM dispatch caught error:", err));
+  await triggerBusinessNotification(
+    req,
+    "Invoice Created",
+    `Invoice #${newInvoice.invoiceNumber} for \u20B9${Number(newInvoice.total).toLocaleString()} has been generated`,
+    "success",
+    "invoices",
+    {
+      invoiceId: newInvoice.id,
+      route: "/invoices",
+      tab: "invoices",
+      amount: String(newInvoice.total),
+      clientName: newInvoice.clientName,
+      paymentMode: "GST Billing"
+    }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "INVOICE_CREATE", `Generated invoice ${newInvoice.invoiceNumber} for ${newInvoice.clientName} (INR ${newInvoice.total})`);
   res.status(201).json(newInvoice);
 });
 app.put("/api/invoices/:id", checkPermission("invoices", "write"), async (req, res) => {
-  const { id } = req.params;
-  const index = db_invoices.findIndex((inv) => inv.id === id);
-  if (index !== -1) {
-    const oldInv = db_invoices[index];
-    const data = req.body;
-    const newTotal = Number(data.total ?? oldInv.total);
-    const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
-    const newDueAmount = Number(data.dueAmount ?? newTotal - newPaidAmount);
-    const clientIndex = db_clients.findIndex((c) => c.id === oldInv.clientId);
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = Math.max(0, db_clients[clientIndex].outstandingBalance - oldInv.dueAmount + newDueAmount);
-      await syncStateToFirestore("clients", oldInv.clientId);
-    }
-    const ledgerIndex = db_ledger.findIndex((led) => led.referenceType === "invoice" && led.referenceId === id);
-    if (ledgerIndex !== -1) {
-      db_ledger[ledgerIndex].amount = newTotal;
-      db_ledger[ledgerIndex].description = `Invoice Modified: ${data.invoiceNumber || oldInv.invoiceNumber}`;
-      if (clientIndex !== -1) {
-        db_ledger[ledgerIndex].runningBalance = db_clients[clientIndex].outstandingBalance;
+  try {
+    const { id } = req.params;
+    const index = db_invoices.findIndex((inv) => inv.id === id);
+    if (index !== -1) {
+      const oldInv = db_invoices[index];
+      const data = req.body;
+      const newInvoiceNum = (data.invoiceNumber || "").trim();
+      if (newInvoiceNum) {
+        const duplicate = db_invoices.find((inv) => inv.id !== id && inv.invoiceNumber && inv.invoiceNumber.trim().toLowerCase() === newInvoiceNum.toLowerCase());
+        if (duplicate) {
+          return res.status(400).json({ error: `An invoice with invoice number "${newInvoiceNum}" already exists. Duplicate invoice numbers are not allowed.` });
+        }
       }
-      await syncStateToFirestore("ledger", db_ledger[ledgerIndex].id);
+      const newTotal = Number(data.total ?? oldInv.total);
+      const newPaidAmount = Number(data.paidAmount ?? oldInv.paidAmount);
+      const newDueAmount = Number(data.dueAmount ?? newTotal - newPaidAmount);
+      const oldClientId = oldInv.clientId;
+      db_invoices[index] = {
+        ...oldInv,
+        ...data,
+        total: newTotal,
+        paidAmount: newPaidAmount,
+        dueAmount: newDueAmount
+      };
+      const newClientId = db_invoices[index].clientId;
+      await reconcileClientData(oldClientId);
+      if (newClientId !== oldClientId) {
+        await reconcileClientData(newClientId);
+      }
+      await syncStateToFirestore("invoices", id);
+      await triggerBusinessNotification(
+        req,
+        "Invoice Updated",
+        `Invoice #${db_invoices[index].invoiceNumber} has been modified`,
+        "info",
+        "invoices",
+        {
+          invoiceId: id,
+          route: "/invoices",
+          tab: "invoices",
+          amount: String(db_invoices[index].total),
+          clientName: db_invoices[index].clientName,
+          paymentMode: "GST Billing"
+        }
+      ).catch((err) => console.error("Notification trigger caught error:", err));
+      logUserActivity(req, "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
+      res.json(db_invoices[index]);
+    } else {
+      res.status(404).json({ error: "Invoice not found" });
     }
-    db_invoices[index] = {
-      ...oldInv,
-      ...data,
-      total: newTotal,
-      paidAmount: newPaidAmount,
-      dueAmount: newDueAmount
-    };
-    await syncStateToFirestore("invoices", id);
-    sendFcmNotification(
-      "Invoice Updated",
-      `Invoice #${db_invoices[index].invoiceNumber} has been modified.`,
-      { route: "/invoices", invoiceId: id, tab: "invoices" }
-    ).catch((err) => console.error("FCM dispatch caught error:", err));
-    logUserActivity("demo-admin", "Karan Sharma", "INVOICE_UPDATE", `Modified invoice ${db_invoices[index].invoiceNumber} for ${db_invoices[index].clientName}`);
-    res.json(db_invoices[index]);
-  } else {
-    res.status(404).json({ error: "Invoice not found" });
+  } catch (err) {
+    console.error("Error updating invoice:", err);
+    res.status(500).json({ error: err.message || "Failed to update invoice due to internal error" });
   }
 });
 app.post("/api/invoices/:id/read", checkPermission("invoices", "read"), async (req, res) => {
@@ -2020,34 +2484,24 @@ app.delete("/api/invoices/:id", checkPermission("invoices", "delete"), async (re
   const index = db_invoices.findIndex((inv) => inv.id === id);
   if (index !== -1) {
     const inv = db_invoices[index];
-    const ledIndices = [];
-    db_ledger.forEach((led, i) => {
-      if (led.referenceType === "invoice" && led.referenceId === id) {
-        ledIndices.push(i);
-      }
-    });
-    for (const ledIdx of ledIndices) {
-      const ledId = db_ledger[ledIdx].id;
-      if (db) {
-        try {
-          await deleteDoc(doc(db, "ledger", ledId));
-        } catch (e) {
-          console.error(`Failed to delete doc ledger/${ledId}:`, e);
-        }
-      }
-    }
-    db_ledger = db_ledger.filter((led) => !(led.referenceType === "invoice" && led.referenceId === id));
     db_invoices.splice(index, 1);
     await syncStateToFirestore("invoices", id);
-    const clientIndex = db_clients.findIndex((c) => c.id === inv.clientId);
-    if (clientIndex !== -1) {
-      const clientInvoices = db_invoices.filter((v) => v.clientId === inv.clientId);
-      const clientPayments = db_payments.filter((p) => p.clientId === inv.clientId);
-      const totalInvoiced = clientInvoices.reduce((sum, v) => sum + v.total, 0);
-      const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
-      db_clients[clientIndex].outstandingBalance = Math.max(0, totalInvoiced - totalPaid);
-      await syncStateToFirestore("clients", inv.clientId);
-    }
+    await reconcileClientData(inv.clientId);
+    await triggerBusinessNotification(
+      req,
+      "Invoice Deleted",
+      `Invoice #${inv.invoiceNumber} for \u20B9${Number(inv.total).toLocaleString()} has been permanently deleted`,
+      "warning",
+      "invoices",
+      {
+        invoiceId: id,
+        route: "/invoices",
+        tab: "invoices",
+        amount: String(inv.total),
+        clientName: inv.clientName,
+        paymentMode: "GST Billing"
+      }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "INVOICE_DELETE", `Voided and deleted invoice: ${inv.invoiceNumber} and updated ledger ties`);
     res.json({ success: true });
   } else {
@@ -2077,6 +2531,14 @@ app.post("/api/quotations", checkPermission("quotations", "write"), async (req, 
   };
   db_quotations.unshift(newQuotation);
   await syncStateToFirestore("quotations", newQuotation.id);
+  await triggerBusinessNotification(
+    req,
+    "Quotation Created",
+    `Estimate proposal ${newQuotation.quotationNumber} for ${newQuotation.clientName} has been created`,
+    "success",
+    "quotations",
+    { quotationId: newQuotation.id, tab: "quotations" }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CREATE", `Prepared estimate ${newQuotation.quotationNumber} for ${newQuotation.clientName}`);
   res.status(201).json(newQuotation);
 });
@@ -2086,6 +2548,14 @@ app.put("/api/quotations/:id", checkPermission("quotations", "write"), async (re
   if (index !== -1) {
     db_quotations[index] = { ...db_quotations[index], ...req.body };
     await syncStateToFirestore("quotations", id);
+    await triggerBusinessNotification(
+      req,
+      "Quotation Updated",
+      `Estimate proposal status for ${db_quotations[index].quotationNumber} updated to ${db_quotations[index].status}`,
+      "info",
+      "quotations",
+      { quotationId: id, tab: "quotations" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_UPDATE", `Updated estimate status: ${db_quotations[index].quotationNumber} -> ${db_quotations[index].status}`);
     res.json(db_quotations[index]);
   } else {
@@ -2099,6 +2569,14 @@ app.delete("/api/quotations/:id", checkPermission("quotations", "delete"), async
     const qNumber = db_quotations[index].quotationNumber;
     db_quotations.splice(index, 1);
     await syncStateToFirestore("quotations", id);
+    await triggerBusinessNotification(
+      req,
+      "Quotation Deleted",
+      `Estimate proposal ${qNumber} has been deleted`,
+      "warning",
+      "quotations",
+      { tab: "quotations" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_DELETE", `Deleted quotation estimate: ${qNumber}`);
     res.json({ success: true });
   } else {
@@ -2136,27 +2614,17 @@ app.post("/api/quotations/:id/convert", checkPermission("quotations", "write"), 
     db_invoices.unshift(convertedInvoice);
     q.status = "converted";
     q.convertedInvoiceId = invoiceId;
-    if (clientDetails) {
-      clientDetails.outstandingBalance += q.total;
-      await syncStateToFirestore("clients", q.clientId);
-    }
-    const newLedger = {
-      id: `led-${Date.now()}`,
-      clientId: q.clientId,
-      clientName: q.clientName,
-      date: convertedInvoice.date,
-      description: `Invoice Raised from Proposal: ${invoiceNum}`,
-      type: "debit",
-      amount: convertedInvoice.total,
-      runningBalance: clientDetails?.outstandingBalance || 0,
-      referenceType: "invoice",
-      referenceId: invoiceId,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    db_ledger.unshift(newLedger);
+    await reconcileClientData(q.clientId);
     await syncStateToFirestore("invoices", invoiceId);
     await syncStateToFirestore("quotations", id);
-    await syncStateToFirestore("ledger", newLedger.id);
+    await triggerBusinessNotification(
+      req,
+      "Invoice Created",
+      `Invoice #${invoiceNum} for \u20B9${Number(convertedInvoice.total).toLocaleString()} has been converted from Estimate ${q.quotationNumber}`,
+      "success",
+      "invoices",
+      { invoiceId, route: "/invoices", tab: "invoices" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "QUOTATION_CONVERT", `Authorized proposal ${q.quotationNumber} conversion into invoice ${invoiceNum}`);
     res.json({ success: true, invoice: convertedInvoice });
   } else {
@@ -2169,8 +2637,15 @@ app.get("/api/payments", checkPermission("payments", "read"), (req, res) => {
 app.post("/api/payments", checkPermission("payments", "write"), async (req, res) => {
   try {
     const data = req.body;
-    const payId = `pay-${Date.now()}`;
     const amountPaid = Number(data.amount || 0);
+    if (data.referenceNum) {
+      const existing = db_payments.find((pay) => pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+      if (existing) {
+        return res.status(400).json({ error: `Payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+      }
+    }
+    const payId = `pay-${Date.now()}`;
+    const performerName = req.headers["x-user-name"] || "Karan Sharma";
     const newPayment = {
       id: payId,
       invoiceId: data.invoiceId,
@@ -2182,42 +2657,11 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
       paymentMode: data.paymentMode || "UPI",
       referenceNum: data.referenceNum || `REF-${Date.now()}`,
       remarks: data.remarks || "No comments",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      createdBy: performerName
     };
     db_payments.unshift(newPayment);
-    const invIndex = db_invoices.findIndex((i) => i.id === newPayment.invoiceId);
-    if (invIndex !== -1) {
-      const inv = db_invoices[invIndex];
-      inv.paidAmount = Number(inv.paidAmount || 0) + amountPaid;
-      inv.dueAmount = Math.max(0, Number(inv.total || 0) - inv.paidAmount);
-      if (inv.dueAmount === 0) {
-        inv.status = "paid";
-      } else if (inv.paidAmount > 0) {
-        inv.status = "partially_paid";
-      }
-      await syncStateToFirestore("invoices", newPayment.invoiceId);
-    }
-    const clientIndex = db_clients.findIndex((c) => c.id === newPayment.clientId);
-    let runningClientBalance = 0;
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = Math.max(0, Number(db_clients[clientIndex].outstandingBalance || 0) - amountPaid);
-      runningClientBalance = db_clients[clientIndex].outstandingBalance;
-      await syncStateToFirestore("clients", newPayment.clientId);
-    }
-    const newLedger = {
-      id: `led-${Date.now()}`,
-      clientId: newPayment.clientId,
-      clientName: newPayment.clientName,
-      date: newPayment.paymentDate,
-      description: `Payment Receipt: ${newPayment.id} against ${newPayment.invoiceNumber} via ${newPayment.paymentMode}`,
-      type: "credit",
-      amount: amountPaid,
-      runningBalance: runningClientBalance,
-      referenceType: "payment",
-      referenceId: payId,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    db_ledger.unshift(newLedger);
+    await reconcileClientData(newPayment.clientId);
     const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
@@ -2236,7 +2680,7 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
       bankChange = amountPaid;
     }
     const newCashbook = {
-      id: `cb-${Date.now()}`,
+      id: `cb-pay-${payId}`,
       date: newPayment.paymentDate,
       description: `Invoiced Collection [${newPayment.clientName}] Ref ${newPayment.referenceNum}`,
       type: "income",
@@ -2249,14 +2693,25 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
     };
     db_cashbook.unshift(newCashbook);
     await syncStateToFirestore("payments", payId);
-    await syncStateToFirestore("ledger", newLedger.id);
     await syncStateToFirestore("cashbook", newCashbook.id);
-    sendFcmNotification(
-      "Payment Received",
-      `\u20B9${Number(newPayment.amount).toLocaleString()} received against Invoice #${newPayment.invoiceNumber || "N/A"}.`,
-      { route: "/payments", paymentId: newPayment.id, invoiceId: newPayment.invoiceId, tab: "payments" }
-    ).catch((err) => console.error("FCM dispatch caught error:", err));
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName}. Double-entry synchronizer successful.`);
+    const amtStr = `\u20B9${newPayment.amount.toLocaleString("en-IN")}`;
+    const formattedMsg = `${amtStr} Payment Received from ${newPayment.clientName} via ${newPayment.paymentMode} (Recorded by ${performerName})`;
+    await triggerBusinessNotification(
+      req,
+      "Payment Created",
+      formattedMsg,
+      "success",
+      "payments",
+      {
+        amount: String(newPayment.amount),
+        clientName: newPayment.clientName,
+        paymentMode: newPayment.paymentMode,
+        paymentId: newPayment.id,
+        invoiceId: newPayment.invoiceId || "",
+        tab: "payments"
+      }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
+    logUserActivity(req, "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName} (Recorded by ${performerName}). Double-entry synchronizer successful.`);
     res.status(201).json(newPayment);
   } catch (err) {
     console.error("Critical payment log execution failed: ", err);
@@ -2264,150 +2719,144 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
   }
 });
 app.put("/api/payments/:id", checkPermission("payments", "write"), async (req, res) => {
-  const { id } = req.params;
-  const data = req.body;
-  const pIndex = db_payments.findIndex((pay) => pay.id === id);
-  if (pIndex !== -1) {
-    const oldP = db_payments[pIndex];
-    const oldAmount = oldP.amount;
-    const oldInvIndex = db_invoices.findIndex((inv) => inv.id === oldP.invoiceId);
-    if (oldInvIndex !== -1) {
-      const inv = db_invoices[oldInvIndex];
-      inv.paidAmount = Math.max(0, inv.paidAmount - oldAmount);
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === inv.total ? "unpaid" : inv.paidAmount > 0 ? "partially_paid" : "unpaid";
-      await syncStateToFirestore("invoices", inv.id);
-    }
-    const oldClientIndex = db_clients.findIndex((c) => c.id === oldP.clientId);
-    if (oldClientIndex !== -1) {
-      db_clients[oldClientIndex].outstandingBalance = db_clients[oldClientIndex].outstandingBalance + oldAmount;
-      await syncStateToFirestore("clients", db_clients[oldClientIndex].id);
-    }
-    const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
-    const isInvoiceChanged = updatedInvoiceId !== oldP.invoiceId;
-    oldP.amount = Number(data.amount ?? oldP.amount);
-    oldP.paymentDate = data.paymentDate || oldP.paymentDate;
-    oldP.paymentMode = data.paymentMode || oldP.paymentMode;
-    oldP.referenceNum = data.referenceNum || oldP.referenceNum;
-    oldP.remarks = data.remarks || oldP.remarks;
-    if (isInvoiceChanged) {
-      oldP.invoiceId = updatedInvoiceId;
-      const targetInv = db_invoices.find((inv) => inv.id === updatedInvoiceId);
-      oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
-    }
-    const newAmount = oldP.amount;
-    const newInvIndex = db_invoices.findIndex((inv) => inv.id === oldP.invoiceId);
-    if (newInvIndex !== -1) {
-      const inv = db_invoices[newInvIndex];
-      inv.paidAmount = inv.paidAmount + newAmount;
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === 0 ? "paid" : inv.paidAmount > 0 ? "partially_paid" : "unpaid";
-      await syncStateToFirestore("invoices", inv.id);
-    }
-    const newClientIndex = db_clients.findIndex((c) => c.id === oldP.clientId);
-    let runningClientBalance = 0;
-    if (newClientIndex !== -1) {
-      db_clients[newClientIndex].outstandingBalance = Math.max(0, db_clients[newClientIndex].outstandingBalance - newAmount);
-      runningClientBalance = db_clients[newClientIndex].outstandingBalance;
-      await syncStateToFirestore("clients", db_clients[newClientIndex].id);
-    }
-    const ledgerToRemove = db_ledger.filter((l) => l.referenceType === "payment" && l.referenceId === oldP.id);
-    db_ledger = db_ledger.filter((l) => !(l.referenceType === "payment" && l.referenceId === oldP.id));
-    for (const led of ledgerToRemove) {
-      await syncStateToFirestore("ledger", led.id);
-    }
-    const newLedger = {
-      id: `led-${Date.now()}`,
-      clientId: oldP.clientId,
-      clientName: oldP.clientName,
-      date: oldP.paymentDate,
-      description: `Payment Receipt (EDITED): ${oldP.id} against ${oldP.invoiceNumber} via ${oldP.paymentMode}`,
-      type: "credit",
-      amount: newAmount,
-      runningBalance: runningClientBalance,
-      referenceType: "payment",
-      referenceId: oldP.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    db_ledger.unshift(newLedger);
-    await syncStateToFirestore("ledger", newLedger.id);
-    const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === oldP.id);
-    db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== oldP.id);
-    for (const cb of cashbookToRemove) {
-      await syncStateToFirestore("cashbook", cb.id);
-    }
-    let cashChange = 0;
-    let bankChange = 0;
-    if (oldP.paymentMode === "Cash") {
-      cashChange = newAmount;
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const pIndex = db_payments.findIndex((pay) => pay.id === id);
+    if (pIndex !== -1) {
+      const oldP = db_payments[pIndex];
+      if (data.referenceNum && data.referenceNum.trim().toLowerCase() !== oldP.referenceNum?.trim().toLowerCase()) {
+        const existing = db_payments.find((pay) => pay.id !== id && pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+        if (existing) {
+          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+        }
+      }
+      const oldClientId = oldP.clientId;
+      const updatedClientId = data.clientId || oldP.clientId;
+      const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
+      oldP.amount = Number(data.amount ?? oldP.amount);
+      oldP.paymentDate = data.paymentDate || oldP.paymentDate;
+      oldP.paymentMode = data.paymentMode || oldP.paymentMode;
+      oldP.referenceNum = data.referenceNum || oldP.referenceNum;
+      oldP.remarks = data.remarks || oldP.remarks;
+      oldP.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (updatedClientId !== oldP.clientId) {
+        oldP.clientId = updatedClientId;
+        const targetClient = db_clients.find((c) => c.id === updatedClientId);
+        oldP.clientName = targetClient ? targetClient.name : oldP.clientName;
+      }
+      if (updatedInvoiceId !== oldP.invoiceId) {
+        oldP.invoiceId = updatedInvoiceId;
+        const targetInv = db_invoices.find((inv) => inv.id === updatedInvoiceId);
+        oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
+      }
+      const newClientId = oldP.clientId;
+      const newAmount = oldP.amount;
+      await reconcileClientData(oldClientId);
+      if (newClientId !== oldClientId) {
+        await reconcileClientData(newClientId);
+      }
+      const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === oldP.id);
+      db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== oldP.id);
+      for (const cb of cashbookToRemove) {
+        await syncStateToFirestore("cashbook", cb.id);
+      }
+      let cashChange = 0;
+      let bankChange = 0;
+      if (oldP.paymentMode === "Cash") {
+        cashChange = newAmount;
+      } else {
+        bankChange = newAmount;
+      }
+      const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) return dateA - dateB;
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        return a.id.localeCompare(b.id);
+      });
+      const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
+      const newCashbook = {
+        id: `cb-pay-${oldP.id}`,
+        date: oldP.paymentDate,
+        description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
+        type: "income",
+        paymentMode: oldP.paymentMode,
+        amount: newAmount,
+        referenceId: oldP.id,
+        runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
+        runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db_cashbook.unshift(newCashbook);
+      await syncStateToFirestore("cashbook", newCashbook.id);
+      await syncStateToFirestore("payments", oldP.id);
+      const performerName = req.headers["x-user-name"] || "Karan Sharma";
+      oldP.updatedBy = performerName;
+      await triggerBusinessNotification(
+        req,
+        "Payment Updated",
+        `Payment of \u20B9${Number(oldP.amount).toLocaleString()} from ${oldP.clientName} has been modified by ${performerName}`,
+        "info",
+        "payments",
+        {
+          paymentId: oldP.id,
+          amount: String(oldP.amount),
+          clientName: oldP.clientName,
+          paymentMode: oldP.paymentMode,
+          invoiceId: oldP.invoiceId || "",
+          tab: "payments"
+        }
+      ).catch((err) => console.error("Notification trigger caught error:", err));
+      logUserActivity(req, "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName} (Updated by ${performerName}). Double-entry log updated.`);
+      res.json(oldP);
     } else {
-      bankChange = newAmount;
+      res.status(404).json({ error: "Payment not found" });
     }
-    const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      if (dateA !== dateB) return dateA - dateB;
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      return a.id.localeCompare(b.id);
-    });
-    const lastCashbookEntry = sortedCashForPayment[sortedCashForPayment.length - 1] || { runningCashBalance: 0, runningBankBalance: 0 };
-    const newCashbook = {
-      id: `cb-${Date.now()}`,
-      date: oldP.paymentDate,
-      description: `Invoiced Collection [${oldP.clientName}] Ref ${oldP.referenceNum} (EDITED)`,
-      type: "income",
-      paymentMode: oldP.paymentMode,
-      amount: newAmount,
-      referenceId: oldP.id,
-      runningCashBalance: lastCashbookEntry.runningCashBalance + cashChange,
-      runningBankBalance: lastCashbookEntry.runningBankBalance + bankChange,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    db_cashbook.unshift(newCashbook);
-    await syncStateToFirestore("cashbook", newCashbook.id);
-    await syncStateToFirestore("payments", oldP.id);
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_UPDATE", `Modified payment receipt references of ${oldP.clientName}. Double-entry log updated.`);
-    res.json(oldP);
-  } else {
-    res.status(404).json({ error: "Payment not found" });
+  } catch (err) {
+    console.error("Critical payment update execution failed: ", err);
+    res.status(500).json({ error: `Could not update payment receipt: ${err.message}` });
   }
 });
 app.delete("/api/payments/:id", checkPermission("payments", "delete"), async (req, res) => {
-  const { id } = req.params;
-  const pIndex = db_payments.findIndex((pay) => pay.id === id);
-  if (pIndex !== -1) {
-    const p = db_payments[pIndex];
-    const invIndex = db_invoices.findIndex((inv) => inv.id === p.invoiceId);
-    if (invIndex !== -1) {
-      const inv = db_invoices[invIndex];
-      inv.paidAmount = Math.max(0, inv.paidAmount - p.amount);
-      inv.dueAmount = Math.max(0, inv.total - inv.paidAmount);
-      inv.status = inv.dueAmount === inv.total ? "unpaid" : inv.paidAmount > 0 ? "partially_paid" : "unpaid";
-      await syncStateToFirestore("invoices", inv.id);
+  try {
+    const { id } = req.params;
+    const pIndex = db_payments.findIndex((pay) => pay.id === id);
+    if (pIndex !== -1) {
+      const p = db_payments[pIndex];
+      db_payments.splice(pIndex, 1);
+      await syncStateToFirestore("payments", id);
+      await reconcileClientData(p.clientId);
+      const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === p.id);
+      db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== p.id);
+      for (const cb of cashbookToRemove) {
+        await syncStateToFirestore("cashbook", cb.id);
+      }
+      const performerName = req.headers["x-user-name"] || "Karan Sharma";
+      await triggerBusinessNotification(
+        req,
+        "Payment Deleted",
+        `Payment of \u20B9${Number(p.amount).toLocaleString()} from ${p.clientName} has been permanently deleted by ${performerName}`,
+        "warning",
+        "payments",
+        {
+          paymentId: id,
+          amount: String(p.amount),
+          clientName: p.clientName,
+          paymentMode: p.paymentMode,
+          tab: "payments"
+        }
+      ).catch((err) => console.error("Notification trigger caught error:", err));
+      logUserActivity(req, "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName} (Deleted by ${performerName})`);
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: "Payment not found" });
     }
-    const clientIndex = db_clients.findIndex((c) => c.id === p.clientId);
-    if (clientIndex !== -1) {
-      db_clients[clientIndex].outstandingBalance = db_clients[clientIndex].outstandingBalance + p.amount;
-      await syncStateToFirestore("clients", db_clients[clientIndex].id);
-    }
-    const ledgerToRemove = db_ledger.filter((l) => l.referenceType === "payment" && l.referenceId === p.id);
-    db_ledger = db_ledger.filter((l) => !(l.referenceType === "payment" && l.referenceId === p.id));
-    for (const led of ledgerToRemove) {
-      await syncStateToFirestore("ledger", led.id);
-    }
-    const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === p.id);
-    db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== p.id);
-    for (const cb of cashbookToRemove) {
-      await syncStateToFirestore("cashbook", cb.id);
-    }
-    db_payments.splice(pIndex, 1);
-    await syncStateToFirestore("payments", id);
-    logUserActivity("demo-admin", "Karan Sharma", "PAYMENT_DELETE", `Voided and deleted payment of INR ${p.amount} from ${p.clientName}`);
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: "Payment not found" });
+  } catch (err) {
+    console.error("Critical payment delete execution failed: ", err);
+    res.status(500).json({ error: `Could not delete payment receipt: ${err.message}` });
   }
 });
 app.get("/api/ledger", checkPermission("ledger", "read"), (req, res) => {
@@ -2456,7 +2905,7 @@ app.post("/api/cashbook", checkPermission("cashbook", "write"), async (req, res)
     newBank -= amount;
   }
   const newEntry = {
-    id: `cb-${Date.now()}`,
+    id: `cb-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
     date: data.date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
     description: data.description || "Cashbook Transaction Entry",
     type,
@@ -2468,14 +2917,23 @@ app.post("/api/cashbook", checkPermission("cashbook", "write"), async (req, res)
   };
   db_cashbook.unshift(newEntry);
   await syncStateToFirestore("cashbook", newEntry.id);
-  if (newEntry.type === "expense") {
-    const payModeLabel = newEntry.paymentMode || "Cash";
-    sendFcmNotification(
-      "Payment Given",
-      `\u20B9${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} payment recorded.`,
-      { route: "/cashbook", cashbookId: newEntry.id, tab: "cashbook" }
-    ).catch((err) => console.error("FCM dispatch caught error:", err));
-  }
+  const payModeLabel = newEntry.paymentMode || "Cash";
+  const cashbookTitle = newEntry.type === "expense" ? "Cashbook Expense Created" : "Cashbook Transaction Created";
+  await triggerBusinessNotification(
+    req,
+    "Cashbook Created",
+    `\u20B9${Number(newEntry.amount).toLocaleString()} ${payModeLabel.toLowerCase()} transaction (${newEntry.description}) has been recorded`,
+    newEntry.type === "expense" ? "warning" : "success",
+    "cashbook",
+    {
+      cashbookId: newEntry.id,
+      route: "/cashbook",
+      tab: "cashbook",
+      amount: String(newEntry.amount),
+      clientName: newEntry.description || "Cashbook Transaction",
+      paymentMode: payModeLabel
+    }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_ENTRY", `Created manual transactional log: ${newEntry.description} for INR ${amount}`);
   res.status(201).json(newEntry);
 });
@@ -2489,6 +2947,21 @@ app.put("/api/cashbook/:id", checkPermission("cashbook", "write"), async (req, r
   if (index !== -1) {
     db_cashbook[index] = { ...db_cashbook[index], ...data };
     await syncStateToFirestore("cashbook", id);
+    await triggerBusinessNotification(
+      req,
+      "Cashbook Updated",
+      `Cashbook entry (${db_cashbook[index].description}) modified to \u20B9${Number(db_cashbook[index].amount).toLocaleString()}`,
+      "info",
+      "cashbook",
+      {
+        cashbookId: id,
+        route: "/cashbook",
+        tab: "cashbook",
+        amount: String(db_cashbook[index].amount),
+        clientName: db_cashbook[index].description || "Cashbook Entry",
+        paymentMode: db_cashbook[index].paymentMode || "Cash"
+      }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_UPDATE", `Updated manual transactional log: ${db_cashbook[index].description}`);
     res.json(db_cashbook[index]);
   } else {
@@ -2502,6 +2975,21 @@ app.delete("/api/cashbook/:id", checkPermission("cashbook", "delete"), async (re
     const item = db_cashbook[index];
     db_cashbook.splice(index, 1);
     await syncStateToFirestore("cashbook", id);
+    await triggerBusinessNotification(
+      req,
+      "Cashbook Deleted",
+      `Cashbook entry (${item.description}) of \u20B9${Number(item.amount).toLocaleString()} has been permanently deleted`,
+      "warning",
+      "cashbook",
+      {
+        cashbookId: id,
+        route: "/cashbook",
+        tab: "cashbook",
+        amount: String(item.amount),
+        clientName: item.description || "Cashbook Entry",
+        paymentMode: item.paymentMode || "Cash"
+      }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "CASHBOOK_DELETE", `Deleted transactional log: ${item.description}`);
     res.json({ success: true });
   } else {
@@ -2536,6 +3024,14 @@ app.post("/api/users", checkPermission("users", "write"), async (req, res) => {
     }
   }
   await syncStateToFirestore("users", newUser.userId);
+  await triggerBusinessNotification(
+    req,
+    "User Profile Created",
+    `Teammate profile "${newUser.name}" was successfully onboarded as ${newUser.role}`,
+    "success",
+    "users",
+    { userId: newUser.userId, tab: "users" }
+  ).catch((err) => console.error("Notification trigger caught error:", err));
   logUserActivity("demo-admin", "Karan Sharma", "USER_CREATE", `Onboarded teammate ${newUser.name} as ${newUser.role}`);
   res.status(201).json(newUser);
 });
@@ -2573,6 +3069,14 @@ app.put("/api/users/:userId", checkPermission("users", "write"), async (req, res
       }
     }
     await syncStateToFirestore("users", userId);
+    await triggerBusinessNotification(
+      req,
+      "User Profile Updated",
+      `Teammate profile detail for "${db_users[index].name}" has been modified`,
+      "info",
+      "users",
+      { userId, tab: "users" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "USER_UPDATE", `Updated teammate Operator: ${db_users[index].name}`);
     res.json(db_users[index]);
   } else {
@@ -2631,6 +3135,14 @@ app.delete("/api/users/:userId", checkPermission("users", "delete"), async (req,
     const name = db_users[index].name;
     db_users.splice(index, 1);
     await syncStateToFirestore("users", userId);
+    await triggerBusinessNotification(
+      req,
+      "User Profile Deleted",
+      `Teammate profile "${name}" has been permanently removed`,
+      "warning",
+      "users",
+      { tab: "users" }
+    ).catch((err) => console.error("Notification trigger caught error:", err));
     logUserActivity("demo-admin", "Karan Sharma", "USER_DELETE", `Revoked teammate clearance for: ${name}`);
     res.json({ success: true });
   } else {
@@ -2640,8 +3152,26 @@ app.delete("/api/users/:userId", checkPermission("users", "delete"), async (req,
 app.get("/api/logs", checkPermission("users", "read"), (req, res) => {
   res.json(db_logs);
 });
+app.post("/api/logs", async (req, res) => {
+  const { action, details } = req.body;
+  const userId = req.headers["x-user-id"] || "demo-admin";
+  const userName = req.headers["x-user-name"] || "Karan Sharma";
+  logUserActivity(userId, userName, action || "GENERAL_ACTIVITY", details || "");
+  res.json({ success: true });
+});
 app.get("/api/notifications", (req, res) => {
-  res.json(db_notifications);
+  const userId = req.headers["x-user-id"];
+  const filtered = db_notifications.filter((n) => n.userId === userId);
+  res.json(filtered);
+});
+app.put("/api/notifications/read-all", async (req, res) => {
+  const userId = req.headers["x-user-id"];
+  const filtered = db_notifications.filter((n) => n.userId === userId && !n.isRead);
+  for (const item of filtered) {
+    item.isRead = true;
+    await syncStateToFirestore("notifications", item.id);
+  }
+  res.json({ success: true, count: filtered.length });
 });
 app.put("/api/notifications/:id/read", async (req, res) => {
   const { id } = req.params;
@@ -2650,6 +3180,17 @@ app.put("/api/notifications/:id/read", async (req, res) => {
     item.isRead = true;
     await syncStateToFirestore("notifications", id);
     res.json(item);
+  } else {
+    res.status(404).json({ error: "Notification not found" });
+  }
+});
+app.delete("/api/notifications/:id", async (req, res) => {
+  const { id } = req.params;
+  const idx = db_notifications.findIndex((n) => n.id === id);
+  if (idx !== -1) {
+    db_notifications.splice(idx, 1);
+    await syncStateToFirestore("notifications", id);
+    res.json({ success: true, id });
   } else {
     res.status(404).json({ error: "Notification not found" });
   }
@@ -2690,9 +3231,34 @@ app.post("/api/settings", checkPermission("settings", "write"), async (req, res)
     res.status(500).json({ error: `Settings update failed: ${err.message}` });
   }
 });
+app.post("/api/transfer-cache", checkPermission("settings", "write"), async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: "Firebase Firestore is not initialized/accessible. Run in offline state first." });
+    }
+    let activeProj = "imodules-de7bf";
+    try {
+      const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (fs.existsSync(firebaseConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+        if (config.projectId) activeProj = config.projectId;
+      }
+    } catch (_) {
+    }
+    await forceTransferLocalCacheToFirestore();
+    logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", `Transferred database cache to online Firestore project: ${activeProj}`);
+    res.json({
+      success: true,
+      message: `Database synchronized successfully! All offline-cached configurations, clients, products, invoices, quotations, cashbooks, ledger balances, and activity logs have been uploaded to project: ${activeProj}`
+    });
+  } catch (err) {
+    console.error("Database cache migration failed:", err);
+    res.status(500).json({ error: err.message || "Database transfer failed" });
+  }
+});
 app.get("/api/public/settings", (req, res) => {
   res.json({
-    companyName: db_settings.companyName || "Internet Modules",
+    companyName: db_settings.companyName || "iModules",
     logoUrl: db_settings.logoUrl || "",
     titleBarText: db_settings.titleBarText || ""
   });
@@ -2714,6 +3280,138 @@ app.get("/api/public/invoice/*", (req, res) => {
     res.status(500).json({ error: `Internal query failed: ${err.message}` });
   }
 });
+app.get("/api/apk/releases", (req, res) => {
+  res.json(db_apk_releases);
+});
+app.get("/api/version", (req, res) => {
+  if (db_apk_releases && db_apk_releases.length > 0) {
+    const latest = db_apk_releases[0];
+    return res.json({ version: latest.version, build: latest.build });
+  }
+  const versionFilePath = path.join(process.cwd(), "version.json");
+  if (fs.existsSync(versionFilePath)) {
+    try {
+      const verData = JSON.parse(fs.readFileSync(versionFilePath, "utf8"));
+      return res.json(verData);
+    } catch (e) {
+    }
+  }
+  res.json({ version: "1.1.2", build: "18" });
+});
+app.post("/api/apk/upload", async (req, res) => {
+  try {
+    const { fileBase64, originalName, uploadedBy, storageUrl } = req.body;
+    if (!fileBase64 && !storageUrl) {
+      return res.status(400).json({ error: "Missing required parameter 'fileBase64' or 'storageUrl'" });
+    }
+    let currentVersion = "1.1.2";
+    let currentBuild = "28";
+    if (db_apk_releases && db_apk_releases.length > 0) {
+      const latestObj = db_apk_releases[0];
+      if (latestObj && latestObj.version) {
+        currentVersion = latestObj.version;
+      }
+      if (latestObj && latestObj.build) {
+        currentBuild = latestObj.build;
+      }
+    } else {
+      const versionFilePath = path.join(process.cwd(), "version.json");
+      if (fs.existsSync(versionFilePath)) {
+        try {
+          const verData = JSON.parse(fs.readFileSync(versionFilePath, "utf8"));
+          if (verData.version) currentVersion = verData.version;
+          if (verData.build) currentBuild = verData.build;
+        } catch (e) {
+          console.warn("Failed to parse existing version.json:", e);
+        }
+      }
+    }
+    const buildNum = parseInt(currentBuild, 10) || 28;
+    const newBuild = String(buildNum + 1);
+    const parts = currentVersion.split(".");
+    if (parts.length === 3) {
+      parts[2] = String((parseInt(parts[2], 10) || 0) + 1);
+    } else if (parts.length > 0) {
+      parts[parts.length - 1] = String((parseInt(parts[parts.length - 1], 10) || 0) + 1);
+    } else {
+      parts.push("1");
+    }
+    const newVersion = parts.join(".");
+    try {
+      const versionFilePath = path.join(process.cwd(), "version.json");
+      fs.writeFileSync(versionFilePath, JSON.stringify({ version: newVersion, build: newBuild }, null, 2), "utf8");
+      console.log(`[Version Control]: Automatically updated version.json to v${newVersion} (Build ${newBuild})`);
+    } catch (fsErr) {
+      console.error("Failed to commit version.json locally:", fsErr);
+    }
+    const uploadDir = path.join(process.cwd(), "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const id = `apk-${Date.now()}-${newVersion}-${newBuild}`;
+    const apkFilePath = path.join(uploadDir, `${id}.apk`);
+    let buffer;
+    if (storageUrl) {
+      console.log(`[APK Sync]: Retrieving binary upload from firestore storage URL: ${storageUrl}`);
+      const downloadResponse = await fetch(storageUrl);
+      if (!downloadResponse.ok) {
+        throw new Error(`Failed to sync uploaded APK from cloud storage registry: ${downloadResponse.statusText}`);
+      }
+      const arrayBuffer = await downloadResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else {
+      let cleanBase64 = fileBase64;
+      if (cleanBase64.includes(",")) {
+        cleanBase64 = cleanBase64.split(",")[1];
+      }
+      buffer = Buffer.from(cleanBase64, "base64");
+    }
+    fs.writeFileSync(apkFilePath, buffer);
+    const sizeBytes = buffer.length;
+    const newRelease = {
+      id,
+      version: newVersion,
+      build: newBuild,
+      fileName: `iModules (v${newVersion} Build ${newBuild}).apk`,
+      uploadedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      uploadedBy: uploadedBy || "Administrator",
+      sizeBytes
+    };
+    db_apk_releases = [newRelease, ...db_apk_releases];
+    try {
+      const historyPath = path.join(uploadDir, "apk-history.json");
+      fs.writeFileSync(historyPath, JSON.stringify(db_apk_releases, null, 2), "utf8");
+    } catch (histErr) {
+      console.error("Failed to write APK local history json:", histErr);
+    }
+    if (db) {
+      try {
+        await setDoc(doc(db, "businessSettings", "apkReleases"), { list: db_apk_releases });
+        console.log(`[Version Control]: Persisted APK releases list in Cloud Firestore.`);
+      } catch (e) {
+        console.error("Failed to save APK release metadata list in Firestore:", e);
+      }
+    }
+    logUserActivity("demo-admin", "Karan Sharma", "SETTINGS_WRITE", `Uploaded new APK release: v${newVersion} (Build ${newBuild})`);
+    res.json({ success: true, release: newRelease });
+  } catch (err) {
+    console.error("Error in APK upload parser:", err);
+    res.status(500).json({ error: err.message || "Failed to process APK upload" });
+  }
+});
+app.get("/api/apk/download/:id", (req, res) => {
+  const release = db_apk_releases.find((r) => r.id === req.params.id);
+  if (!release) {
+    return res.status(404).json({ error: "APK Release not found" });
+  }
+  const filePath = path.join(process.cwd(), "uploads", `${release.id}.apk`);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Physical APK file has been purged or does not exist on disk" });
+  }
+  res.setHeader("Content-Type", "application/vnd.android.package-archive");
+  res.setHeader("Content-Disposition", `attachment; filename="${release.fileName}"`);
+  res.sendFile(filePath);
+});
 app.get("/api/passwords", (req, res) => {
   res.json(db_passwords);
 });
@@ -2726,6 +3424,52 @@ app.post("/api/passwords", async (req, res) => {
       await setDoc(doc(db, "businessSettings", "passwords"), db_passwords);
     }
     res.json({ success: true, passwords: db_passwords });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Please enter email address and security password." });
+    }
+    const emailLower = email.toLowerCase().trim();
+    const userMatched = db_users.find((u) => u.email.toLowerCase() === emailLower);
+    if (!userMatched) {
+      return res.status(404).json({ error: "User is not registered. Please contact your system Administrator." });
+    }
+    const correctPassword = db_passwords[emailLower] || (emailLower === "modulesinternet@gmail.com" ? "Admin@123" : null);
+    if (!correctPassword || password !== correctPassword) {
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
+    }
+    if (userMatched.status !== "active") {
+      return res.status(403).json({ error: "Access Denied: Your corporate account is currently inactive. Please contact your system Administrator." });
+    }
+    res.json({
+      success: true,
+      user: userMatched,
+      role: userMatched.role
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/auth/check-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Specify corporate email address." });
+    }
+    const emailLower = email.toLowerCase().trim();
+    const userMatched = db_users.find((u) => u.email.toLowerCase() === emailLower);
+    if (!userMatched) {
+      return res.status(404).json({ error: "Corporate profile not registered with this email address." });
+    }
+    res.json({
+      success: true,
+      user: userMatched
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2751,7 +3495,7 @@ app.get("/api/batch-sync", async (req, res) => {
     const totalInvoicesCount = db_invoices.length;
     const pendingInvoicesCount = db_invoices.filter((i) => i.status !== "paid").length;
     const monthlyDataMap = /* @__PURE__ */ new Map();
-    const months = ["Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     months.forEach((m) => {
       monthlyDataMap.set(m, { month: m, billed: 0, collected: 0 });
     });
@@ -2760,7 +3504,7 @@ app.get("/api/batch-sync", async (req, res) => {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const m = monthNames[monthIndex];
       const fallbackMonth = m ? m.substring(0, 3) : "Jan";
-      const key = months.includes(fallbackMonth) ? fallbackMonth : months[months.length - 1] || "May";
+      const key = months.includes(fallbackMonth) ? fallbackMonth : months[months.length - 1] || "Dec";
       const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
       current.billed += inv.total;
       monthlyDataMap.set(key, current);
@@ -2770,7 +3514,7 @@ app.get("/api/batch-sync", async (req, res) => {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const m = monthNames[monthIndex];
       const fallbackMonth = m ? m.substring(0, 3) : "Jan";
-      const key = months.includes(fallbackMonth) ? fallbackMonth : months[months.length - 1] || "May";
+      const key = months.includes(fallbackMonth) ? fallbackMonth : months[months.length - 1] || "Dec";
       const current = monthlyDataMap.get(key) || { month: key, billed: 0, collected: 0 };
       current.collected += pay.amount;
       monthlyDataMap.set(key, current);

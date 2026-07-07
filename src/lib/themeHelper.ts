@@ -115,8 +115,54 @@ export const THEME_PALETTES: Record<string, ColorPalette> = {
   }
 };
 
+function hexToRgb(hex: string) {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 14, g: 165, b: 233 };
+}
+
+function mix(colorRgb: {r: number, g: number, b: number}, mixWithWhite: boolean, weight: number) {
+  const w2 = 1 - weight;
+  const mixColor = mixWithWhite ? 255 : 0;
+  const r = Math.round(colorRgb.r * weight + mixColor * w2);
+  const g = Math.round(colorRgb.g * weight + mixColor * w2);
+  const b = Math.round(colorRgb.b * weight + mixColor * w2);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+function generatePaletteFromHex(hex: string): ColorPalette {
+  const rgb = hexToRgb(hex);
+  return {
+    name: 'Custom',
+    primary: hex,
+    secondary: mix(rgb, false, 0.8),
+    '50': mix(rgb, true, 0.05),
+    '100': mix(rgb, true, 0.15),
+    '200': mix(rgb, true, 0.3),
+    '300': mix(rgb, true, 0.45),
+    '400': mix(rgb, true, 0.7),
+    '500': mix(rgb, true, 1.0),
+    '600': mix(rgb, false, 0.8),
+    '700': mix(rgb, false, 0.6),
+    '800': mix(rgb, false, 0.45),
+    '900': mix(rgb, false, 0.3),
+    '950': mix(rgb, false, 0.2),
+  };
+}
+
 export function applyThemeColor(themeKey: string = 'sky-blue') {
-  const theme = THEME_PALETTES[themeKey] || THEME_PALETTES['sky-blue'];
+  let theme: ColorPalette;
+  if (themeKey.startsWith('#')) {
+    theme = generatePaletteFromHex(themeKey);
+  } else {
+    theme = THEME_PALETTES[themeKey] || THEME_PALETTES['sky-blue'];
+  }
+
   const root = document.documentElement;
   
   root.style.setProperty('--theme-primary', theme.primary);
