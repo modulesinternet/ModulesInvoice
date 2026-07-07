@@ -366,15 +366,13 @@ export default function CashbookModule({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      {(row.type === 'expense' || row.type === 'withdrawal') && (
-                        <button
-                          onClick={() => handleDelete(row.id, row.description)}
-                          className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
-                          title="Delete Cashbook Entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDelete(row.id, row.description)}
+                        className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                        title="Delete Cashbook Entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
