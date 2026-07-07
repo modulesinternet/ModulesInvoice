@@ -1399,7 +1399,7 @@ export default function App() {
     try {
       await api.createClient(c);
       showToast(`Corporate partner "${c.name}" registered successfully!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1409,7 +1409,7 @@ export default function App() {
     try {
       await api.updateClient(id, c);
       showToast(`Partner profile updated.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1419,7 +1419,7 @@ export default function App() {
     try {
       await api.deleteClient(id);
       showToast(`Successfully removed client.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1429,7 +1429,7 @@ export default function App() {
     try {
       await api.createProduct(p);
       showToast(`Catalogue item "${p.name}" listed successfully!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1439,7 +1439,7 @@ export default function App() {
     try {
       await api.updateProduct(id, p);
       showToast("Catalogue product description modified.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1449,7 +1449,7 @@ export default function App() {
     try {
       await api.deleteProduct(id);
       showToast("Catalogue item removed.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1459,7 +1459,7 @@ export default function App() {
     try {
       await api.createCategory(name);
       showToast(`Category "${name}" added successfully.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1469,7 +1469,7 @@ export default function App() {
     try {
       await api.updateCategory(oldName, newName);
       showToast(`Category renamed to "${newName}" successfully.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1479,7 +1479,7 @@ export default function App() {
     try {
       await api.deleteCategory(name);
       showToast(`Category "${name}" has been deleted.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1489,7 +1489,7 @@ export default function App() {
     try {
       await api.createInvoice(inv);
       showToast(`Authorized & dispatched invoice!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1499,7 +1499,7 @@ export default function App() {
     try {
       await api.updateInvoice(id, inv);
       showToast(`Maturity/bill items updated successfully!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1518,7 +1518,7 @@ export default function App() {
     try {
       await api.deleteInvoice(id);
       showToast("Invoice reversed and outstanding balanced.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1528,7 +1528,7 @@ export default function App() {
     try {
       await api.createQuotation(q);
       showToast(`Proposal estimate dispatched to client!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1538,7 +1538,7 @@ export default function App() {
     try {
       await api.convertQuotation(id);
       showToast("Approved: Proposal estimate converted to official Tax Invoice successfully!");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1548,7 +1548,7 @@ export default function App() {
     try {
       await api.updateQuotation(id, q);
       showToast("Estimate proposal updated successfully.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1558,7 +1558,7 @@ export default function App() {
     try {
       await api.deleteQuotation(id);
       showToast("Estimate proposal deleted successfully.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1568,7 +1568,7 @@ export default function App() {
     try {
       await api.createPayment(p);
       showToast(`Cleared: Added ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.amount!)} deposit to client ledger!`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1578,7 +1578,7 @@ export default function App() {
     try {
       await api.updatePayment(id, p);
       showToast("Approved: Modified payment receipt references successfully.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1588,7 +1588,7 @@ export default function App() {
     try {
       await api.deletePayment(id);
       showToast("Approved: Voided and deleted payment successfully.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1598,7 +1598,7 @@ export default function App() {
     try {
       await api.createCashbookEntry(entry);
       showToast("Approved: Recorded Cashbook operating voucher.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1608,7 +1608,7 @@ export default function App() {
     try {
       await api.updateCashbookEntry(id, entry);
       showToast("Approved: Updated cashbook operating voucher.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1618,7 +1618,7 @@ export default function App() {
     try {
       await api.deleteCashbookEntry(id);
       showToast("Approved: Deleted cashbook operating voucher.");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1628,7 +1628,7 @@ export default function App() {
     try {
       await api.saveSettings(settings);
       showToast("Approved: System firm parameters updated.");
-      await loadMasterData(true, true);
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1638,7 +1638,7 @@ export default function App() {
     try {
       await api.importDatabase(backup);
       showToast("Approved: In-browser database backup restored successfully!");
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1648,7 +1648,7 @@ export default function App() {
     try {
       await api.createUser(u);
       showToast(`Access granted: Invited team member ${u.name}`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1658,7 +1658,7 @@ export default function App() {
     try {
       await api.updateUser(userId, u);
       showToast(`Update saved: Modified details for team member ${u.name}`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1668,7 +1668,7 @@ export default function App() {
     try {
       await api.deleteUser(userId);
       showToast(`Teammate credentials and access revoked.`);
-      await loadMasterData();
+      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
