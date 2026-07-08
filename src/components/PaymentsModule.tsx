@@ -113,10 +113,13 @@ export default function PaymentsModule({
     const clientObj = clients.find(c => c.id === clientId)!;
     const invoiceObj = invoices.find(inv => inv.id === invoiceId)!;
 
+    // Removed strict check to allow for overpayments/credit balances
+    /*
     if (Number(amount) > invoiceObj.dueAmount) {
       alert(`Warning: The specified payment amount ${formatCurrency(Number(amount))} exceeds this invoice's remaining due balance ${formatCurrency(invoiceObj.dueAmount)}.`);
       return;
     }
+    */
 
     setIsSaving(true);
     try {
@@ -164,12 +167,15 @@ export default function PaymentsModule({
     const clientObj = clients.find(c => c.id === clientId)!;
     const invoiceObj = invoices.find(inv => inv.id === invoiceId)!;
 
+    // Removed strict check to allow for overpayments/credit balances
+    /*
     // Check balance limit
     const allowableBalance = invoiceObj.dueAmount + (invoiceObj.id === editingPayment.invoiceId ? editingPayment.amount : 0);
     if (Number(amount) > allowableBalance) {
       alert(`Warning: The specified payment amount ${formatCurrency(Number(amount))} exceeds this invoice's maximum available remaining balance of ${formatCurrency(allowableBalance)}.`);
       return;
     }
+    */
 
     setIsSaving(true);
     try {
@@ -504,8 +510,11 @@ export default function PaymentsModule({
               {selectedInvoiceObj && (
                 <div className="p-3 bg-indigo-50 text-[11px] text-indigo-800 rounded-xl italic">
                   Remaining unpaid balance after this receipt: 
-                  <b className="font-mono ml-1 text-slate-800">
-                    {formatCurrency(Math.max(0, selectedInvoiceObj.dueAmount - Number(amount || 0)))}
+                  <b className={`font-mono ml-1 ${selectedInvoiceObj.dueAmount - Number(amount || 0) < 0 ? 'text-blue-600' : 'text-slate-800'}`}>
+                    {selectedInvoiceObj.dueAmount - Number(amount || 0) < 0 
+                      ? `(Credit: ${formatCurrency(Math.abs(selectedInvoiceObj.dueAmount - Number(amount || 0)))})`
+                      : formatCurrency(Math.max(0, selectedInvoiceObj.dueAmount - Number(amount || 0)))
+                    }
                   </b>
                 </div>
               )}

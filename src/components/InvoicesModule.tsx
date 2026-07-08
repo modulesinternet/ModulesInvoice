@@ -1925,11 +1925,13 @@ export default function InvoicesModule({
                 <button
                   onClick={async () => {
                     if (confirm(`Remove the attached delivery challan '${selectedInvoice.challanName || ""}'?`)) {
-                      await onUpdateInvoice(selectedInvoice.id, {
-                        challanUrl: undefined,
-                        challanName: undefined,
-                        challanType: undefined
-                      });
+                      const updates = {
+                        challanUrl: null,
+                        challanName: null,
+                        challanType: null
+                      };
+                      await onUpdateInvoice(selectedInvoice.id, updates as any);
+                      setSelectedInvoice(prev => prev ? { ...prev, ...updates } : null);
                     }
                   }}
                   className="p-2 border border-amber-200 rounded-xl bg-white text-amber-600 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1.5 transition"
@@ -2584,11 +2586,15 @@ export default function InvoicesModule({
                           <button
                             onClick={async () => {
                               if (confirm(`Remove the attached delivery challan '${inv.challanName || ""}'?`)) {
-                                await onUpdateInvoice(inv.id, {
-                                  challanUrl: undefined,
-                                  challanName: undefined,
-                                  challanType: undefined
-                                });
+                                const updates = {
+                                  challanUrl: null,
+                                  challanName: null,
+                                  challanType: null
+                                };
+                                await onUpdateInvoice(inv.id, updates as any);
+                                if (selectedInvoiceRaw && selectedInvoiceRaw.id === inv.id) {
+                                  setSelectedInvoice(prev => prev ? { ...prev, ...updates } : null);
+                                }
                               }
                             }}
                             className="p-1 px-1.5 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition"
