@@ -770,21 +770,23 @@ try {
   }
 }
 async function sendFcmNotification(title, body, extraData = {}) {
-  console.log(`[FCM BROADCAST] Broadcast request initiated: "${title}" - "${body}"`);
+  console.log(`[FCM BROADCAST] Broadcast request initiated: "${title}"`);
   if (db_fcm_tokens.length === 0) {
     console.log("[FCM BROADCAST] Active recipient registration dictionary is empty. Skipping notification delivery.");
     return;
   }
-  const tokens = Array.from(new Set(db_fcm_tokens.map((t) => t.deviceToken))).filter(Boolean);
+  const tokens = Array.from(new Set(
+    db_fcm_tokens.filter((t) => t.platform === "android").map((t) => t.deviceToken)
+  )).filter(Boolean);
   if (tokens.length === 0) {
-    console.log("[FCM BROADCAST] No valid FCM registration keys extracted. Skipping.");
+    console.log("[FCM BROADCAST] No valid Android FCM registration keys extracted. Skipping.");
     return;
   }
   if (!isFcmSupported) {
-    console.log(`[FCM SIMULATED DELIVERY] Simulated multicast delivery to ${tokens.length} device(s) complete.`);
+    console.log(`[FCM SIMULATED DELIVERY] Simulated Android multicast delivery to ${tokens.length} device(s) complete.`);
     return;
   }
-  console.log(`[FCM BROADCAST] dispatching message packet to ${tokens.length} active recipient tokens.`);
+  console.log(`[FCM BROADCAST] dispatching message packet to ${tokens.length} active Android recipient tokens.`);
   const messagePayload = {
     notification: {
       title,
@@ -794,76 +796,33 @@ async function sendFcmNotification(title, body, extraData = {}) {
       priority: "high",
       notification: {
         sound: "default",
-        // Standard fallback sound ensures it works on all devices without raw resource errors
         channelId: "high_priority_notifications",
-        // Use high-priority notification channel
         visibility: "public",
-        // Render details securely on lockscreen
         notificationPriority: "PRIORITY_MAX",
-        // Show heads-up banner with max urgency above general notifications
         defaultSound: true,
-        // Auto-play system sound
         defaultVibrateTimings: true,
-        // Auto-vibrate
         defaultLightSettings: true
-        // Enable indicator LEDs
       }
     },
-    apns: {
-      headers: {
-        "apns-priority": "10"
-        // Wake device instantly from sleep state
-      },
-      payload: {
-        aps: {
-          alert: {
-            title,
-            body
-          },
-          sound: "default",
-          "content-available": 1
-          // Let background handlers receive payload
-        }
-      }
-    },
-    webpush: {
-      headers: {
-        Urgency: "high"
-      },
-      notification: {
-        title,
-        body,
-        icon: "/assets/favicon.ico",
-        badge: "/assets/favicon.ico",
-        requireInteraction: true
-      }
-    },
-    data: {
-      ...extraData,
-      title,
-      body,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    }
+    tokens,
+    data: extraData
   };
-  for (const token of tokens) {
-    try {
-      await admin.messaging().send({
-        token,
-        ...messagePayload
-      });
-      console.log(`[FCM SUCCESS] Delivered push message to device endpoint: ${token.substring(0, 15)}...`);
-    } catch (err) {
-      console.warn(`[FCM FAILED] Failed delivery on endpoint: ${token.substring(0, 15)}... Error:`, err.message);
-      if (err.code === "messaging/registration-token-not-registered" || err.message?.includes("not-registered")) {
-        console.log(`[FCM MAINTENANCE] Evicting stale/expired device key: ${token.substring(0, 15)}...`);
-        const index = db_fcm_tokens.findIndex((t) => t.deviceToken === token);
+  try {
+    const response = await admin.messaging().sendEachForMulticast(messagePayload);
+    console.log(`[FCM SUCCESS] Delivery complete. Success: ${response.successCount}, Failures: ${response.failureCount}`);
+    if (response.failureCount > 0) {
+      const failedTokens = response.responses.map((resp, idx) => !resp.success ? tokens[idx] : null).filter(Boolean);
+      for (const expiredToken of failedTokens) {
+        const index = db_fcm_tokens.findIndex((t) => t.deviceToken === expiredToken);
         if (index !== -1) {
-          const expiredTokenId = db_fcm_tokens[index].tokenId;
+          const expiredTokenId = db_fcm_tokens[index].id;
           db_fcm_tokens.splice(index, 1);
           await syncStateToFirestore("fcmTokens", expiredTokenId).catch(() => null);
         }
       }
     }
+  } catch (error) {
+    console.error("[FCM FATAL] Multicast engine failure:", error.message);
   }
 }
 async function triggerBusinessNotification(req, title, message, type, moduleName, extraData = {}) {
@@ -1227,7 +1186,7 @@ async function runBackgroundFirestoreSync(topic, id) {
     console.warn("WARNING: Fallback save failed on Firestore sync. Continuing in memory-only model.", error);
   }
 }
-async function reconcileClientData(clientId) {
+async function reconcileClientData(clientId, batch) {
   const clientIndex = db_clients.findIndex((c) => c.id === clientId);
   if (clientIndex === -1) return;
   const client = db_clients[clientIndex];
@@ -1247,7 +1206,9 @@ async function reconcileClientData(clientId) {
       inv.paidAmount = calculatedPaid;
       inv.dueAmount = calculatedDue;
       inv.status = calculatedStatus;
-      if (db) {
+      if (batch) {
+        batch.set(doc(db, "invoices", inv.id), inv);
+      } else if (db) {
         await withTimeout(setDoc(doc(db, "invoices", inv.id), inv), 1e4).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
       }
     }
@@ -1257,13 +1218,19 @@ async function reconcileClientData(clientId) {
   const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
   if (client.outstandingBalance !== calculatedBalance) {
     client.outstandingBalance = calculatedBalance;
-    if (db) {
+    if (batch) {
+      batch.set(doc(db, "clients", client.id), client);
+    } else if (db) {
       await withTimeout(setDoc(doc(db, "clients", client.id), client), 1e4).catch((e) => console.warn(`[Reconcile] Firestore client sync failed: ${e.message}`));
     }
   }
   const existingLedgers = db_ledger.filter((l) => l.clientId === clientId);
   db_ledger = db_ledger.filter((l) => l.clientId !== clientId);
-  if (db) {
+  if (batch) {
+    for (const led of existingLedgers) {
+      batch.delete(doc(db, "ledger", led.id));
+    }
+  } else if (db) {
     for (const led of existingLedgers) {
       await withTimeout(deleteDoc(doc(db, "ledger", led.id)), 1e4).catch(() => null);
     }
@@ -1285,6 +1252,7 @@ async function reconcileClientData(clientId) {
       id: p.id,
       paymentDate: p.paymentDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
       referenceNum: p.referenceNum || "",
+      bankRef: p.bankRef || "",
       invoiceNumber: p.invoiceNumber || "",
       paymentMode: p.paymentMode || "",
       amount: Number(p.amount || 0),
@@ -1315,10 +1283,14 @@ async function reconcileClientData(clientId) {
         runningBalance: runningBal,
         referenceType: "invoice",
         referenceId: tx.id,
+        invoiceNumber: tx.invoiceNumber,
+        referenceNum: tx.invoiceNumber,
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
-      if (db) {
+      if (batch) {
+        batch.set(doc(db, "ledger", newLed.id), newLed);
+      } else if (db) {
         await withTimeout(setDoc(doc(db, "ledger", newLed.id), newLed), 1e4).catch((e) => console.warn(`[Reconcile] Firestore ledger invoice sync failed: ${e.message}`));
       }
     } else {
@@ -1334,10 +1306,15 @@ async function reconcileClientData(clientId) {
         runningBalance: runningBal,
         referenceType: "payment",
         referenceId: tx.id,
+        invoiceNumber: tx.invoiceNumber || "",
+        referenceNum: tx.referenceNum || "",
+        bankRef: tx.bankRef || "",
         createdAt: tx.createdAt
       };
       db_ledger.push(newLed);
-      if (db) {
+      if (batch) {
+        batch.set(doc(db, "ledger", newLed.id), newLed);
+      } else if (db) {
         await withTimeout(setDoc(doc(db, "ledger", newLed.id), newLed), 1e4).catch((e) => console.warn(`[Reconcile] Firestore ledger payment sync failed: ${e.message}`));
       }
     }
@@ -1388,6 +1365,28 @@ async function performSelfHealingAudit() {
       }
     }
   }
+  for (const cb of db_cashbook) {
+    if (cb.referenceId && (cb.referenceId.startsWith("pay-") || cb.referenceId.startsWith("cb-pay-"))) {
+      const payId = cb.referenceId.replace("cb-pay-", "");
+      const payment = db_payments.find((p) => p.id === payId);
+      if (payment) {
+        let changed = false;
+        if (payment.referenceNum && cb.referenceNum !== payment.referenceNum) {
+          console.log(`[Self-Healing] Healing cashbook entry ${cb.id} with payment reference ${payment.referenceNum}`);
+          cb.referenceNum = payment.referenceNum;
+          changed = true;
+        }
+        if (payment.bankRef && cb.bankRef !== payment.bankRef) {
+          console.log(`[Self-Healing] Healing cashbook entry ${cb.id} with bankRef ${payment.bankRef}`);
+          cb.bankRef = payment.bankRef;
+          changed = true;
+        }
+        if (changed && db) {
+          await withTimeout(setDoc(doc(db, "cashbook", cb.id), cb), 1e4).catch((e) => console.warn(`[Self-Healing] Cashbook document sync failed: ${e.message}`));
+        }
+      }
+    }
+  }
   console.log(`[Self-Healing] Audit sweep completed. Active ledger count: ${db_ledger.length}`);
 }
 function getCleanLedger() {
@@ -1400,15 +1399,12 @@ function getCleanLedger() {
     if (led.referenceType === "payment") return validPaymentIds.has(led.referenceId);
     return true;
   });
-  const seenPaymentRefs = /* @__PURE__ */ new Set();
+  const seenSignatures = /* @__PURE__ */ new Set();
   const dedupedLedger = [];
   tempLedger.forEach((led) => {
-    if (led.referenceType === "payment" && led.referenceId) {
-      if (!seenPaymentRefs.has(led.referenceId)) {
-        seenPaymentRefs.add(led.referenceId);
-        dedupedLedger.push(led);
-      }
-    } else {
+    const sig = `${led.clientId}_${led.type}_${led.amount}_${led.date}_${led.referenceId || ""}_${led.invoiceNumber || ""}_${led.referenceNum || ""}`;
+    if (!seenSignatures.has(sig)) {
+      seenSignatures.add(sig);
       dedupedLedger.push(led);
     }
   });
@@ -2631,19 +2627,50 @@ app.post("/api/quotations/:id/convert", checkPermission("quotations", "write"), 
     res.status(404).json({ error: "Quotation not found" });
   }
 });
+function getNextPaymentReference() {
+  let maxNum = 0;
+  for (const pay of db_payments) {
+    if (pay.referenceNum && pay.referenceNum.startsWith("PAYRD-")) {
+      const numStr = pay.referenceNum.substring(6);
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  let nextNum = maxNum + 1;
+  let referenceNum = `PAYRD-${nextNum}`;
+  while (db_payments.some((pay) => pay.referenceNum === referenceNum)) {
+    nextNum++;
+    referenceNum = `PAYRD-${nextNum}`;
+  }
+  return referenceNum;
+}
 app.get("/api/payments", checkPermission("payments", "read"), (req, res) => {
   res.json(db_payments);
 });
 app.post("/api/payments", checkPermission("payments", "write"), async (req, res) => {
+  const oldPayments = db_payments.map((pay) => ({ ...pay }));
+  const oldCashbook = db_cashbook.map((cb) => ({ ...cb }));
+  const oldInvoices = db_invoices.map((inv) => ({ ...inv }));
+  const oldClients = db_clients.map((c) => ({ ...c }));
+  const oldLedger = [...db_ledger];
   try {
     const data = req.body;
     const amountPaid = Number(data.amount || 0);
-    if (data.referenceNum) {
-      const existing = db_payments.find((pay) => pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
-      if (existing) {
-        return res.status(400).json({ error: `Payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+    const checkInvoiceNumber = data.invoiceNumber || "";
+    const checkAmount = amountPaid;
+    const checkDate = data.paymentDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const checkRef = data.referenceNum;
+    if (checkRef) {
+      const duplicate = db_payments.find(
+        (pay) => pay.invoiceNumber === checkInvoiceNumber && pay.amount === checkAmount && pay.paymentDate === checkDate && (pay.bankRef === checkRef || pay.referenceNum === checkRef)
+      );
+      if (duplicate) {
+        return res.status(400).json({ error: "Duplicate payment detected: A payment with the same Invoice Number, Payment Amount, Payment Date, and Payment Reference already exists." });
       }
     }
+    const generatedRef = getNextPaymentReference();
     const payId = `pay-${Date.now()}`;
     const performerName = req.headers["x-user-name"] || "Karan Sharma";
     const newPayment = {
@@ -2653,15 +2680,22 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
       clientId: data.clientId,
       clientName: data.clientName,
       amount: amountPaid,
-      paymentDate: data.paymentDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      paymentDate: checkDate,
       paymentMode: data.paymentMode || "UPI",
-      referenceNum: data.referenceNum || `REF-${Date.now()}`,
+      referenceNum: generatedRef,
+      // Enforce sequential reference starting with PAYRD-
+      bankRef: data.referenceNum || "",
+      // Enforce user-specified manual bank/UPI reference code
       remarks: data.remarks || "No comments",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       createdBy: performerName
     };
+    const batch = db ? writeBatch(db) : null;
+    if (batch) {
+      batch.set(doc(db, "payments", payId), newPayment);
+    }
     db_payments.unshift(newPayment);
-    await reconcileClientData(newPayment.clientId);
+    await reconcileClientData(newPayment.clientId, batch);
     const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
@@ -2687,13 +2721,20 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
       paymentMode: newPayment.paymentMode,
       amount: amountPaid,
       referenceId: payId,
+      referenceNum: newPayment.referenceNum,
+      bankRef: newPayment.bankRef,
       runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
       runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (batch) {
+      batch.set(doc(db, "cashbook", newCashbook.id), newCashbook);
+    }
     db_cashbook.unshift(newCashbook);
-    await syncStateToFirestore("payments", payId);
-    await syncStateToFirestore("cashbook", newCashbook.id);
+    if (batch) {
+      await batch.commit();
+    }
+    saveStateToLocalCache();
     const amtStr = `\u20B9${newPayment.amount.toLocaleString("en-IN")}`;
     const formattedMsg = `${amtStr} Payment Received from ${newPayment.clientName} via ${newPayment.paymentMode} (Recorded by ${performerName})`;
     await triggerBusinessNotification(
@@ -2714,30 +2755,43 @@ app.post("/api/payments", checkPermission("payments", "write"), async (req, res)
     logUserActivity(req, "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName} (Recorded by ${performerName}). Double-entry synchronizer successful.`);
     res.status(201).json(newPayment);
   } catch (err) {
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
     console.error("Critical payment log execution failed: ", err);
     res.status(500).json({ error: `Could not approve ledger credit of payment receipt: ${err.message}` });
   }
 });
 app.put("/api/payments/:id", checkPermission("payments", "write"), async (req, res) => {
+  const oldPayments = db_payments.map((pay) => ({ ...pay }));
+  const oldCashbook = db_cashbook.map((cb) => ({ ...cb }));
+  const oldInvoices = db_invoices.map((inv) => ({ ...inv }));
+  const oldClients = db_clients.map((c) => ({ ...c }));
+  const oldLedger = [...db_ledger];
   try {
     const { id } = req.params;
     const data = req.body;
     const pIndex = db_payments.findIndex((pay) => pay.id === id);
     if (pIndex !== -1) {
       const oldP = db_payments[pIndex];
-      if (data.referenceNum && data.referenceNum.trim().toLowerCase() !== oldP.referenceNum?.trim().toLowerCase()) {
-        const existing = db_payments.find((pay) => pay.id !== id && pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+      const checkManualRef = data.referenceNum;
+      if (checkManualRef && checkManualRef.trim().toLowerCase() !== oldP.bankRef?.trim().toLowerCase()) {
+        const existing = db_payments.find((pay) => pay.id !== id && pay.bankRef?.trim().toLowerCase() === checkManualRef.trim().toLowerCase());
         if (existing) {
-          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${checkManualRef}' already exists. Please specify a unique reference number.` });
         }
       }
       const oldClientId = oldP.clientId;
       const updatedClientId = data.clientId || oldP.clientId;
       const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
-      oldP.amount = Number(data.amount ?? oldP.amount);
+      const newAmount = Number(data.amount ?? oldP.amount);
+      oldP.amount = newAmount;
       oldP.paymentDate = data.paymentDate || oldP.paymentDate;
       oldP.paymentMode = data.paymentMode || oldP.paymentMode;
-      oldP.referenceNum = data.referenceNum || oldP.referenceNum;
+      oldP.bankRef = checkManualRef || oldP.bankRef;
       oldP.remarks = data.remarks || oldP.remarks;
       oldP.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
       if (updatedClientId !== oldP.clientId) {
@@ -2751,15 +2805,20 @@ app.put("/api/payments/:id", checkPermission("payments", "write"), async (req, r
         oldP.invoiceNumber = targetInv ? targetInv.invoiceNumber : oldP.invoiceNumber;
       }
       const newClientId = oldP.clientId;
-      const newAmount = oldP.amount;
-      await reconcileClientData(oldClientId);
+      const batch = db ? writeBatch(db) : null;
+      if (batch) {
+        batch.set(doc(db, "payments", oldP.id), oldP);
+      }
+      await reconcileClientData(oldClientId, batch);
       if (newClientId !== oldClientId) {
-        await reconcileClientData(newClientId);
+        await reconcileClientData(newClientId, batch);
       }
       const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === oldP.id);
       db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== oldP.id);
-      for (const cb of cashbookToRemove) {
-        await syncStateToFirestore("cashbook", cb.id);
+      if (batch) {
+        for (const cb of cashbookToRemove) {
+          batch.delete(doc(db, "cashbook", cb.id));
+        }
       }
       let cashChange = 0;
       let bankChange = 0;
@@ -2786,13 +2845,20 @@ app.put("/api/payments/:id", checkPermission("payments", "write"), async (req, r
         paymentMode: oldP.paymentMode,
         amount: newAmount,
         referenceId: oldP.id,
+        referenceNum: oldP.referenceNum,
+        bankRef: oldP.bankRef,
         runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
         runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       db_cashbook.unshift(newCashbook);
-      await syncStateToFirestore("cashbook", newCashbook.id);
-      await syncStateToFirestore("payments", oldP.id);
+      if (batch) {
+        batch.set(doc(db, "cashbook", newCashbook.id), newCashbook);
+      }
+      if (batch) {
+        await batch.commit();
+      }
+      saveStateToLocalCache();
       const performerName = req.headers["x-user-name"] || "Karan Sharma";
       oldP.updatedBy = performerName;
       await triggerBusinessNotification(
@@ -2816,24 +2882,44 @@ app.put("/api/payments/:id", checkPermission("payments", "write"), async (req, r
       res.status(404).json({ error: "Payment not found" });
     }
   } catch (err) {
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
     console.error("Critical payment update execution failed: ", err);
     res.status(500).json({ error: `Could not update payment receipt: ${err.message}` });
   }
 });
 app.delete("/api/payments/:id", checkPermission("payments", "delete"), async (req, res) => {
+  const oldPayments = db_payments.map((pay) => ({ ...pay }));
+  const oldCashbook = db_cashbook.map((cb) => ({ ...cb }));
+  const oldInvoices = db_invoices.map((inv) => ({ ...inv }));
+  const oldClients = db_clients.map((c) => ({ ...c }));
+  const oldLedger = [...db_ledger];
   try {
     const { id } = req.params;
     const pIndex = db_payments.findIndex((pay) => pay.id === id);
     if (pIndex !== -1) {
       const p = db_payments[pIndex];
+      const batch = db ? writeBatch(db) : null;
+      if (batch) {
+        batch.delete(doc(db, "payments", id));
+      }
       db_payments.splice(pIndex, 1);
-      await syncStateToFirestore("payments", id);
-      await reconcileClientData(p.clientId);
+      await reconcileClientData(p.clientId, batch);
       const cashbookToRemove = db_cashbook.filter((cb) => cb.referenceId === p.id);
       db_cashbook = db_cashbook.filter((cb) => cb.referenceId !== p.id);
-      for (const cb of cashbookToRemove) {
-        await syncStateToFirestore("cashbook", cb.id);
+      if (batch) {
+        for (const cb of cashbookToRemove) {
+          batch.delete(doc(db, "cashbook", cb.id));
+        }
       }
+      if (batch) {
+        await batch.commit();
+      }
+      saveStateToLocalCache();
       const performerName = req.headers["x-user-name"] || "Karan Sharma";
       await triggerBusinessNotification(
         req,
@@ -2855,6 +2941,12 @@ app.delete("/api/payments/:id", checkPermission("payments", "delete"), async (re
       res.status(404).json({ error: "Payment not found" });
     }
   } catch (err) {
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
     console.error("Critical payment delete execution failed: ", err);
     res.status(500).json({ error: `Could not delete payment receipt: ${err.message}` });
   }
@@ -3783,6 +3875,30 @@ async function bootServer() {
   }
   const isFirebaseFunction = process.env.IS_FIREBASE_FUNCTION === "true";
   if (!isFirebaseFunction) {
+    app.get("/api/proxy-file", async (req, res) => {
+      const fileUrl = req.query.url;
+      if (!fileUrl) {
+        return res.status(400).send("Missing url parameter");
+      }
+      try {
+        const fetch2 = (await import("node-fetch")).default || globalThis.fetch;
+        const response = await fetch2(fileUrl);
+        if (!response.ok) {
+          return res.status(response.status).send("Failed to fetch file");
+        }
+        const contentType = response.headers.get("content-type");
+        if (contentType) {
+          res.setHeader("Content-Type", contentType);
+        }
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        res.send(buffer);
+      } catch (err) {
+        console.error("Proxy error:", err);
+        res.status(500).send("Proxy error");
+      }
+    });
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Smart Accounts Server up and running at http://localhost:${PORT}`);
     });
