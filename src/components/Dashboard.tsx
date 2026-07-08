@@ -126,7 +126,7 @@ export default function Dashboard({
           </div>
           <div className="space-y-3">
             <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Outstanding</span>
-            <h3 className="text-2xl font-bold text-slate-900 font-display">{formatCurrency(metrics.totalOutstanding)}</h3>
+            <h3 className="text-2xl font-bold text-slate-900 font-display">{formatCurrency(metrics.unpaidInvoicesValue)}</h3>
             <div className="flex items-center gap-1.5 text-xs text-rose-500 font-medium">
               <Clock className="w-3.5 h-3.5" />
               <span>{metrics.pendingInvoicesCount} invoices pending</span>

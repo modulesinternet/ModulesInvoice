@@ -89,7 +89,7 @@ export function computeLocalDashboardMetrics(
   const totalRevenue = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalInvoicesValue = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const unpaidInvoicesValue = invoices.reduce((sum, inv) => sum + (inv.dueAmount || 0), 0);
-  const totalOutstanding = clients.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
+  const totalOutstanding = unpaidInvoicesValue;
 
   const totalClientsCount = clients.length;
   const totalInvoicesCount = invoices.length;

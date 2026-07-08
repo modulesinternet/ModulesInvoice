@@ -131,7 +131,7 @@ export default function LedgerModule({
                 <p className="text-[10px] text-slate-500">Consolidated balance sheet exposure across clients</p>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Debited Invoices</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Invoice Value</span>
                 <h3 className="text-2xl font-black font-mono text-white">{formatCurrency(aggregateDebitsAll)}</h3>
                 <p className="text-[10px] text-slate-500">Accumulated billing outlays generated</p>
               </div>
@@ -161,7 +161,7 @@ export default function LedgerModule({
 
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="px-3 py-1.5 bg-white border border-slate-100 rounded-xl text-center">
-                      <span className="text-[8px] text-slate-400 uppercase font-bold block">Debited</span>
+                      <span className="text-[8px] text-slate-400 uppercase font-bold block">Invoice Value</span>
                       <span className="text-xs font-mono font-bold text-slate-700">{formatCurrency(cDebits)}</span>
                     </div>
                     <div className="px-3 py-1.5 bg-white border border-slate-100 rounded-xl text-center">
@@ -184,7 +184,7 @@ export default function LedgerModule({
                         <th className="py-3 px-5">Invoice No</th>
                         <th className="py-3 px-5">Ref / ID</th>
                         <th className="py-3 px-5">Description Particulars</th>
-                        <th className="py-3 px-5 text-right">Debit (+)</th>
+                        <th className="py-3 px-5 text-right">Invoice Value (+)</th>
                         <th className="py-3 px-5 text-right">Credit (-)</th>
                         <th className="py-3 px-5 text-right font-mono">Status</th>
                       </tr>
@@ -247,7 +247,7 @@ export default function LedgerModule({
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-sm">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Debited Invoicing</span>
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Invoice Value</span>
               <h3 className="text-xl font-bold font-mono text-rose-600 mt-2">{formatCurrency(totalDebits)}</h3>
               <p className="text-[10px] text-slate-400 mt-1">Sum of accounts receivable despatches</p>
             </div>
@@ -261,7 +261,7 @@ export default function LedgerModule({
             <div className={`p-5 rounded-2xl border shadow-sm ${closingBalance > 0 ? 'bg-rose-50 border-rose-100 text-rose-900' : 'bg-emerald-50 border-emerald-100 text-emerald-900'}`}>
               <span className="text-[10px] uppercase font-bold block opacity-75">Current Closing Balance Due</span>
               <h3 className="text-xl font-extrabold font-display font-mono mt-2">{formatCurrency(closingBalance)}</h3>
-              <p className="text-[10px] opacity-75 mt-1">{closingBalance > 0 ? 'Outstanding debit due' : 'Ledger cleanly reconciled'}</p>
+              <p className="text-[10px] opacity-75 mt-1">{closingBalance > 0 ? 'Outstanding amount due' : 'Ledger cleanly reconciled'}</p>
             </div>
           </div>
 
@@ -279,7 +279,7 @@ export default function LedgerModule({
                   <th className="py-3 px-5">Invoice No</th>
                   <th className="py-3 px-5">Transactions Code</th>
                   <th className="py-3 px-5">Description Clause</th>
-                  <th className="py-3 px-5 text-right">Debit columns (+)</th>
+                  <th className="py-3 px-5 text-right">Invoice Value (+)</th>
                   <th className="py-3 px-5 text-right">Credit columns (-)</th>
                   <th className="py-3 px-5 text-right font-mono">Closing Net</th>
                 </tr>
