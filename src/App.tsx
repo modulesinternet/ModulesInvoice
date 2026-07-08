@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { api } from './services/api';
 import versionData from '../version.json';
-import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto, getAppVersionInfo, addBackButtonListener, exitApp, triggerLocalNotification, requestNotificationPermission, setupPushNotifications } from './services/mobile';
+import { addNetworkListener, addLifecycleListener, getNetworkStatus, isMobileDevice, shareContent, capturePhoto, getAppVersionInfo, addBackButtonListener, exitApp,  requestNotificationPermission, setupPushNotifications } from './services/mobile';
 import { db as firestoreDb, handleFirestoreError, OperationType } from './services/firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { DEFAULT_SETTINGS } from './lib/demoData';
@@ -68,9 +68,7 @@ import UsersModule from './components/UsersModule';
 import SettingsModule from './components/SettingsModule';
 import PublicInvoiceView from './components/PublicInvoiceView';
 import ProfileModule from './components/ProfileModule';
-import AndroidIncomingCallScreen from './components/AndroidIncomingCallScreen';
 import SplashAnimation from './components/SplashAnimation';
-import NotificationsModule from './components/NotificationsModule';
 import WorkflowModule from './components/WorkflowModule';
 import { playSoundTone, playVoiceAnnouncement } from './services/soundService';
 import { applyThemeColor } from './lib/themeHelper';
@@ -314,20 +312,7 @@ export default function App() {
   const [cashbook, setCashbook] = useState<CashbookEntry[]>(() => getCachedItem('db_cashbook', []));
   const [users, setUsers] = useState<UserProfile[]>(() => getCachedItem('db_users', []));
   const [logs, setLogs] = useState<ActivityLog[]>(() => getCachedItem('db_logs', []));
-  const [notifications, setNotifications] = useState<Notification[]>(() => getCachedItem('db_notifications', []));
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showIncomingCallAlert, setShowIncomingCallAlert] = useState<Notification | null>(null);
-  const [androidIncomingCall, setAndroidIncomingCall] = useState<Payment | Partial<Payment> | null>(null);
-  const triggerIncomingCall = (pay: Partial<Payment>) => {
-    const isAndroid = (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android') || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
-    if (!isAndroid) {
-      console.log("[Call Guard] Suppressed incoming call trigger on non-Android platform as requested.");
-      return;
-    }
-    const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(pay.amount || 0);
-    api.createLog('CALL_TRIGGERED', `VoIP Call notification triggered for payment of ${formattedAmt} received from ${pay.clientName || 'N/A'} via ${pay.paymentMode}.`).catch(() => {});
-    setAndroidIncomingCall(pay);
-  };
+          const triggerIncomingCall = (pay: Partial<Payment>) => { console.log("Call triggers removed.", pay); };
   const [notificationsPageSize, setNotificationsPageSize] = useState(5);
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(() => getCachedItem('db_settings', DEFAULT_SETTINGS));
   const [categories, setCategories] = useState<string[]>(() => getCachedItem('db_categories', []));
@@ -683,8 +668,7 @@ export default function App() {
       setCashbook(cashbookFinal);
       setUsers(usersFinal);
       setLogs(logsFinal);
-      setNotifications(notificationsFinal);
-
+      
       // Save to localStorage cache as well
       localStorage.setItem('db_clients', JSON.stringify(clientsFinal));
       localStorage.setItem('db_products', JSON.stringify(productsFinal));
@@ -866,10 +850,7 @@ export default function App() {
           const data = notification.data;
           
           // Trigger the standard visual local notification banner
-          triggerLocalNotification(
-            notification.title || "Message Received", 
-            notification.body || "New update registered."
-          );
+          
 
           // If it is a payment, invoice, or cashbook alert, launch the VoIP ring screen immediately
           if (data && (
@@ -1002,7 +983,7 @@ export default function App() {
                 ? `Invoice ${inv.invoiceNumber} created for ${inv.clientName} worth ${formattedAmt}.`
                 : `Invoice ${inv.invoiceNumber} for ${inv.clientName} updated to status: ${inv.status.replace('_', ' ').toUpperCase()}.`;
               
-              triggerLocalNotification(title, body);
+              
             }
           }
         }
@@ -1044,15 +1025,12 @@ export default function App() {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry))
                      .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
       
-      const seenPaymentRefs = new Set<string>();
+      const seenSignatures = new Set<string>();
       const dedupedList: LedgerEntry[] = [];
       list.forEach(item => {
-        if (item.referenceType === 'payment' && item.referenceId) {
-          if (!seenPaymentRefs.has(item.referenceId)) {
-            seenPaymentRefs.add(item.referenceId);
-            dedupedList.push(item);
-          }
-        } else {
+        const sig = `${item.clientId}_${item.type}_${item.amount}_${item.date}_${item.referenceId || ''}_${item.invoiceNumber || ''}_${item.referenceNum || ''}`;
+        if (!seenSignatures.has(sig)) {
+          seenSignatures.add(sig);
           dedupedList.push(item);
         }
       });
@@ -1113,12 +1091,7 @@ export default function App() {
                        n.userId === 'demo-admin'
                      ))
                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setNotifications(prev => {
-        const nextStr = JSON.stringify(list);
-        if (JSON.stringify(prev) === nextStr) return prev;
-        localStorage.setItem('db_notifications', nextStr);
-        return list;
-      });
+      
 
       // Populate session set on first snapshot to prevent historical triggers
       if (isFirstNotificationsSnapshot) {
@@ -1197,8 +1170,7 @@ export default function App() {
               if (businessSettings?.incomingCallAlertEnabled) {
                 const allowedModules = ['invoices', 'cashbook', 'payments'];
                 if (allowedModules.includes(docData.module || '')) {
-                  setShowIncomingCallAlert(docData);
-                  
+                                    
                   try {
                     const amtMatched = docData.message.match(/₹[\d,]+/);
                     const amountStr = amtMatched ? amtMatched[0].replace(/[^0-9]/g, '') : "0";
@@ -1226,9 +1198,6 @@ export default function App() {
               }
 
               // Trigger real system pull-down local notification banner on Android
-              triggerLocalNotification(docData.title, docData.message).catch(err => {
-                console.warn("[Local Notif Fail] Suppressed banner error:", err);
-              });
             }
           }
         }
@@ -2447,84 +2416,7 @@ export default function App() {
 
           {/* Notification Alert System for Mobile */}
           <div className="relative">
-            <button 
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none"
-              title="View System Notifications"
-            >
-              <Bell className="w-4 h-4 text-slate-600" />
-              {notifications.filter(n => !n.isRead).length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full animate-pulse"></span>
-              )}
-            </button>
-
-            {showNotifications && (
-              <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left animate-fade-in divide-y divide-slate-100 font-sans">
-                <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-slate-100">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
-                  {notifications.some(n => !n.isRead) && (
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await api.markAllNotificationsRead();
-                          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-                          showToast("Assigned read clearance to logs", "success");
-                        } catch (e: any) {
-                          showToast(`Clearance failed: ${e.message || e}`, "error");
-                        }
-                      }}
-                      className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
-                    >
-                      Clear Unread
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                  {notifications.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-xs font-sans">
-                      No active network notices.
-                    </div>
-                  ) : (
-                    notifications.slice(0, 5).map((item) => (
-                      <div 
-                        key={item.id} 
-                        onClick={async () => {
-                          if (!item.isRead) {
-                            try {
-                              await api.markNotificationRead(item.id);
-                              setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
-                              showToast("Notification marked as read", "success");
-                            } catch (err: any) {
-                              console.error("Failed to mark individual notification as read:", err);
-                              showToast("Failed to mark notice as read", "error");
-                            }
-                          }
-                        }}
-                        className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70 cursor-pointer hover:bg-slate-100'}`}
-                        title={item.isRead ? "Operational Alert" : "Click to mark as read"}
-                      >
-                        <div className="flex items-center gap-1.5 justify-between">
-                          <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
-                          <span className="text-[8px] font-mono text-slate-400 shrink-0">{new Date(item.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 leading-relaxed block">{item.message}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
-                  <button 
-                    onClick={() => {
-                      setActiveTab('notifications');
-                      setShowNotifications(false);
-                    }}
-                    className="w-full text-center py-2 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-105 active:scale-98 text-[10px] font-bold uppercase text-indigo-650 text-indigo-600 cursor-pointer transition"
-                  >
-                    View All Notifications
-                  </button>
-                </div>
-              </div>
-            )}
+            
           </div>
 
           {/* Professional badge avatar on right edge of mobile top header */}
@@ -2735,68 +2627,7 @@ export default function App() {
 
             {/* Notification alert count with interactive dropdown */}
             <div className="relative">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 border border-[#E5E7EB] hover:bg-slate-50 rounded-xl cursor-pointer block bg-white transition relative focus:outline-none"
-                title="View System Notifications"
-              >
-                <Bell className="w-4 h-4 text-slate-600" />
-                {notifications.filter(n => !n.isRead).length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FF3366] border-2 border-white rounded-full animate-pulse"></span>
-                )}
-              </button>
-
-              {showNotifications && (
-                <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-left animate-fade-in divide-y divide-slate-100 font-sans">
-                  <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-slate-100">
-                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Operational Alerts ({notifications.length})</span>
-                  {notifications.some(n => !n.isRead) && (
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await api.markAllNotificationsRead();
-                          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-                          showToast("Assigned read clearance to logs", "success");
-                        } catch (e: any) {
-                          showToast(`Clearance failed: ${e.message || e}`, "error");
-                        }
-                      }}
-                      className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer"
-                    >
-                      Clear Unread
-                    </button>
-                  )}
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {notifications.length === 0 ? (
-                      <div className="p-8 text-center text-slate-400 text-xs">
-                        No active network notices.
-                      </div>
-                    ) : (
-                      notifications.slice(0, 5).map((item) => (
-                        <div key={item.id} className={`p-3 flex flex-col gap-1 transition ${item.isRead ? 'bg-white' : 'bg-slate-50/70'}`}>
-                          <div className="flex items-center gap-1.5 justify-between">
-                            <span className="text-[10px] font-bold text-slate-800 block truncate max-w-[190px]">{item.title}</span>
-                            <span className="text-[8px] font-mono text-slate-400 shrink-0">{new Date(item.createdAt).toLocaleDateString()}</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 leading-relaxed block">{item.message}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-2 bg-slate-50 flex items-center justify-center border-t border-slate-100">
-                    <button 
-                      onClick={() => {
-                        setActiveTab('notifications');
-                        setShowNotifications(false);
-                      }}
-                      className="w-full text-center py-2 px-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-105 text-[10px] font-bold uppercase text-indigo-600 cursor-pointer transition"
-                    >
-                      View All Notifications
-                    </button>
-                  </div>
-                </div>
-              )}
+              
             </div>
 
             {/* Logged in User Profile badge indicator */}
@@ -2997,10 +2828,8 @@ export default function App() {
                   onImportBackup={handleImportBackup}
                   onTriggerDemoCall={triggerIncomingCall}
                   onTriggerVoipDiagnostic={(notification) => {
-                    setShowIncomingCallAlert(notification);
-                    setTimeout(() => {
-                      setShowIncomingCallAlert(null);
-                    }, 3000);
+                                        setTimeout(() => {
+                                          }, 3000);
                   }}
                 />
               )}
@@ -3022,38 +2851,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'notifications' && (
-                <NotificationsModule 
-                  notifications={notifications}
-                  onMarkRead={async (id) => {
-                    try {
-                      await api.markNotificationRead(id);
-                      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-                      showToast("Notification marked as read", "success");
-                    } catch (e: any) {
-                      showToast(`Action failed: ${e.message || e}`, "error");
-                    }
-                  }}
-                  onMarkAllRead={async () => {
-                    try {
-                      await api.markAllNotificationsRead();
-                      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-                      showToast("All notifications marked as read", "success");
-                    } catch (e: any) {
-                      showToast(`Action failed: ${e.message || e}`, "error");
-                    }
-                  }}
-                  onDelete={async (id) => {
-                    try {
-                      await api.deleteNotification(id);
-                      setNotifications(prev => prev.filter(n => n.id !== id));
-                      showToast("Notification deleted successfully", "success");
-                    } catch (e: any) {
-                      showToast(`Action failed: ${e.message || e}`, "error");
-                    }
-                  }}
-                />
-              )}
+              
 
               {activeTab === 'workflow' && (
                 <WorkflowModule 
@@ -3132,126 +2930,9 @@ export default function App() {
         </div>
       )}
 
-      {showIncomingCallAlert && (
-        <div className="fixed inset-0 bg-[#0B0D19]/96 z-[9999] flex flex-col justify-between p-8 text-white font-sans animate-fade-in no-print overflow-hidden select-none">
-          {/* Pulsing wave background lines */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-            <span className="absolute w-[200px] h-[200px] border border-emerald-500 rounded-full animate-ping"></span>
-            <span className="absolute w-[400px] h-[400px] border border-indigo-500 rounded-full animate-ping delay-700"></span>
-            <span className="absolute w-[600px] h-[600px] border border-cyan-500 rounded-full animate-ping delay-1000"></span>
-          </div>
+      
 
-          {/* Top header indicator */}
-          <div className="w-full flex flex-col items-center pt-8 space-y-2 z-10 text-center">
-            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-              🔔 HIGH-PRIORITY TRANSACTION DETECTED
-            </span>
-            <h2 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 font-mono">
-              iModules Secure Billing Network
-            </h2>
-          </div>
-
-          {/* Main content display details */}
-          <div className="w-full flex flex-col items-center space-y-7 z-10 text-center max-w-md mx-auto">
-            {/* Glowing ring checkmark */}
-            <div className="w-24 h-24 bg-gradient-to-br from-emerald-500/25 to-cyan-500/25 border-2 border-emerald-400/50 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)] animate-bounce">
-              <CheckCircle className="w-12 h-12 text-emerald-450 text-emerald-400" />
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                {showIncomingCallAlert.module === 'invoices' 
-                  ? 'Invoice Registered Successfully' 
-                  : showIncomingCallAlert.module === 'cashbook' 
-                    ? 'Cashbook Entry Synced Successfully' 
-                    : 'Payments Entry Synced Successfully'}
-              </p>
-              <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white font-display drop-shadow-[0_4px_12px_rgba(255,255,255,0.08)]">
-                {showIncomingCallAlert.message.match(/₹[\d,]+/)?.[0] || 'Transaction Alert'}
-              </h1>
-            </div>
-
-            <div className="w-full bg-white/[0.03] border border-white/[0.06] backdrop-blur-md rounded-3xl p-5 text-left space-y-3.5 shadow-xl">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase block block leading-none mb-1">
-                  {showIncomingCallAlert.module === 'invoices'
-                    ? 'Invoice Reference / Client'
-                    : showIncomingCallAlert.module === 'cashbook'
-                      ? 'Transaction Details'
-                      : 'Corporate Payee client'}
-                </span>
-                <span className="text-sm font-bold text-slate-100 leading-snug">
-                  {showIncomingCallAlert.module === 'invoices'
-                    ? ((showIncomingCallAlert.message.match(/Invoice\s+(#[^\s]+)/)?.[1] || '') + ' ' + (showIncomingCallAlert.message.match(/for\s+([^\svia\.]+)/)?.[1] || '').trim()).trim() || showIncomingCallAlert.message
-                    : showIncomingCallAlert.module === 'cashbook'
-                      ? showIncomingCallAlert.message.match(/\(([^\)]+)\)/)?.[1] || showIncomingCallAlert.message
-                      : showIncomingCallAlert.message.match(/from\s+([^\svia\.]+)/)?.[1]?.trim() || 'N/A'}
-                </span>
-              </div>
-              <div className="h-px bg-white/[0.06]" />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block block leading-none mb-1">Receipt Mode</span>
-                  <span className="text-xs font-bold text-indigo-300">
-                    ⚡ {showIncomingCallAlert.module === 'invoices'
-                      ? 'GST Billing'
-                      : showIncomingCallAlert.module === 'cashbook'
-                        ? 'Cashbook Ledger'
-                        : showIncomingCallAlert.message.match(/via\s+([^\s\.]+)/)?.[1]?.trim() || 'Real-time'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none mb-1">Audit stamp</span>
-                  <span className="text-xs font-bold text-slate-100">
-                    {new Date(showIncomingCallAlert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sliding interactive buttons at bottom */}
-          <div className="w-full flex flex-col sm:flex-row items-center gap-4 max-w-sm mx-auto pb-8 z-10">
-            <button
-              onClick={() => {
-                setActiveTab('ledger');
-                setShowIncomingCallAlert(null);
-              }}
-              className="w-full py-4 bg-white text-[#0B0D19] hover:bg-slate-50 active:scale-98 font-bold text-xs rounded-2xl cursor-pointer shadow-xl transition flex items-center justify-center gap-2"
-            >
-              <BookOpen className="w-4 h-4 text-slate-700" />
-              <span>Go to Accounts Ledger</span>
-            </button>
-            
-            <button
-              onClick={() => setShowIncomingCallAlert(null)}
-              className="w-full py-3.5 text-xs bg-white/10 hover:bg-white/15 border border-white/10 active:scale-98 font-bold text-white rounded-2xl cursor-pointer transition text-center"
-            >
-              Dismiss Secure Alert
-            </button>
-          </div>
-        </div>
-      )}
-
-      {androidIncomingCall && (
-        <AndroidIncomingCallScreen
-          payment={androidIncomingCall}
-          settings={businessSettings}
-          onAccept={() => {
-            const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(androidIncomingCall.amount);
-            api.createLog('CALL_ACCEPTED', `Operator accepted VoIP Call notification for payment of ${formattedAmt} received from ${androidIncomingCall.clientName || 'N/A'} via ${androidIncomingCall.paymentMode}.`).catch(() => {});
-            
-            setActiveTab('payments');
-            setAndroidIncomingCall(null);
-          }}
-          onDecline={() => {
-            const formattedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(androidIncomingCall.amount);
-            api.createLog('CALL_DECLINED', `Operator declined VoIP Call notification for payment of ${formattedAmt} received from ${androidIncomingCall.clientName || 'N/A'} via ${androidIncomingCall.paymentMode}.`).catch(() => {});
-            setAndroidIncomingCall(null);
-          }}
-        />
-      )}
+      
 
       </motion.div>
 

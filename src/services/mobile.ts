@@ -261,10 +261,7 @@ export const setupPushNotifications = async (
         onNotificationReceived(notification);
       } else {
         // Display/trigger standard local overlay notification for better visual parity in foreground
-        triggerLocalNotification(
-          notification.title || "Message Received", 
-          notification.body || "New update registered."
-        );
+        
       }
     });
 
@@ -304,71 +301,7 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 const recentNotifications = new Map<string, number>();
 
-export const triggerLocalNotification = async (title: string, body: string): Promise<void> => {
-  const isAndroidApp = (typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android') || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent));
-  if (!isAndroidApp) {
-    console.log("[Notification Guard] Suppressed local notification on non-Android platform as requested.");
-    return;
-  }
-  try {
-    const now = Date.now();
-    const signature = `${title.trim()}:${body.trim()}`;
-    
-    // De-duplicate matching notifications within an 8-second sliding time window
-    const lastTime = recentNotifications.get(signature);
-    if (lastTime && now - lastTime < 8000) {
-      console.log(`[Notification De-duplicator] Suppressed duplicate notification: "${title}" - "${body}"`);
-      return;
-    }
-    recentNotifications.set(signature, now);
-
-    // Keep memory clean
-    if (recentNotifications.size > 50) {
-      for (const [sig, time] of recentNotifications.entries()) {
-        if (now - time > 10000) {
-          recentNotifications.delete(sig);
-        }
-      }
-    }
-
-    // Create channel for high priority alerts if on Android (Crucial for newer Android OS versions)
-    try {
-      await LocalNotifications.createChannel({
-        id: 'high_priority_local',
-        name: 'High Priority Alerts',
-        description: 'Emergency notifications and critical billing status alerts',
-        importance: 5, // IMPORTANCE_HIGH / MAX
-        visibility: 1, // VISIBILITY_PUBLIC
-        sound: undefined,
-        vibration: true,
-        lights: true,
-        lightColor: '#3B82F6'
-      });
-    } catch (channelErr) {
-      console.error("Failed to create high priority LocalNotification channel:", channelErr);
-    }
-
-    const granted = await requestNotificationPermission();
-    if (granted) {
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title,
-            body,
-            id: Math.floor(Math.random() * 100000),
-            schedule: { at: new Date(Date.now() + 500) }, // fire almost instantly
-            channelId: 'high_priority_local', // Bound to our high priority channel
-            sound: undefined,
-            actionTypeId: "",
-            extra: null
-          }
-        ]
-      });
-    }
-  } catch (err) {
-    console.warn("Notification trigger failed: ", err);
-  }
-};
+export const triggerLocalNotification = async () => {};
 
 export interface NativeServiceHealth {
   isAndroidNative: boolean;

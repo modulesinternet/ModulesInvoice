@@ -32,7 +32,7 @@ import { storage } from '../services/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SOUND_TONES, playSoundTone } from '../services/soundService';
 import { Volume2, Speaker, Smartphone, MessageSquare, BellRing, Activity, Radio, Check, X } from 'lucide-react';
-import { triggerLocalNotification, requestNotificationPermission, checkNativeServiceHealth, NativeServiceHealth, pingVoipBridge, VoipBridgeStatus } from '../services/mobile';
+import {  requestNotificationPermission, checkNativeServiceHealth, NativeServiceHealth, pingVoipBridge, VoipBridgeStatus } from '../services/mobile';
 
 const formatReleaseDateTime = (isoString?: string) => {
   if (!isoString) return '';
@@ -350,10 +350,7 @@ export default function SettingsModule({
         return;
       }
       setTestNotificationStatus('Triggering test notification...');
-      await triggerLocalNotification(
-        "🔔 System Notification Test",
-        "Permission active! If you see this, real-time push and billing alerts are fully enabled on this device."
-      );
+      
       setTestNotificationStatus('Test notification triggered!');
       setTimeout(() => setTestNotificationStatus(''), 5000);
     } catch (error: any) {

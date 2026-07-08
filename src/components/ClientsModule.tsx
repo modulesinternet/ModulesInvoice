@@ -389,6 +389,18 @@ export default function ClientsModule({
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Opening Outstanding Balance *</label>
+                  <input 
+                    type="number"
+                    required
+                    placeholder="e.g. 0 or any initial pending balance"
+                    value={outstandingBalance}
+                    onChange={(e) => setOutstandingBalance(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none font-mono text-slate-800"
+                  />
+                </div>
+
                 {/* Form Actions */}
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
                   <button 

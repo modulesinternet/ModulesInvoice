@@ -261,25 +261,31 @@ try {
 
 // Active multicast FCM notification delivery engine
 async function sendFcmNotification(title: string, body: string, extraData: Record<string, string> = {}) {
-  console.log(`[FCM BROADCAST] Broadcast request initiated: "${title}" - "${body}"`);
+  console.log(`[FCM BROADCAST] Broadcast request initiated: "${title}"`);
   
   if (db_fcm_tokens.length === 0) {
     console.log("[FCM BROADCAST] Active recipient registration dictionary is empty. Skipping notification delivery.");
     return;
   }
 
-  const tokens = Array.from(new Set(db_fcm_tokens.map(t => t.deviceToken))).filter(Boolean);
+  // ONLY send to Android platforms
+  const tokens = Array.from(new Set(
+    db_fcm_tokens
+      .filter(t => t.platform === 'android')
+      .map(t => t.deviceToken)
+  )).filter(Boolean);
+
   if (tokens.length === 0) {
-    console.log("[FCM BROADCAST] No valid FCM registration keys extracted. Skipping.");
+    console.log("[FCM BROADCAST] No valid Android FCM registration keys extracted. Skipping.");
     return;
   }
 
   if (!isFcmSupported) {
-    console.log(`[FCM SIMULATED DELIVERY] Simulated multicast delivery to ${tokens.length} device(s) complete.`);
+    console.log(`[FCM SIMULATED DELIVERY] Simulated Android multicast delivery to ${tokens.length} device(s) complete.`);
     return;
   }
 
-  console.log(`[FCM BROADCAST] dispatching message packet to ${tokens.length} active recipient tokens.`);
+  console.log(`[FCM BROADCAST] dispatching message packet to ${tokens.length} active Android recipient tokens.`);
 
   const messagePayload = {
     notification: {
@@ -289,69 +295,40 @@ async function sendFcmNotification(title: string, body: string, extraData: Recor
     android: {
       priority: 'high' as const,
       notification: {
-        sound: 'default', // Standard fallback sound ensures it works on all devices without raw resource errors
-        channelId: 'high_priority_notifications', // Use high-priority notification channel
-        visibility: 'public' as const, // Render details securely on lockscreen
-        notificationPriority: 'PRIORITY_MAX' as const, // Show heads-up banner with max urgency above general notifications
-        defaultSound: true, // Auto-play system sound
-        defaultVibrateTimings: true, // Auto-vibrate
-        defaultLightSettings: true, // Enable indicator LEDs
+        sound: 'default',
+        channelId: 'high_priority_notifications',
+        visibility: 'public' as const,
+        notificationPriority: 'PRIORITY_MAX' as const,
+        defaultSound: true,
+        defaultVibrateTimings: true,
+        defaultLightSettings: true,
       }
     },
-    apns: {
-      headers: {
-        'apns-priority': '10', // Wake device instantly from sleep state
-      },
-      payload: {
-        aps: {
-          alert: {
-            title,
-            body,
-          },
-          sound: 'default',
-          'content-available': 1, // Let background handlers receive payload
-        },
-      },
-    },
-    webpush: {
-      headers: {
-        Urgency: 'high',
-      },
-      notification: {
-        title,
-        body,
-        icon: '/assets/favicon.ico',
-        badge: '/assets/favicon.ico',
-        requireInteraction: true,
-      },
-    },
-    data: {
-      ...extraData,
-      title,
-      body,
-      timestamp: new Date().toISOString()
-    }
+    tokens,
+    data: extraData,
   };
 
-  for (const token of tokens) {
-    try {
-      await admin.messaging().send({
-        token,
-        ...messagePayload
-      });
-      console.log(`[FCM SUCCESS] Delivered push message to device endpoint: ${token.substring(0, 15)}...`);
-    } catch (err: any) {
-      console.warn(`[FCM FAILED] Failed delivery on endpoint: ${token.substring(0, 15)}... Error:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered' || err.message?.includes('not-registered')) {
-        console.log(`[FCM MAINTENANCE] Evicting stale/expired device key: ${token.substring(0, 15)}...`);
-        const index = db_fcm_tokens.findIndex(t => t.deviceToken === token);
+  try {
+    const response = await admin.messaging().sendEachForMulticast(messagePayload);
+    console.log(`[FCM SUCCESS] Delivery complete. Success: ${response.successCount}, Failures: ${response.failureCount}`);
+    
+    // Clean up expired tokens
+    if (response.failureCount > 0) {
+      const failedTokens = response.responses
+        .map((resp, idx) => !resp.success ? tokens[idx] : null)
+        .filter(Boolean) as string[];
+      
+      for (const expiredToken of failedTokens) {
+        const index = db_fcm_tokens.findIndex(t => t.deviceToken === expiredToken);
         if (index !== -1) {
-          const expiredTokenId = db_fcm_tokens[index].tokenId;
+          const expiredTokenId = db_fcm_tokens[index].id;
           db_fcm_tokens.splice(index, 1);
           await syncStateToFirestore('fcmTokens', expiredTokenId).catch(() => null);
         }
       }
     }
+  } catch (error: any) {
+    console.error("[FCM FATAL] Multicast engine failure:", error.message);
   }
 }
 
@@ -1058,16 +1035,13 @@ function getCleanLedger(): LedgerEntry[] {
     return true;
   });
 
-  // Deduplicate entries referencing the same payment
-  const seenPaymentRefs = new Set<string>();
+  // Deduplicate entries based on transaction signature
+  const seenSignatures = new Set<string>();
   const dedupedLedger: LedgerEntry[] = [];
   tempLedger.forEach(led => {
-    if (led.referenceType === 'payment' && led.referenceId) {
-      if (!seenPaymentRefs.has(led.referenceId)) {
-        seenPaymentRefs.add(led.referenceId);
-        dedupedLedger.push(led);
-      }
-    } else {
+    const sig = `${led.clientId}_${led.type}_${led.amount}_${led.date}_${led.referenceId || ''}_${led.invoiceNumber || ''}_${led.referenceNum || ''}`;
+    if (!seenSignatures.has(sig)) {
+      seenSignatures.add(sig);
       dedupedLedger.push(led);
     }
   });

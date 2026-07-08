@@ -875,8 +875,9 @@ export default function InvoicesModule({
   };
 
   // PDF Export Engine via html2canvas plus jsPDF with reliable pure vector fallback
-  const handleDownloadPDF = async (action: 'download' | 'print' = 'download') => {
-    if (!printableRef.current) return;
+  const handleDownloadPDF = async (action: 'download' | 'print' = 'download', invoiceToDownload?: Invoice) => {
+    const selectedInvoice = invoiceToDownload || (selectedInvoiceRaw ? (invoices.find(inv => inv.id === selectedInvoiceRaw.id) || selectedInvoiceRaw) : null);
+    if (!selectedInvoice) return;
     
     // Temporarily intercept console logging to suppress verbose "oklch" parsing warnings from html2canvas
     const originalConsoleError = console.error;
@@ -906,6 +907,24 @@ export default function InvoicesModule({
     };
 
     try {
+      let qrCodeToUse = qrCodeDataUrl;
+      const useCust = businessSettings?.useCustomQrCode && businessSettings?.customQrUrl;
+      if (useCust) {
+        qrCodeToUse = businessSettings.customQrUrl;
+      } else if (!qrCodeToUse || invoiceToDownload) {
+        const qrText = `${window.location.origin}/public/invoice/${encodeURIComponent(selectedInvoice.invoiceNumber)}`;
+        try {
+          qrCodeToUse = await new Promise<string>((resolve, reject) => {
+            QRCode.toDataURL(qrText, { margin: 1, width: 250 }, (err, url) => {
+              if (err) reject(err);
+              else resolve(url);
+            });
+          });
+        } catch (qrErr) {
+          console.warn("Could not generate QR code for PDF on the fly:", qrErr);
+        }
+      }
+
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -1504,7 +1523,7 @@ export default function InvoicesModule({
           }
         }
         
-        const hasQrCode = selectedInvoice && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeDataUrl;
+        const hasQrCode = selectedInvoice && (businessSettings?.showInvoiceQrCode ?? true) !== false && qrCodeToUse;
         
         if (hasQrCode) {
           try {
@@ -1523,7 +1542,7 @@ export default function InvoicesModule({
             const qrSize = Math.max(18, Math.min(26, leftBlocksSize * 0.65));
             const imgQrX = currentLeftX + (leftBlocksSize - qrSize) / 2;
             const imgQrY = (footerSpaceY + 6) + (leftBlocksSize - qrSize) / 2 - 3;
-            pdf.addImage(qrCodeDataUrl, 'PNG', imgQrX, imgQrY, qrSize, qrSize);
+            pdf.addImage(qrCodeToUse, 'PNG', imgQrX, imgQrY, qrSize, qrSize);
             
             // Draw centered Click to Verify at the bottom
             pdf.setFont('helvetica', 'bold');
@@ -1583,74 +1602,20 @@ export default function InvoicesModule({
         if (!isPdf) {
           try {
             pdf.addPage();
-            const challanEl = document.getElementById('challan-attachment-section');
-            let addedWithCanvas = false;
-            
-            if (challanEl) {
-              try {
-                // Capture the full styled HTML/JSX delivery challan page
-                const challanCanvas = await html2canvas(challanEl, {
-                  scale: 2,
-                  useCORS: true,
-                  logging: false,
-                  allowTaint: false,
-                  width: 794,
-                  windowWidth: 794,
-                  onclone: (clonedDoc) => {
-                    replaceOklchInStyleTags(clonedDoc);
-                    const clonedChallan = clonedDoc.getElementById('challan-attachment-section');
-                    if (clonedChallan) {
-                      clonedChallan.style.setProperty('width', '794px', 'important');
-                      clonedChallan.style.setProperty('height', '1123px', 'important');
-                      clonedChallan.style.boxShadow = 'none';
-                      clonedChallan.style.border = 'none';
-                      clonedChallan.style.borderRadius = '0';
-                      clonedChallan.style.margin = '0';
-                      clonedChallan.style.padding = '38px', 'important';
-                    }
-                  }
-                });
-                
-                if (challanCanvas) {
-                  const challanImgData = challanCanvas.toDataURL('image/png');
-                  const imgWidth = 210; // A4 standard width in mm
-                  const pageHeight = 297; // A4 standard height in mm
-                  let renderedWidth = imgWidth;
-                  let renderedHeight = (challanCanvas.height * imgWidth) / challanCanvas.width;
-                  
-                  if (renderedHeight > pageHeight - 12) {
-                    const scale = (pageHeight - 12) / renderedHeight;
-                    renderedWidth = renderedWidth * scale;
-                    renderedHeight = pageHeight - 12;
-                  }
-                  
-                  const xOffset = (imgWidth - renderedWidth) / 2;
-                  const yOffset = 6;
-                  pdf.addImage(challanImgData, 'PNG', xOffset, yOffset, renderedWidth, renderedHeight);
-                  addedWithCanvas = true;
-                }
-              } catch (canvasErr) {
-                console.warn("Challan canvas capture failed:", canvasErr);
-              }
-            }
-            
-            if (!addedWithCanvas) {
-              try {
-                // Direct image addition fallback for raw attached proof screen
-                const imgFormat = selectedInvoice.challanUrl.includes('png') ? 'PNG' : 'JPEG';
-                pdf.addImage(selectedInvoice.challanUrl, imgFormat, 10, 10, 190, 277);
-                addedWithCanvas = true;
-              } catch (imgErr) {
-                console.warn("Direct image addition failed:", imgErr);
-              }
-            }
+            // Direct image addition is much more reliable and robust than capturing the DOM element,
+            // especially on mobile devices or when the element is not mounted.
+            const b64Challan = await toBase64(selectedInvoice.challanUrl);
+            const imgFormat = selectedInvoice.challanUrl.includes('png') || selectedInvoice.challanUrl.startsWith('data:image/png') || b64Challan.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            pdf.addImage(b64Challan, imgFormat, 10, 10, 190, 277, undefined, 'FAST');
           } catch (challanRenderErr) {
             console.warn("Could not append clear challan image to invoice PDF:", challanRenderErr);
           }
         }
       }
 
-      const safeInvoiceName = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
+      const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
+      const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
+      const safeInvoiceName = `${propertyName}-${invoiceNum}`;
       
       const generatedArrayBuffer = pdf.output('arraybuffer');
       let finalBytes = new Uint8Array(generatedArrayBuffer);
@@ -1673,7 +1638,7 @@ export default function InvoicesModule({
         let pdfUrlToShare = blobUrl;
         if (selectedInvoice && onUpdateInvoice) {
           try {
-            const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${safeInvoiceName}.pdf`);
+            const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/${safeInvoiceName}.pdf`);
             await uploadBytes(fileRef, finalBlob);
             const publicUrl = await getDownloadURL(fileRef);
             await onUpdateInvoice(selectedInvoice.id, { pdfUrl: publicUrl });
@@ -1686,7 +1651,7 @@ export default function InvoicesModule({
         // Trigger native share sheet which handles download, print, cloud print, and send beautifully
         const { shareContent } = await import('../services/mobile');
         await shareContent(
-          `Invoice_${safeInvoiceName}`,
+          safeInvoiceName,
           `Please find Invoice ${selectedInvoice?.invoiceNumber || ''} for ${selectedInvoice?.clientName || ''}.`,
           pdfUrlToShare
         );
@@ -1727,14 +1692,14 @@ export default function InvoicesModule({
       // Download PDF
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `Invoice_${safeInvoiceName}.pdf`;
+      link.download = `${safeInvoiceName}.pdf`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
 
       // Parallelly stream the generated PDF as a backup blob to Firebase Cloud Storage
       if (selectedInvoice && onUpdateInvoice) {
         try {
-          const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/Invoice_${safeInvoiceName}.pdf`);
+          const fileRef = storageRef(storage, `invoices/${selectedInvoice.id}/${safeInvoiceName}.pdf`);
           await uploadBytes(fileRef, finalBlob);
           const pdfUrl = await getDownloadURL(fileRef);
           await onUpdateInvoice(selectedInvoice.id, { pdfUrl });
@@ -1761,14 +1726,33 @@ export default function InvoicesModule({
   };
 
   const handleSendEmailSimulation = () => {
-    alert(`Success: Interactive dispatch complete. Copies generated and forwarded to ${emailTo}`);
+    const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
+    const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
+    const safeInvoiceName = `${propertyName}-${invoiceNum}.pdf`;
+    alert(`Success: Interactive dispatch complete. Standardized attachment "${safeInvoiceName}" successfully generated and forwarded to ${emailTo}`);
     setIsEmailModalOpen(false);
+  };
+
+  const getInvoiceDisplayStatus = (inv: Invoice) => {
+    if (inv.status === 'paid') return 'paid';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isPastDue = new Date(inv.dueDate).getTime() < today.getTime();
+    if (isPastDue) return 'overdue';
+    return inv.status;
   };
 
   const filteredInvoices = invoices.filter(inv => {
     const matchesSearch = inv.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = statusFilter === 'All' || inv.status === statusFilter;
+    let matchesFilter = false;
+    if (statusFilter === 'All') {
+      matchesFilter = true;
+    } else if (statusFilter === 'overdue') {
+      matchesFilter = getInvoiceDisplayStatus(inv) === 'overdue';
+    } else {
+      matchesFilter = inv.status === statusFilter;
+    }
     return matchesSearch && matchesFilter;
   });
 
@@ -1825,16 +1809,16 @@ export default function InvoicesModule({
         // DETAIL VIEWER FOR SINGLE INVOICE
         <div className="space-y-6">
           {/* Controls Bar */}
-          <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 no-print" id="invoice-actions-panel">
+          <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 no-print" id="invoice-actions-panel">
             <button 
               onClick={() => setSelectedInvoice(null)}
-              className="text-slate-500 hover:text-slate-800 text-xs font-semibold"
+              className="text-slate-500 hover:text-slate-800 text-xs font-semibold self-start lg:self-auto"
             >
               &larr; Back to Invoices ledger
             </button>
             
             {/* Template Swappers */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 justify-center lg:justify-start">
               <span className="text-[10px] uppercase font-extrabold text-slate-400">Design Theme:</span>
               <button 
                 onClick={() => setInvoiceTemplate('navy')}
@@ -1857,7 +1841,7 @@ export default function InvoicesModule({
             </div>
 
             {/* Print/Download triggers */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 justify-center lg:justify-end w-full lg:w-auto">
               {canWrite && (
                 <button 
                   onClick={() => {
@@ -1926,9 +1910,9 @@ export default function InvoicesModule({
                   onClick={async () => {
                     if (confirm(`Remove the attached delivery challan '${selectedInvoice.challanName || ""}'?`)) {
                       await onUpdateInvoice(selectedInvoice.id, {
-                        challanUrl: undefined,
-                        challanName: undefined,
-                        challanType: undefined
+                        challanUrl: null,
+                        challanName: null,
+                        challanType: null
                       });
                     }
                   }}
@@ -2072,13 +2056,18 @@ export default function InvoicesModule({
                 ) : null}
               </div>
 
-              <div className="text-right space-y-1.5">
+              <div className="text-left sm:text-right space-y-1.5 w-full sm:w-auto">
                 <span className={`text-xl uppercase font-black tracking-widest block font-sans ${activeTheme?.accentText || 'text-[#5B21FF]'}`}>TAX INVOICE</span>
                 <h1 className="text-sm font-mono font-bold text-slate-700 mt-0.5">{selectedInvoice.invoiceNumber}</h1>
-                <div className="flex items-center justify-end gap-1.5 mt-1 relative">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(selectedInvoice.status)} uppercase`}>
-                    {selectedInvoice.status.replace('_', ' ')}
-                  </span>
+                <div className="flex items-center justify-start sm:justify-end gap-1.5 mt-1 relative">
+                  {(() => {
+                    const displayStatus = getInvoiceDisplayStatus(selectedInvoice);
+                    return (
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(displayStatus)} uppercase`}>
+                        {displayStatus.replace('_', ' ')}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="text-xs text-slate-500 font-mono pt-3 space-y-0.5">
                   <p>Invoiced Date: <b>{formatDisplayDate(selectedInvoice.date)}</b></p>
@@ -2466,14 +2455,14 @@ export default function InvoicesModule({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
-                    <th className="py-3 px-5">Invoice Reference</th>
-                    <th className="py-3 px-5">Company Name</th>
-                    <th className="py-3 px-5">raised date</th>
-                    <th className="py-3 px-5">due date</th>
-                    <th className="py-3 px-5 text-right">Invoice value</th>
-                    <th className="py-3 px-5 text-right">Outstanding</th>
-                    <th className="py-3 px-5 text-center">reconciliation status</th>
-                    <th className="py-3 px-5 text-center">Operations</th>
+                    <th className="py-3 px-5">INVOICE REFERENCE</th>
+                    <th className="py-3 px-5">COMPANY NAME</th>
+                    <th className="py-3 px-5">RAISED DATE</th>
+                    <th className="py-3 px-5">DUE DATE</th>
+                    <th className="py-3 px-5 text-right">INVOICE VALUE</th>
+                    <th className="py-3 px-5 text-right">OUTSTANDING</th>
+                    <th className="py-3 px-5 text-center">RECONCILIATION STATUS</th>
+                    <th className="py-3 px-5 text-center">OPERATIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -2500,115 +2489,129 @@ export default function InvoicesModule({
                         )}
                       </td>
                       <td className="py-4 px-5 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(inv.status)} uppercase`}>
-                          {inv.status.replace('_', ' ')}
-                        </span>
+                        {(() => {
+                          const displayStatus = getInvoiceDisplayStatus(inv);
+                          return (
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(displayStatus)} uppercase`}>
+                              {displayStatus.replace('_', ' ')}
+                            </span>
+                          );
+                        })()}
                       </td>
-                      <td className="py-4 px-5 text-center flex items-center justify-center gap-1.5 pt-3">
-                        <button 
-                          onClick={() => handleSelectInvoice(inv)}
-                          className="px-2 py-1 border border-slate-200 hover:border-[#5B21FF] rounded-lg text-slate-600 hover:text-[#5B21FF] font-semibold hover:bg-purple-50 transition"
-                        >
-                          Review Bill
-                        </button>
-                        {inv.status !== 'paid' && inv.dueAmount > 0 && canWrite && (
+                      <td className="py-4 px-5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button 
-                            onClick={() => handleOpenSettleModal(inv)}
-                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm transition flex items-center gap-1 hover:scale-[1.02]"
-                            title="Settle Invoice Payment (Full/Partial)"
+                            onClick={() => handleSelectInvoice(inv)}
+                            className="px-2 py-1 border border-slate-200 hover:border-[#5B21FF] rounded-lg text-slate-600 hover:text-[#5B21FF] font-semibold hover:bg-purple-50 transition"
                           >
-                            Settle
+                            Review Bill
                           </button>
-                        )}
-                        {canWrite && (
-                          <button
-                            onClick={() => {
-                              setIsEditing(true);
-                              setEditingInvoiceId(inv.id);
-                              setClientId(inv.clientId);
-                              setDate(inv.date);
-                              setDueDate(inv.dueDate);
-                              setNotes(inv.notes || '');
-                              setDiscount(String(inv.discount || 0));
-                              setInvoiceNumber(inv.invoiceNumber);
-                              
-                              const mappedItems = inv.items.map(item => {
-                                const prod = products.find(p => p.id === item.productId || p.name === item.name);
-                                return {
-                                  productId: prod ? prod.id : '',
-                                  qty: item.qty,
-                                  price: item.price
-                                };
-                              }).filter(v => v.productId !== '');
-                              
-                              setAddedItems(mappedItems);
-                              setIsCreateOpen(true);
-                            }}
-                            className="p-1 px-1.5 border border-slate-250 border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"
-                            title="Edit Invoice / Bill"
+                          <button 
+                            onClick={() => handleDownloadPDF('download', inv)}
+                            className="p-1 border border-slate-200 hover:border-[#5B21FF] hover:text-[#5B21FF] rounded-lg text-slate-500 hover:bg-purple-50 transition flex items-center justify-center"
+                            title="Download PDF Invoice"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Download className="w-4 h-4" />
                           </button>
-                        )}
-                        {canWrite && (
-                          <div className="inline-block relative">
-                            <label 
-                              className="p-1 px-1.5 border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition cursor-pointer flex items-center justify-center inline-flex"
-                              title={inv.challanUrl ? `Update Challan (Attached: ${inv.challanName || 'Yes'})` : "Attach Delivery Challan"}
+                          {inv.status !== 'paid' && inv.dueAmount > 0 && canWrite && (
+                            <button 
+                              onClick={() => handleOpenSettleModal(inv)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm transition flex items-center gap-1 hover:scale-[1.02]"
+                              title="Settle Invoice Payment (Full/Partial)"
                             >
-                              <Paperclip className={`w-3.5 h-3.5 ${inv.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
-                              <input 
-                                type="file" 
-                                accept="image/*,application/pdf" 
-                                className="hidden" 
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = async () => {
-                                      const base64String = reader.result as string;
-                                      await onUpdateInvoice(inv.id, { 
-                                        challanUrl: base64String, 
-                                        challanName: file.name,
-                                        challanType: file.type
-                                      });
-                                    };
-                                    reader.readAsDataURL(file);
-                                  }
-                                }}
-                              />
-                            </label>
-                          </div>
-                        )}
-                        {canWrite && inv.challanUrl && (
-                          <button
-                            onClick={async () => {
-                              if (confirm(`Remove the attached delivery challan '${inv.challanName || ""}'?`)) {
-                                await onUpdateInvoice(inv.id, {
-                                  challanUrl: undefined,
-                                  challanName: undefined,
-                                  challanType: undefined
-                                });
-                              }
-                            }}
-                            className="p-1 px-1.5 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition"
-                            title={`Remove Challan: ${inv.challanName || ""}`}
-                          >
-                            <X className="w-3.5 h-3.5 text-amber-600 font-bold" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button 
-                            onClick={async () => {
-                              if (confirm(`Confirm removing invoice ${inv.invoiceNumber}? Associated ledger and outstandings will reverse.`)) {
-                                await onDeleteInvoice(inv.id);
-                              }
-                            }}
-                            className="p-1 px-1.5 border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                              Settle
+                            </button>
+                          )}
+                          {canWrite && (
+                            <button
+                              onClick={() => {
+                                setIsEditing(true);
+                                setEditingInvoiceId(inv.id);
+                                setClientId(inv.clientId);
+                                setDate(inv.date);
+                                setDueDate(inv.dueDate);
+                                setNotes(inv.notes || '');
+                                setDiscount(String(inv.discount || 0));
+                                setInvoiceNumber(inv.invoiceNumber);
+                                
+                                const mappedItems = inv.items.map(item => {
+                                  const prod = products.find(p => p.id === item.productId || p.name === item.name);
+                                  return {
+                                    productId: prod ? prod.id : '',
+                                    qty: item.qty,
+                                    price: item.price
+                                  };
+                                }).filter(v => v.productId !== '');
+                                
+                                setAddedItems(mappedItems);
+                                setIsCreateOpen(true);
+                              }}
+                              className="p-1 px-1.5 border border-slate-250 border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"
+                              title="Edit Invoice / Bill"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canWrite && (
+                            <div className="inline-block relative">
+                              <label 
+                                className="p-1 px-1.5 border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition cursor-pointer flex items-center justify-center inline-flex"
+                                title={inv.challanUrl ? `Update Challan (Attached: ${inv.challanName || 'Yes'})` : "Attach Delivery Challan"}
+                              >
+                                <Paperclip className={`w-3.5 h-3.5 ${inv.challanUrl ? 'text-emerald-500 font-bold' : 'text-slate-400'}`} />
+                                <input 
+                                  type="file" 
+                                  accept="image/*,application/pdf" 
+                                  className="hidden" 
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = async () => {
+                                        const base64String = reader.result as string;
+                                        await onUpdateInvoice(inv.id, { 
+                                          challanUrl: base64String, 
+                                          challanName: file.name,
+                                          challanType: file.type
+                                        });
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                          {canWrite && inv.challanUrl && (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Remove the attached delivery challan '${inv.challanName || ""}'?`)) {
+                                  await onUpdateInvoice(inv.id, {
+                                    challanUrl: null,
+                                    challanName: null,
+                                    challanType: null
+                                  });
+                                }
+                              }}
+                              className="p-1 px-1.5 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                              title={`Remove Challan: ${inv.challanName || ""}`}
+                            >
+                              <X className="w-3.5 h-3.5 text-amber-600 font-bold" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button 
+                              onClick={async () => {
+                                if (confirm(`Confirm removing invoice ${inv.invoiceNumber}? Associated ledger and outstandings will reverse.`)) {
+                                  await onDeleteInvoice(inv.id);
+                                }
+                              }}
+                              className="p-1 px-1.5 border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2943,7 +2946,11 @@ export default function InvoicesModule({
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none"
                 />
               </div>
-              <p className="text-[11px] text-slate-400 italic">This dispatch bundles a print optimized version of Invoice {selectedInvoice?.invoiceNumber} along with payment instructions.</p>
+              <p className="text-[11px] text-slate-400 italic">This dispatch bundles the standardized PDF document "<b>{(() => {
+                const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
+                const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
+                return `${propertyName}-${invoiceNum}.pdf`;
+              })()}</b>" along with payment instructions.</p>
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button 
                   onClick={() => setIsEmailModalOpen(false)}

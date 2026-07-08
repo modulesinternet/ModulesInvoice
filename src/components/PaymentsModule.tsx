@@ -437,6 +437,14 @@ export default function PaymentsModule({
                       )}
                     </span>
                   </div>
+                  <div className="flex justify-between items-center font-sans pt-1.5 border-t border-rose-150 border-rose-200">
+                    <span className="text-slate-600 font-medium">Registry Outstanding Balance:</span>
+                    <span className="font-mono font-black text-rose-700 text-sm">
+                      {formatCurrency(
+                        clients.find(c => c.id === clientId)?.outstandingBalance || 0
+                      )}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -610,6 +618,14 @@ export default function PaymentsModule({
                         invoices
                           .filter(inv => inv.clientId === clientId && inv.status !== 'paid')
                           .reduce((s, inv) => s + inv.dueAmount, 0)
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center font-sans pt-1.5 border-t border-rose-150 border-rose-200">
+                    <span className="text-slate-600 font-medium">Registry Outstanding Balance:</span>
+                    <span className="font-mono font-black text-rose-700 text-sm">
+                      {formatCurrency(
+                        clients.find(c => c.id === clientId)?.outstandingBalance || 0
                       )}
                     </span>
                   </div>
