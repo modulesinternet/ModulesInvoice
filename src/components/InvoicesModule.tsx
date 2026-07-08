@@ -41,30 +41,43 @@ async function toBase64(url: string): Promise<string> {
   if (!url) return '';
   if (url.startsWith('data:')) return url;
   try {
-    const isFirebase = url.includes('firebasestorage.googleapis.com');
-    const fetchUrl = isFirebase ? `/api/proxy-file?url=${encodeURIComponent(url)}` : url;
-    
-    const res = await fetch(fetchUrl);
-    const arrayBuffer = await res.arrayBuffer();
-    
-    // Convert ArrayBuffer to Base64
-    let binary = '';
-    const bytes = new Uint8Array(arrayBuffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    const b64 = window.btoa(binary);
-    
-    // Determine mime type from URL or fallback
-    let mime = 'image/jpeg';
-    if (url.toLowerCase().includes('.png')) mime = 'image/png';
-    else if (url.toLowerCase().includes('.pdf')) mime = 'application/pdf';
-    
-    return `data:${mime};base64,${b64}`;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   } catch (err) {
-    console.warn("Fetch base64 failed, returning original url:", err);
-    return url;
+    console.warn("Fetch base64 failed, trying canvas load for url:", url, err);
+    try {
+      return await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/png'));
+              return;
+            }
+            reject(new Error('no canvas context'));
+          } catch (canvasErr) {
+            reject(canvasErr);
+          }
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    } catch (canvasErr) {
+      console.warn("Could not pre-convert URL to base64, continuing with original:", canvasErr);
+      return url;
+    }
   }
 }
 
@@ -77,27 +90,31 @@ async function toBase64Rounded(url: string, roundedRatio: number = 0.12): Promis
       const img = new Image();
       img.onload = () => {
         try {
+          const w = img.naturalWidth || img.width || 300;
+          const h = img.naturalHeight || img.height || 300;
           const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = w;
+          canvas.height = h;
           const ctx = canvas.getContext('2d');
-          if (!ctx) return resolve(rawBase64);
-          
-          ctx.beginPath();
-          const radius = Math.min(img.width, img.height) * roundedRatio;
-          ctx.moveTo(radius, 0);
-          ctx.lineTo(img.width - radius, 0);
-          ctx.quadraticCurveTo(img.width, 0, img.width, radius);
-          ctx.lineTo(img.width, img.height - radius);
-          ctx.quadraticCurveTo(img.width, img.height, img.width - radius, img.height);
-          ctx.lineTo(radius, img.height);
-          ctx.quadraticCurveTo(0, img.height, 0, img.height - radius);
-          ctx.lineTo(0, radius);
-          ctx.quadraticCurveTo(0, 0, radius, 0);
-          ctx.closePath();
-          ctx.clip();
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
+          if (ctx) {
+            ctx.beginPath();
+            const r = Math.min(w, h) * roundedRatio;
+            ctx.moveTo(r, 0);
+            ctx.lineTo(w - r, 0);
+            ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r);
+            ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h);
+            ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/png'));
+          } else {
+            resolve(rawBase64);
+          }
         } catch (e) {
           resolve(rawBase64);
         }
@@ -131,9 +148,7 @@ async function mergePdfAttachments(invoicePdfArrayBuffer: ArrayBuffer, challanUr
         bytes[i] = binaryString.charCodeAt(i);
       }
     } else {
-      const isFirebase = challanUrl.includes('firebasestorage.googleapis.com');
-      const fetchUrl = isFirebase ? `/api/proxy-file?url=${encodeURIComponent(challanUrl)}` : challanUrl;
-      const response = await fetch(fetchUrl);
+      const response = await fetch(challanUrl);
       const arrayBuffer = await response.arrayBuffer();
       bytes = new Uint8Array(arrayBuffer);
     }
@@ -1598,7 +1613,7 @@ export default function InvoicesModule({
         }
       }
 
-      const propertyName = ((selectedInvoice?.clientName || businessSettings?.companyName || "Client") + "").replace(/\s+/g, "");
+      const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
       const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
       const safeInvoiceName = `${propertyName}-${invoiceNum}`;
       
@@ -1711,7 +1726,7 @@ export default function InvoicesModule({
   };
 
   const handleSendEmailSimulation = () => {
-    const propertyName = ((selectedInvoice?.clientName || businessSettings?.companyName || "Client") + "").replace(/\s+/g, "");
+    const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
     const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
     const safeInvoiceName = `${propertyName}-${invoiceNum}.pdf`;
     alert(`Success: Interactive dispatch complete. Standardized attachment "${safeInvoiceName}" successfully generated and forwarded to ${emailTo}`);
@@ -2932,7 +2947,7 @@ export default function InvoicesModule({
                 />
               </div>
               <p className="text-[11px] text-slate-400 italic">This dispatch bundles the standardized PDF document "<b>{(() => {
-                const propertyName = ((selectedInvoice?.clientName || businessSettings?.companyName || "Client") + "").replace(/\s+/g, "");
+                const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
                 const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
                 return `${propertyName}-${invoiceNum}.pdf`;
               })()}</b>" along with payment instructions.</p>

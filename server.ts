@@ -4033,34 +4033,7 @@ async function bootServer() {
   const isFirebaseFunction = process.env.IS_FIREBASE_FUNCTION === "true";
   if (!isFirebaseFunction) {
     // Listen on all network namespaces for seamless container routing
-    
-app.get('/api/proxy-file', async (req: Request, res: Response) => {
-  const fileUrl = req.query.url as string;
-  if (!fileUrl) {
-    return res.status(400).send('Missing url parameter');
-  }
-  try {
-    const fetch = (await import('node-fetch')).default || globalThis.fetch;
-    const response = await fetch(fileUrl);
-    if (!response.ok) {
-      return res.status(response.status).send('Failed to fetch file');
-    }
-    const contentType = response.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    }
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    res.send(buffer);
-  } catch (err: any) {
-    console.error('Proxy error:', err);
-    res.status(500).send('Proxy error');
-  }
-});
-
-  app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Smart Accounts Server up and running at http://localhost:${PORT}`);
     });
   } else {
