@@ -1925,13 +1925,11 @@ export default function InvoicesModule({
                 <button
                   onClick={async () => {
                     if (confirm(`Remove the attached delivery challan '${selectedInvoice.challanName || ""}'?`)) {
-                      const updates = {
-                        challanUrl: null,
-                        challanName: null,
-                        challanType: null
-                      };
-                      await onUpdateInvoice(selectedInvoice.id, updates as any);
-                      setSelectedInvoice(prev => prev ? { ...prev, ...updates } : null);
+                      await onUpdateInvoice(selectedInvoice.id, {
+                        challanUrl: undefined,
+                        challanName: undefined,
+                        challanType: undefined
+                      });
                     }
                   }}
                   className="p-2 border border-amber-200 rounded-xl bg-white text-amber-600 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1.5 transition"
@@ -2469,9 +2467,9 @@ export default function InvoicesModule({
                 <thead>
                   <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
                     <th className="py-3 px-5">Invoice Reference</th>
-                    <th className="py-3 px-5">Company Target</th>
+                    <th className="py-3 px-5">Company Name</th>
                     <th className="py-3 px-5">raised date</th>
-                    <th className="py-3 px-5">maturity due</th>
+                    <th className="py-3 px-5">due date</th>
                     <th className="py-3 px-5 text-right">Invoice value</th>
                     <th className="py-3 px-5 text-right">Outstanding</th>
                     <th className="py-3 px-5 text-center">reconciliation status</th>
@@ -2586,15 +2584,11 @@ export default function InvoicesModule({
                           <button
                             onClick={async () => {
                               if (confirm(`Remove the attached delivery challan '${inv.challanName || ""}'?`)) {
-                                const updates = {
-                                  challanUrl: null,
-                                  challanName: null,
-                                  challanType: null
-                                };
-                                await onUpdateInvoice(inv.id, updates as any);
-                                if (selectedInvoiceRaw && selectedInvoiceRaw.id === inv.id) {
-                                  setSelectedInvoice(prev => prev ? { ...prev, ...updates } : null);
-                                }
+                                await onUpdateInvoice(inv.id, {
+                                  challanUrl: undefined,
+                                  challanName: undefined,
+                                  challanType: undefined
+                                });
                               }
                             }}
                             className="p-1 px-1.5 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition"

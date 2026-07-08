@@ -207,7 +207,10 @@ export default function LedgerModule({
                         <tr key={row.id} className="hover:bg-slate-50/10">
                           <td className="py-2.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
                           <td className="py-2.5 px-5 font-mono font-bold text-indigo-600 uppercase">{row.invoiceNumber || 'N/A'}</td>
-                          <td className="py-2.5 px-5 font-mono font-bold text-slate-700 uppercase">{row.referenceId}</td>
+                          <td className="py-2.5 px-5 font-mono font-bold text-slate-700 uppercase">
+                            <div>{row.referenceNum || row.referenceId}</div>
+                            {row.bankRef && <div className="text-[10px] text-indigo-600 font-sans font-bold normal-case mt-0.5">Ref ID: {row.bankRef}</div>}
+                          </td>
                           <td className="py-2.5 px-5 text-slate-605 text-slate-600 font-medium">{row.description}</td>
                           <td className="py-2.5 px-5 text-right font-mono font-bold text-rose-600">
                             {row.type === 'debit' ? formatCurrency(row.amount) : '-'}
@@ -301,7 +304,10 @@ export default function LedgerModule({
                   <tr key={row.id} className="hover:bg-slate-50/20">
                     <td className="py-3.5 px-5 text-slate-500 font-mono">{formatDisplayDate(row.date)}</td>
                     <td className="py-3.5 px-5 font-mono font-bold text-indigo-600 uppercase">{row.invoiceNumber || 'N/A'}</td>
-                    <td className="py-3.5 px-5 font-mono font-bold text-slate-800 uppercase">{row.referenceId}</td>
+                    <td className="py-3.5 px-5 font-mono font-bold text-slate-800 uppercase">
+                      <div>{row.referenceNum || row.referenceId}</div>
+                      {row.bankRef && <div className="text-[10px] text-indigo-600 font-sans font-bold normal-case mt-0.5">Ref ID: {row.bankRef}</div>}
+                    </td>
                     <td className="py-3.5 px-5 text-slate-600 font-medium">{row.description}</td>
                     <td className="py-3.5 px-5 text-right font-mono font-bold text-rose-600">
                       {row.type === 'debit' ? formatCurrency(row.amount) : '-'}

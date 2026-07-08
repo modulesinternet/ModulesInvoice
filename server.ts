@@ -53,8 +53,6 @@ import {
   deleteDoc, 
   collection, 
   writeBatch, 
-  query,
-  where,
   getDocFromServer,
   onSnapshot 
 } from 'firebase/firestore';
@@ -804,166 +802,163 @@ async function runBackgroundFirestoreSync(topic: string, id?: string) {
 }
 
 // Exhaustive data reconciliation and ledger rebuilding routine for a client
-async function reconcileClientData(clientId: string) {
-  if (!clientId) return;
+async function reconcileClientData(clientId: string, batch?: any) {
+  // 1. Find client
+  const clientIndex = db_clients.findIndex(c => c.id === clientId);
+  if (clientIndex === -1) return;
+  const client = db_clients[clientIndex];
 
-  try {
-    // 1. Find client
-    const clientIndex = db_clients.findIndex(c => c.id === clientId);
-    if (clientIndex === -1) return;
-    const client = db_clients[clientIndex];
+  // 2. Filter client's invoices and payments
+  const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId);
+  const clientPayments = db_payments.filter(p => p.clientId === clientId);
 
-    // 2. Filter client's invoices and payments
-    const clientInvoices = db_invoices.filter(inv => inv.clientId === clientId);
-    const clientPayments = db_payments.filter(p => p.clientId === clientId);
-
-    // 3. Reconcile each invoice's paidAmount and dueAmount based on linked payments
-    for (let i = 0; i < db_invoices.length; i++) {
-      const inv = db_invoices[i];
-      if (inv.clientId === clientId) {
-        const paymentsForInv = clientPayments.filter(p => p.invoiceId === inv.id);
-        const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-        const calculatedDue = Number(inv.total || 0) - calculatedPaid;
-        
-        let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
-        if (calculatedDue <= 0) {
-          calculatedStatus = 'paid';
-        } else if (calculatedPaid > 0) {
-          calculatedStatus = 'partially_paid';
-        }
-
-        if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
-          db_invoices[i] = {
-            ...inv,
-            paidAmount: calculatedPaid,
-            dueAmount: calculatedDue,
-            status: calculatedStatus
-          };
-          if (db) {
-            await withTimeout(setDoc(doc(db, 'invoices', inv.id), db_invoices[i]), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
-          }
-        }
-      }
-    }
-
-    // 4. Update Client's aggregate outstanding balance (allows negative/credit)
-    const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-    const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const calculatedBalance = totalInvoiced - totalPaid;
-
-    if (client.outstandingBalance !== calculatedBalance) {
-      db_clients[clientIndex] = {
-        ...client,
-        outstandingBalance: calculatedBalance
-      };
-      if (db) {
-        await withTimeout(setDoc(doc(db, 'clients', clientId), db_clients[clientIndex]), 10000).catch((e) => console.warn(`[Reconcile] Firestore client sync failed: ${e.message}`));
-      }
-    }
-
-    // 5. Rebuild ledger entries locally first to avoid race conditions and partial states
-    const transactions: ({ type: 'invoice'; id: string; date: string; invoiceNumber: string; total: number; createdAt: string } | { type: 'payment'; id: string; paymentDate: string; referenceNum: string; invoiceNumber: string; paymentMode: string; amount: number; createdAt: string })[] = [];
+  // 3. Reconcile invoice payments
+  for (const inv of clientInvoices) {
+    const paymentsForInv = clientPayments.filter(p => p.invoiceId === inv.id);
+    const calculatedPaid = paymentsForInv.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const calculatedDue = Math.max(0, Number(inv.total || 0) - calculatedPaid);
     
-    clientInvoices.forEach(inv => {
-      transactions.push({
-        type: 'invoice',
-        id: inv.id,
-        date: inv.date || new Date().toISOString().split('T')[0],
-        invoiceNumber: inv.invoiceNumber,
-        total: Number(inv.total || 0),
-        createdAt: inv.createdAt || new Date().toISOString()
-      });
-    });
+    let calculatedStatus: 'unpaid' | 'partially_paid' | 'paid' = 'unpaid';
+    if (calculatedDue === 0) {
+      calculatedStatus = 'paid';
+    } else if (calculatedPaid > 0) {
+      calculatedStatus = 'partially_paid';
+    }
 
-    clientPayments.forEach(p => {
-      transactions.push({
-        type: 'payment',
-        id: p.id,
-        paymentDate: p.paymentDate || new Date().toISOString().split('T')[0],
-        referenceNum: p.referenceNum || '',
-        invoiceNumber: p.invoiceNumber || '',
-        paymentMode: p.paymentMode || '',
-        amount: Number(p.amount || 0),
-        createdAt: p.createdAt || new Date().toISOString()
-      });
-    });
-
-    // Sort chronologically by transaction date, then by creation time
-    transactions.sort((a, b) => {
-      const dateA = new Date(a.type === 'invoice' ? a.date : a.paymentDate).getTime();
-      const dateB = new Date(b.type === 'invoice' ? b.date : b.paymentDate).getTime();
-      if (dateA !== dateB) return dateA - dateB;
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      return timeA - timeB;
-    });
-
-    const newLedgerEntries: LedgerEntry[] = [];
-    let runningBal = 0;
-    for (const tx of transactions) {
-      if (tx.type === 'invoice') {
-        runningBal += tx.total;
-        newLedgerEntries.push({
-          id: `led-inv-${tx.id}`,
-          clientId,
-          clientName: db_clients[clientIndex].name,
-          date: tx.date,
-          description: `Invoice Raised: ${tx.invoiceNumber}`,
-          type: 'debit',
-          amount: tx.total,
-          runningBalance: runningBal,
-          referenceType: 'invoice',
-          referenceId: tx.id,
-          invoiceNumber: tx.invoiceNumber,
-          createdAt: tx.createdAt
-        });
-      } else {
-        runningBal -= tx.amount;
-        newLedgerEntries.push({
-          id: `led-pay-${tx.id}`,
-          clientId,
-          clientName: db_clients[clientIndex].name,
-          date: tx.paymentDate,
-          description: `Payment Receipt Ref ${tx.referenceNum} against ${tx.invoiceNumber || 'Account'} via ${tx.paymentMode}`,
-          type: 'credit',
-          amount: tx.amount,
-          runningBalance: runningBal,
-          referenceType: 'payment',
-          referenceId: tx.id,
-          invoiceNumber: tx.invoiceNumber,
-          createdAt: tx.createdAt
-        });
+    if (inv.paidAmount !== calculatedPaid || inv.dueAmount !== calculatedDue || inv.status !== calculatedStatus) {
+      inv.paidAmount = calculatedPaid;
+      inv.dueAmount = calculatedDue;
+      inv.status = calculatedStatus;
+      if (batch) {
+        batch.set(doc(db, 'invoices', inv.id), inv);
+      } else if (db) {
+        await withTimeout(setDoc(doc(db, 'invoices', inv.id), inv), 10000).catch((e) => console.warn(`[Reconcile] Firestore invoice sync failed: ${e.message}`));
       }
     }
-
-    // Atomic update of in-memory db_ledger
-    const otherLedgers = db_ledger.filter(l => l.clientId !== clientId);
-    db_ledger = [...otherLedgers, ...newLedgerEntries];
-
-    // Atomic update of Firestore using writeBatch
-    if (db) {
-      // Find all existing ledger records for this client in Firestore to delete them
-      const q = query(collection(db, 'ledger'), where('clientId', '==', clientId));
-      const snap = await getDocs(q);
-      
-      const batch = writeBatch(db);
-      snap.docs.forEach(docSnap => batch.delete(docSnap.ref));
-      
-      // Add new ones
-      newLedgerEntries.forEach(entry => {
-        batch.set(doc(db, 'ledger', entry.id), entry);
-      });
-      
-      await withTimeout(batch.commit(), 30000).catch(e => {
-        console.error(`[Reconcile] Failed to commit ledger batch for client ${clientId}:`, e);
-      });
-    }
-
-    saveStateToLocalCache();
-    console.log(`[Reconcile] System successfully rebuilt ledger for client ${clientId} (${newLedgerEntries.length} entries)`);
-  } catch (err) {
-    console.error(`[Reconcile] CRITICAL RECONCILIATION ERROR for client ${clientId}:`, err);
   }
+
+  // 4. Calculate client outstanding balance
+  const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+  const totalPaid = clientPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const calculatedBalance = Math.max(0, totalInvoiced - totalPaid);
+
+  if (client.outstandingBalance !== calculatedBalance) {
+    client.outstandingBalance = calculatedBalance;
+    if (batch) {
+      batch.set(doc(db, 'clients', client.id), client);
+    } else if (db) {
+      await withTimeout(setDoc(doc(db, 'clients', client.id), client), 10000).catch((e) => console.warn(`[Reconcile] Firestore client sync failed: ${e.message}`));
+    }
+  }
+
+  // 5. Rebuild ledger entries for this client
+  // First, find all existing ledger entries for this client and delete them from Firestore & db_ledger
+  const existingLedgers = db_ledger.filter(l => l.clientId === clientId);
+  db_ledger = db_ledger.filter(l => l.clientId !== clientId);
+  if (batch) {
+    for (const led of existingLedgers) {
+      batch.delete(doc(db, 'ledger', led.id));
+    }
+  } else if (db) {
+    for (const led of existingLedgers) {
+      await withTimeout(deleteDoc(doc(db, 'ledger', led.id)), 10000).catch(() => null);
+    }
+  }
+
+  // Next, sort transactions chronologically to generate correct running balance
+  const transactions: ({ type: 'invoice'; id: string; date: string; invoiceNumber: string; total: number; createdAt: string } | { type: 'payment'; id: string; paymentDate: string; referenceNum: string; bankRef: string; invoiceNumber: string; paymentMode: string; amount: number; createdAt: string })[] = [];
+
+  clientInvoices.forEach(inv => {
+    transactions.push({
+      type: 'invoice',
+      id: inv.id,
+      date: inv.date || new Date().toISOString().split('T')[0],
+      invoiceNumber: inv.invoiceNumber,
+      total: Number(inv.total || 0),
+      createdAt: inv.createdAt || new Date().toISOString()
+    });
+  });
+
+  clientPayments.forEach(p => {
+    transactions.push({
+      type: 'payment',
+      id: p.id,
+      paymentDate: p.paymentDate || new Date().toISOString().split('T')[0],
+      referenceNum: p.referenceNum || '',
+      bankRef: (p as any).bankRef || '',
+      invoiceNumber: p.invoiceNumber || '',
+      paymentMode: p.paymentMode || '',
+      amount: Number(p.amount || 0),
+      createdAt: p.createdAt || new Date().toISOString()
+    });
+  });
+
+  // Sort chronologically by transaction date, then by creation time
+  transactions.sort((a, b) => {
+    const dateA = new Date(a.type === 'invoice' ? a.date : a.paymentDate).getTime();
+    const dateB = new Date(b.type === 'invoice' ? b.date : b.paymentDate).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return timeA - timeB;
+  });
+
+  // Generate new ledger entries with correct running balance
+  let runningBal = 0;
+  for (let idx = 0; idx < transactions.length; idx++) {
+    const tx = transactions[idx];
+    if (tx.type === 'invoice') {
+      runningBal += tx.total;
+      const newLed: LedgerEntry = {
+        id: `led-inv-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.date,
+        description: `Invoice Raised: ${tx.invoiceNumber}`,
+        type: 'debit',
+        amount: tx.total,
+        runningBalance: runningBal,
+        referenceType: 'invoice',
+        referenceId: tx.id,
+        invoiceNumber: tx.invoiceNumber,
+        referenceNum: tx.invoiceNumber,
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (batch) {
+        batch.set(doc(db, 'ledger', newLed.id), newLed);
+      } else if (db) {
+        await withTimeout(setDoc(doc(db, 'ledger', newLed.id), newLed), 10000).catch((e) => console.warn(`[Reconcile] Firestore ledger invoice sync failed: ${e.message}`));
+      }
+    } else {
+      runningBal -= tx.amount;
+      const newLed: LedgerEntry = {
+        id: `led-pay-${tx.id}`,
+        clientId,
+        clientName: client.name,
+        date: tx.paymentDate,
+        description: `Payment Receipt Ref ${tx.referenceNum} against ${tx.invoiceNumber} via ${tx.paymentMode}`,
+        type: 'credit',
+        amount: tx.amount,
+        runningBalance: runningBal,
+        referenceType: 'payment',
+        referenceId: tx.id,
+        invoiceNumber: tx.invoiceNumber || '',
+        referenceNum: tx.referenceNum || '',
+        bankRef: (tx as any).bankRef || '',
+        createdAt: tx.createdAt
+      };
+      db_ledger.push(newLed);
+      if (batch) {
+        batch.set(doc(db, 'ledger', newLed.id), newLed);
+      } else if (db) {
+        await withTimeout(setDoc(doc(db, 'ledger', newLed.id), newLed), 10000).catch((e) => console.warn(`[Reconcile] Firestore ledger payment sync failed: ${e.message}`));
+      }
+    }
+  }
+
+  // Commit changes to local cache
+  saveStateToLocalCache();
 }
 
 // Exhaustive global self-healing audit and sweep of ledger/client balances
@@ -1016,6 +1011,30 @@ async function performSelfHealingAudit() {
           console.log(`[Self-Healing] Successfully deleted orphan ledger document ${id} from Firestore.`);
         } catch (e) {
           console.error(`[Self-Healing] Failed to delete orphan ledger document ${id} from Firestore:`, e);
+        }
+      }
+    }
+  }
+
+  // 3. Update existing automated cashbook entries to have referenceNum and bankRef from their payments
+  for (const cb of db_cashbook) {
+    if (cb.referenceId && (cb.referenceId.startsWith('pay-') || cb.referenceId.startsWith('cb-pay-'))) {
+      const payId = cb.referenceId.replace('cb-pay-', '');
+      const payment = db_payments.find(p => p.id === payId);
+      if (payment) {
+        let changed = false;
+        if (payment.referenceNum && cb.referenceNum !== payment.referenceNum) {
+          console.log(`[Self-Healing] Healing cashbook entry ${cb.id} with payment reference ${payment.referenceNum}`);
+          cb.referenceNum = payment.referenceNum;
+          changed = true;
+        }
+        if (payment.bankRef && cb.bankRef !== payment.bankRef) {
+          console.log(`[Self-Healing] Healing cashbook entry ${cb.id} with bankRef ${payment.bankRef}`);
+          cb.bankRef = payment.bankRef;
+          changed = true;
+        }
+        if (changed && db) {
+          await withTimeout(setDoc(doc(db, 'cashbook', cb.id), cb), 10000).catch((e) => console.warn(`[Self-Healing] Cashbook document sync failed: ${e.message}`));
         }
       }
     }
@@ -1901,10 +1920,10 @@ app.get('/api/dashboard', checkPermission('dashboard', 'read'), (req: Request, r
     .slice(0, 5);
 
   // Liquidity mode splits
-  const upiCollected = db_payments.filter(p => p.paymentMode === 'UPI' || p.paymentMode === 'UPI/Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
+  const upiCollected = db_payments.filter(p => p.paymentMode === 'UPI').reduce((sum, p) => sum + p.amount, 0);
   const bankCollected = db_payments.filter(p => p.paymentMode === 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
   const cashCollected = db_payments.filter(p => p.paymentMode === 'Cash').reduce((sum, p) => sum + p.amount, 0);
-  const otherCollected = db_payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer' && p.paymentMode !== 'UPI/Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
+  const otherCollected = db_payments.filter(p => p.paymentMode !== 'Cash' && p.paymentMode !== 'UPI' && p.paymentMode !== 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
 
   // Compute cashbook running balances sequentially for true current operating liquidity
   const sortedCashbook = [...db_cashbook].sort((a, b) => {
@@ -2549,46 +2568,93 @@ app.post('/api/quotations/:id/convert', checkPermission('quotations', 'write'), 
 });
 
 // 6. Payments Receipt Module & Triple Sync Bookkeeping Engine
+function getNextPaymentReference(): string {
+  let maxNum = 0;
+  for (const pay of db_payments) {
+    if (pay.referenceNum && pay.referenceNum.startsWith('PAYRD-')) {
+      const numStr = pay.referenceNum.substring(6);
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  let nextNum = maxNum + 1;
+  let referenceNum = `PAYRD-${nextNum}`;
+  while (db_payments.some(pay => pay.referenceNum === referenceNum)) {
+    nextNum++;
+    referenceNum = `PAYRD-${nextNum}`;
+  }
+  return referenceNum;
+}
+
 app.get('/api/payments', checkPermission('payments', 'read'), (req: Request, res: Response) => {
   res.json(db_payments);
 });
 
 app.post('/api/payments', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
+  const oldPayments = db_payments.map(pay => ({ ...pay }));
+  const oldCashbook = db_cashbook.map(cb => ({ ...cb }));
+  const oldInvoices = db_invoices.map(inv => ({ ...inv }));
+  const oldClients = db_clients.map(c => ({ ...c }));
+  const oldLedger = [...db_ledger];
+
   try {
     const data = req.body;
     const amountPaid = Number(data.amount || 0);
 
-    if (data.referenceNum) {
-      const existing = db_payments.find(pay => pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
-      if (existing) {
-        return res.status(400).json({ error: `Payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+    // Duplication Check (Invoice Number, Payment Amount, Payment Date, Payment Reference)
+    const checkInvoiceNumber = data.invoiceNumber || "";
+    const checkAmount = amountPaid;
+    const checkDate = data.paymentDate || new Date().toISOString().split('T')[0];
+    const checkRef = data.referenceNum;
+
+    if (checkRef) {
+      const duplicate = db_payments.find(pay => 
+        pay.invoiceNumber === checkInvoiceNumber &&
+        pay.amount === checkAmount &&
+        pay.paymentDate === checkDate &&
+        (pay.bankRef === checkRef || pay.referenceNum === checkRef)
+      );
+      if (duplicate) {
+        return res.status(400).json({ error: "Duplicate payment detected: A payment with the same Invoice Number, Payment Amount, Payment Date, and Payment Reference already exists." });
       }
     }
+
+    // Auto-generate sequential reference number PAYRD-k and verify uniqueness
+    const generatedRef = getNextPaymentReference();
 
     const payId = `pay-${Date.now()}`;
     const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
 
-    const newPayment: Payment & { createdBy?: string } = {
+    const newPayment: Payment & { createdBy?: string; bankRef?: string } = {
       id: payId,
       invoiceId: data.invoiceId,
       invoiceNumber: data.invoiceNumber || "",
       clientId: data.clientId,
       clientName: data.clientName,
       amount: amountPaid,
-      paymentDate: data.paymentDate || new Date().toISOString().split('T')[0],
+      paymentDate: checkDate,
       paymentMode: data.paymentMode || "UPI",
-      referenceNum: data.referenceNum || `REF-${Date.now()}`,
+      referenceNum: generatedRef, // Enforce sequential reference starting with PAYRD-
+      bankRef: data.referenceNum || "", // Enforce user-specified manual bank/UPI reference code
       remarks: data.remarks || "No comments",
       createdAt: new Date().toISOString(),
       createdBy: performerName
     };
 
+    // Initialize Batch
+    const batch = db ? writeBatch(db) : null;
+
+    if (batch) {
+      batch.set(doc(db, 'payments', payId), newPayment);
+    }
     db_payments.unshift(newPayment);
 
-    // Fully reconcile client balances, invoice dues/payments, and rebuild ledger entries
-    await reconcileClientData(newPayment.clientId);
+    // Reconcile Client Data (invoices, clients, ledger) with batch
+    await reconcileClientData(newPayment.clientId, batch);
 
-    // AUTOMATION TRIGGER 4: Cashbook auto synchronizer running bank & cash accounts
+    // Cashbook entry auto synchronizer
     const sortedCashForPayment = [...db_cashbook].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
@@ -2616,14 +2682,24 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
       paymentMode: newPayment.paymentMode,
       amount: amountPaid,
       referenceId: payId,
+      referenceNum: newPayment.referenceNum,
+      bankRef: newPayment.bankRef,
       runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
       runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
       createdAt: new Date().toISOString()
     };
+
+    if (batch) {
+      batch.set(doc(db, 'cashbook', newCashbook.id), newCashbook);
+    }
     db_cashbook.unshift(newCashbook);
 
-    await syncStateToFirestore('payments', payId);
-    await syncStateToFirestore('cashbook', newCashbook.id);
+    // Commit Transaction/Batch
+    if (batch) {
+      await batch.commit();
+    }
+
+    saveStateToLocalCache();
 
     // Trigger centralized master business notification broadcast
     const amtStr = `₹${newPayment.amount.toLocaleString('en-IN')}`;
@@ -2647,12 +2723,26 @@ app.post('/api/payments', checkPermission('payments', 'write'), async (req: Requ
     logUserActivity(req, "PAYMENT_COLLECT", `Cleared collection receipts pay: ${amountPaid} from ${newPayment.clientName} (Recorded by ${performerName}). Double-entry synchronizer successful.`);
     res.status(201).json(newPayment);
   } catch (err: any) {
+    // ROLLBACK on error
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
+
     console.error("Critical payment log execution failed: ", err);
     res.status(500).json({ error: `Could not approve ledger credit of payment receipt: ${err.message}` });
   }
 });
 
 app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: Request, res: Response) => {
+  const oldPayments = db_payments.map(pay => ({ ...pay }));
+  const oldCashbook = db_cashbook.map(cb => ({ ...cb }));
+  const oldInvoices = db_invoices.map(inv => ({ ...inv }));
+  const oldClients = db_clients.map(c => ({ ...c }));
+  const oldLedger = [...db_ledger];
+
   try {
     const { id } = req.params;
     const data = req.body;
@@ -2660,24 +2750,26 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
     if (pIndex !== -1) {
       const oldP = db_payments[pIndex];
 
-      if (data.referenceNum && data.referenceNum.trim().toLowerCase() !== oldP.referenceNum?.trim().toLowerCase()) {
-        const existing = db_payments.find(pay => pay.id !== id && pay.referenceNum?.trim().toLowerCase() === data.referenceNum.trim().toLowerCase());
+      // Since the user might be editing referenceNum (which represents their manual bankRef), verify uniqueness of bankRef
+      const checkManualRef = data.referenceNum;
+      if (checkManualRef && checkManualRef.trim().toLowerCase() !== oldP.bankRef?.trim().toLowerCase()) {
+        const existing = db_payments.find(pay => pay.id !== id && pay.bankRef?.trim().toLowerCase() === checkManualRef.trim().toLowerCase());
         if (existing) {
-          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${data.referenceNum}' already exists. Please specify a unique reference number.` });
+          return res.status(400).json({ error: `Another payment with Reference Code / Bank ID '${checkManualRef}' already exists. Please specify a unique reference number.` });
         }
       }
 
-      // 1. Revert Old values & apply edits
       const oldClientId = oldP.clientId;
-
-      // Apply edits & update pointers dynamically
       const updatedClientId = data.clientId || oldP.clientId;
       const updatedInvoiceId = data.invoiceId || oldP.invoiceId;
 
-      oldP.amount = Number(data.amount ?? oldP.amount);
+      const newAmount = Number(data.amount ?? oldP.amount);
+
+      // Update in-memory payment object
+      oldP.amount = newAmount;
       oldP.paymentDate = data.paymentDate || oldP.paymentDate;
       oldP.paymentMode = data.paymentMode || oldP.paymentMode;
-      oldP.referenceNum = data.referenceNum || oldP.referenceNum;
+      oldP.bankRef = checkManualRef || oldP.bankRef;
       oldP.remarks = data.remarks || oldP.remarks;
       (oldP as any).updatedAt = new Date().toISOString();
 
@@ -2694,21 +2786,29 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
       }
 
       const newClientId = oldP.clientId;
-      const newAmount = oldP.amount;
 
-      // Fully reconcile balances, dues, and rebuild ledgers for affected clients
-      await reconcileClientData(oldClientId);
+      // Initialize Batch
+      const batch = db ? writeBatch(db) : null;
+
+      if (batch) {
+        batch.set(doc(db, 'payments', oldP.id), oldP);
+      }
+
+      // Fully reconcile balances, dues, and rebuild ledgers for affected clients in the batch
+      await reconcileClientData(oldClientId, batch);
       if (newClientId !== oldClientId) {
-        await reconcileClientData(newClientId);
+        await reconcileClientData(newClientId, batch);
       }
 
       // Filter and rebuild Cashbook entry
       const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === oldP.id);
       db_cashbook = db_cashbook.filter(cb => cb.referenceId !== oldP.id);
-      for (const cb of cashbookToRemove) {
-        await syncStateToFirestore('cashbook', cb.id);
+      if (batch) {
+        for (const cb of cashbookToRemove) {
+          batch.delete(doc(db, 'cashbook', cb.id));
+        }
       }
-      
+
       let cashChange = 0;
       let bankChange = 0;
       if (oldP.paymentMode === 'Cash') {
@@ -2736,14 +2836,24 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
         paymentMode: oldP.paymentMode,
         amount: newAmount,
         referenceId: oldP.id,
+        referenceNum: oldP.referenceNum,
+        bankRef: oldP.bankRef,
         runningCashBalance: Number(lastCashbookEntry.runningCashBalance || 0) + cashChange,
         runningBankBalance: Number(lastCashbookEntry.runningBankBalance || 0) + bankChange,
         createdAt: new Date().toISOString()
       };
       db_cashbook.unshift(newCashbook);
-      await syncStateToFirestore('cashbook', newCashbook.id);
 
-      await syncStateToFirestore('payments', oldP.id);
+      if (batch) {
+        batch.set(doc(db, 'cashbook', newCashbook.id), newCashbook);
+      }
+
+      // Commit Batch Transaction
+      if (batch) {
+        await batch.commit();
+      }
+
+      saveStateToLocalCache();
 
       const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
       (oldP as any).updatedBy = performerName;
@@ -2771,31 +2881,57 @@ app.put('/api/payments/:id', checkPermission('payments', 'write'), async (req: R
       res.status(404).json({ error: "Payment not found" });
     }
   } catch (err: any) {
+    // ROLLBACK on error
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
+
     console.error("Critical payment update execution failed: ", err);
     res.status(500).json({ error: `Could not update payment receipt: ${err.message}` });
   }
 });
 
 app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (req: Request, res: Response) => {
+  const oldPayments = db_payments.map(pay => ({ ...pay }));
+  const oldCashbook = db_cashbook.map(cb => ({ ...cb }));
+  const oldInvoices = db_invoices.map(inv => ({ ...inv }));
+  const oldClients = db_clients.map(c => ({ ...c }));
+  const oldLedger = [...db_ledger];
+
   try {
     const { id } = req.params;
     const pIndex = db_payments.findIndex(pay => pay.id === id);
     if (pIndex !== -1) {
       const p = db_payments[pIndex];
 
-      // Delete payment
-      db_payments.splice(pIndex, 1);
-      await syncStateToFirestore('payments', id);
+      const batch = db ? writeBatch(db) : null;
 
-      // Fully reconcile client data, payments, and rebuild ledger entries
-      await reconcileClientData(p.clientId);
+      if (batch) {
+        batch.delete(doc(db, 'payments', id));
+      }
+      db_payments.splice(pIndex, 1);
+
+      // Reconcile client data in memory & build batch
+      await reconcileClientData(p.clientId, batch);
 
       // Revert Cashbook
       const cashbookToRemove = db_cashbook.filter(cb => cb.referenceId === p.id);
       db_cashbook = db_cashbook.filter(cb => cb.referenceId !== p.id);
-      for (const cb of cashbookToRemove) {
-        await syncStateToFirestore('cashbook', cb.id);
+      if (batch) {
+        for (const cb of cashbookToRemove) {
+          batch.delete(doc(db, 'cashbook', cb.id));
+        }
       }
+
+      // Commit Batch Transaction
+      if (batch) {
+        await batch.commit();
+      }
+
+      saveStateToLocalCache();
 
       const performerName = (req.headers['x-user-name'] as string) || "Karan Sharma";
 
@@ -2821,6 +2957,14 @@ app.delete('/api/payments/:id', checkPermission('payments', 'delete'), async (re
       res.status(404).json({ error: "Payment not found" });
     }
   } catch (err: any) {
+    // ROLLBACK on error
+    db_payments = oldPayments;
+    db_cashbook = oldCashbook;
+    db_invoices = oldInvoices;
+    db_clients = oldClients;
+    db_ledger = oldLedger;
+    saveStateToLocalCache();
+
     console.error("Critical payment delete execution failed: ", err);
     res.status(500).json({ error: `Could not delete payment receipt: ${err.message}` });
   }
@@ -2962,22 +3106,8 @@ app.delete('/api/cashbook/:id', checkPermission('cashbook', 'delete'), async (re
   const index = db_cashbook.findIndex(cb => cb.id === id);
   if (index !== -1) {
     const item = db_cashbook[index];
-    const payId = item.referenceId;
-    
     db_cashbook.splice(index, 1);
     await syncStateToFirestore('cashbook', id);
-
-    // If this cashbook entry was linked to a payment, we must also remove the payment & reconcile
-    if (item.type === 'income' && payId && payId.startsWith('pay-')) {
-      const pIndex = db_payments.findIndex(p => p.id === payId);
-      if (pIndex !== -1) {
-        const pay = db_payments[pIndex];
-        const clientId = pay.clientId;
-        db_payments.splice(pIndex, 1);
-        await syncStateToFirestore('payments', payId);
-        await reconcileClientData(clientId);
-      }
-    }
 
     // Trigger centralized master business notification broadcast
     await triggerBusinessNotification(

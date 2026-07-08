@@ -323,7 +323,7 @@ export default function CashbookModule({
             <thead>
               <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
                 <th className="py-3.5 px-5">Voucher Date</th>
-                <th className="py-3.5 px-5">Ref Code / Bank ID</th>
+                <th className="py-3.5 px-5">PAYRD NUMBER / REF CODE</th>
                 <th className="py-3.5 px-5">Ledger Clause Description</th>
                 <th className="py-3.5 px-4 text-center">Reconciled Pool</th>
                 <th className="py-3.5 px-5 text-right text-emerald-600">Credits / Receipts (+)</th>
@@ -335,7 +335,10 @@ export default function CashbookModule({
               {filteredCashbook.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/20">
                   <td className="py-3.5 px-5 font-mono text-slate-550">{formatDisplayDate(row.date)}</td>
-                  <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">{row.referenceId || "N/A"}</td>
+                  <td className="py-3.5 px-5 font-mono text-slate-900 font-bold uppercase">
+                    <div>{row.referenceNum || row.referenceId || "N/A"}</div>
+                    {row.bankRef && <div className="text-[10px] text-indigo-600 font-sans font-bold normal-case mt-0.5">Ref ID: {row.bankRef}</div>}
+                  </td>
                   <td className="py-3.5 px-5 text-slate-650">
                     <div className="flex flex-col">
                       <span>{row.description}</span>
@@ -515,7 +518,6 @@ export default function CashbookModule({
                     onChange={(e) => setEntryType(e.target.value as any)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
                   >
-                    <option value="income" className="text-emerald-600 font-bold">Credit / Income (+)</option>
                     <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
                     <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
                     <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>
@@ -709,7 +711,6 @@ export default function CashbookModule({
                     onChange={(e) => setEntryType(e.target.value as any)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none font-bold"
                   >
-                    <option value="income" className="text-emerald-600 font-bold">Credit / Income (+)</option>
                     <option value="expense" className="text-rose-600 font-bold">Debit / Payout (-)</option>
                     <option value="bank_deposit" className="text-blue-600 font-bold">Bank Deposit (+ bank)</option>
                     <option value="withdrawal" className="text-amber-600 font-bold">Bank Withdrawal (+ cash)</option>

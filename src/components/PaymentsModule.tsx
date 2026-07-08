@@ -113,13 +113,10 @@ export default function PaymentsModule({
     const clientObj = clients.find(c => c.id === clientId)!;
     const invoiceObj = invoices.find(inv => inv.id === invoiceId)!;
 
-    // Removed strict check to allow for overpayments/credit balances
-    /*
     if (Number(amount) > invoiceObj.dueAmount) {
       alert(`Warning: The specified payment amount ${formatCurrency(Number(amount))} exceeds this invoice's remaining due balance ${formatCurrency(invoiceObj.dueAmount)}.`);
       return;
     }
-    */
 
     setIsSaving(true);
     try {
@@ -167,15 +164,12 @@ export default function PaymentsModule({
     const clientObj = clients.find(c => c.id === clientId)!;
     const invoiceObj = invoices.find(inv => inv.id === invoiceId)!;
 
-    // Removed strict check to allow for overpayments/credit balances
-    /*
     // Check balance limit
     const allowableBalance = invoiceObj.dueAmount + (invoiceObj.id === editingPayment.invoiceId ? editingPayment.amount : 0);
     if (Number(amount) > allowableBalance) {
       alert(`Warning: The specified payment amount ${formatCurrency(Number(amount))} exceeds this invoice's maximum available remaining balance of ${formatCurrency(allowableBalance)}.`);
       return;
     }
-    */
 
     setIsSaving(true);
     try {
@@ -217,7 +211,7 @@ export default function PaymentsModule({
     setInvoiceId(p.invoiceId);
     setAmount(String(p.amount));
     setMode(p.paymentMode as any);
-    setReferenceNumber(p.referenceNum);
+    setReferenceNumber((p as any).bankRef || p.referenceNum);
     setNotes(p.remarks || '');
     setPaymentDate(p.paymentDate ? p.paymentDate.split('T')[0] : new Date().toISOString().split('T')[0]);
   };
@@ -314,7 +308,7 @@ export default function PaymentsModule({
           <thead>
             <tr className="bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#E5E7EB]">
               <th className="py-3 px-5">Reconciliation Date</th>
-              <th className="py-3 px-5">UPI / bank Reference ID</th>
+              <th className="py-3 px-5">PAYRD NUMBER</th>
               <th className="py-3 px-5">Corporate Partner</th>
               <th className="py-3 px-5"> Settled Invoice</th>
               <th className="py-3 px-5">Channel Mode</th>
@@ -338,6 +332,7 @@ export default function PaymentsModule({
                 <td className="py-4 px-5 text-right font-mono font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
                 <td className="py-4 px-5 text-slate-400 italic font-medium">
                   <div>{p.remarks}</div>
+                  {(p as any).bankRef && <div className="text-[10px] text-indigo-600 font-mono font-bold not-italic mt-0.5">Ref ID: {(p as any).bankRef}</div>}
                   {((p as any).createdBy || (p as any).updatedBy) && (
                     <div className="text-[9px] text-slate-500 not-italic mt-1 font-sans font-semibold tracking-tight">
                       {(p as any).createdBy && <span>Recorded by: {(p as any).createdBy}</span>}
@@ -429,6 +424,22 @@ export default function PaymentsModule({
                 </select>
               </div>
 
+              {clientId && (
+                <div className="p-3 bg-rose-50 border border-rose-100/50 rounded-xl text-xs text-rose-850 space-y-1">
+                  <div className="font-bold uppercase tracking-wider text-[9px] text-rose-600 font-mono">Client Account Exposure Summary</div>
+                  <div className="flex justify-between items-center font-sans">
+                    <span className="text-slate-600 font-medium">Total Outstanding Invoices Amount:</span>
+                    <span className="font-mono font-black text-rose-700 text-sm">
+                      {formatCurrency(
+                        invoices
+                          .filter(inv => inv.clientId === clientId && inv.status !== 'paid')
+                          .reduce((s, inv) => s + inv.dueAmount, 0)
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Select Invoice */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-400 uppercase">Linked Pending Invoice *</label>
@@ -510,11 +521,8 @@ export default function PaymentsModule({
               {selectedInvoiceObj && (
                 <div className="p-3 bg-indigo-50 text-[11px] text-indigo-800 rounded-xl italic">
                   Remaining unpaid balance after this receipt: 
-                  <b className={`font-mono ml-1 ${selectedInvoiceObj.dueAmount - Number(amount || 0) < 0 ? 'text-blue-600' : 'text-slate-800'}`}>
-                    {selectedInvoiceObj.dueAmount - Number(amount || 0) < 0 
-                      ? `(Credit: ${formatCurrency(Math.abs(selectedInvoiceObj.dueAmount - Number(amount || 0)))})`
-                      : formatCurrency(Math.max(0, selectedInvoiceObj.dueAmount - Number(amount || 0)))
-                    }
+                  <b className="font-mono ml-1 text-slate-800">
+                    {formatCurrency(Math.max(0, selectedInvoiceObj.dueAmount - Number(amount || 0)))}
                   </b>
                 </div>
               )}
@@ -591,6 +599,22 @@ export default function PaymentsModule({
                   ))}
                 </select>
               </div>
+
+              {clientId && (
+                <div className="p-3 bg-rose-50 border border-rose-100/50 rounded-xl text-xs text-rose-850 space-y-1">
+                  <div className="font-bold uppercase tracking-wider text-[9px] text-rose-600 font-mono">Client Account Exposure Summary</div>
+                  <div className="flex justify-between items-center font-sans">
+                    <span className="text-slate-600 font-medium">Total Outstanding Invoices Amount:</span>
+                    <span className="font-mono font-black text-rose-700 text-sm">
+                      {formatCurrency(
+                        invoices
+                          .filter(inv => inv.clientId === clientId && inv.status !== 'paid')
+                          .reduce((s, inv) => s + inv.dueAmount, 0)
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Select Invoice */}
               <div className="space-y-1">

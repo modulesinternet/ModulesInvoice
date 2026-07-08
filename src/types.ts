@@ -75,9 +75,9 @@ export interface Invoice {
   readCount?: number;
   pdfUrl?: string;
   attachments?: { name: string; url: string; size?: number; type?: string }[];
-  challanUrl?: string | null;
-  challanName?: string | null;
-  challanType?: string | null;
+  challanUrl?: string;
+  challanName?: string;
+  challanType?: string;
 }
 
 export interface QuotationItem {
@@ -119,6 +119,7 @@ export interface Payment {
   paymentDate: string;
   paymentMode: "Cash" | "UPI" | "Bank Transfer" | "Card" | "Cheque" | "UPI/Bank Transfer";
   referenceNum: string;
+  bankRef?: string;
   remarks: string;
   createdAt: string;
 }
@@ -135,6 +136,8 @@ export interface LedgerEntry {
   referenceType: "invoice" | "payment" | "opening_balance" | "adjustment";
   referenceId: string;
   invoiceNumber?: string;
+  referenceNum?: string;
+  bankRef?: string;
   createdAt: string;
 }
 
@@ -146,6 +149,8 @@ export interface CashbookEntry {
   paymentMode: string; // e.g. 'Cash', 'UPI', 'Bank Transfer', etc.
   amount: number;
   referenceId?: string;
+  referenceNum?: string;
+  bankRef?: string;
   category?: string;
   runningCashBalance: number;
   runningBankBalance: number;
