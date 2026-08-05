@@ -274,6 +274,13 @@ type InvoiceLayoutTemplate = 'navy' | 'minimal' | 'emerald';
 
 const STANDARD_DOC_CLASS = "bg-white rounded-lg border border-slate-200/80 shadow-2xl p-6 md:p-[10mm] w-full md:w-[210mm] min-h-[297mm] print:!min-h-0 mx-auto flex flex-col justify-between print:min-h-0 print:p-0 print:border-none print:shadow-none print:w-full relative overflow-hidden font-sans text-slate-800 animate-fade-in";
 
+export function formatExportPdfName(companyNameInput?: string, invoiceNumInput?: string): string {
+  const companyRaw = (companyNameInput || "Invoice").trim();
+  const cleanedCompany = companyRaw.replace(/\s+/g, '_');
+  const cleanedInvoiceNum = String(invoiceNumInput || "Invoice").trim().replace(/\//g, '_').replace(/\s+/g, '_');
+  return `${cleanedCompany}_ ${cleanedInvoiceNum}`;
+}
+
 export default function InvoicesModule({
   invoices,
   clients,
@@ -1662,9 +1669,14 @@ export default function InvoicesModule({
         }
       }
 
-      const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
-      const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
-      const safeInvoiceName = `${propertyName}-${invoiceNum}`;
+      const formatExportPdfName = (compName?: string, invNum?: string) => {
+        const companyRaw = (compName || businessSettings?.companyName || selectedInvoice?.clientName || "Invoice").trim();
+        const cleanedCompany = companyRaw.replace(/\s+/g, '_');
+        const cleanedInvoiceNum = String(invNum || selectedInvoice?.invoiceNumber || "Invoice").trim().replace(/\//g, '_').replace(/\s+/g, '_');
+        return `${cleanedCompany}_ ${cleanedInvoiceNum}`;
+      };
+
+      const safeInvoiceName = formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber);
       
       const generatedArrayBuffer = pdf.output('arraybuffer');
       let finalBytes = new Uint8Array(generatedArrayBuffer);
@@ -1775,9 +1787,7 @@ export default function InvoicesModule({
   };
 
   const handleSendEmailSimulation = () => {
-    const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
-    const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
-    const safeInvoiceName = `${propertyName}-${invoiceNum}.pdf`;
+    const safeInvoiceName = `${formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber)}.pdf`;
     alert(`Success: Interactive dispatch complete. Standardized attachment "${safeInvoiceName}" successfully generated and forwarded to ${emailTo}`);
     setIsEmailModalOpen(false);
   };
@@ -3071,9 +3081,7 @@ export default function InvoicesModule({
                 />
               </div>
               <p className="text-[11px] text-slate-400 italic">This dispatch bundles the standardized PDF document "<b>{(() => {
-                const propertyName = (businessSettings?.companyName || "Invoice").replace(/\s+/g, '');
-                const invoiceNum = String(selectedInvoice?.invoiceNumber || "Invoice").replace(/\//g, '_');
-                return `${propertyName}-${invoiceNum}.pdf`;
+                return `${formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber)}.pdf`;
               })()}</b>" along with payment instructions.</p>
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button 
