@@ -674,6 +674,27 @@ export default function InvoicesModule({
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 15*24*60*60*1000).toISOString().split('T')[0]);
   const [notes, setNotes] = useState(businessSettings?.defaultInvoiceNotes || 'Humble warning: Please quote our invoice serial number in all bank payouts.');
   const [discount, setDiscount] = useState('0');
+  const [includeArrear, setIncludeArrear] = useState(false);
+  const [arrearAmountInput, setArrearAmountInput] = useState('0');
+
+  React.useEffect(() => {
+    if (isEditing && editingInvoiceId) {
+      const invToEdit = invoices.find(inv => inv.id === editingInvoiceId);
+      if (invToEdit && invToEdit.arrearAmount && invToEdit.arrearAmount > 0) {
+        setIncludeArrear(true);
+        setArrearAmountInput(String(invToEdit.arrearAmount));
+      }
+    } else if (clientId) {
+      const matchedClient = clients.find(c => c.id === clientId);
+      if (matchedClient && matchedClient.outstandingBalance > 0) {
+        setArrearAmountInput(String(matchedClient.outstandingBalance));
+        setIncludeArrear(true);
+      } else {
+        setIncludeArrear(false);
+        setArrearAmountInput('0');
+      }
+    }
+  }, [clientId, isEditing, editingInvoiceId, clients, invoices]);
 
   React.useEffect(() => {
     if (isCreateOpen && !isEditing) {
@@ -853,6 +874,7 @@ export default function InvoicesModule({
         dueAmount: finalDueAmount,
         status: finalStatus,
         notes,
+        arrearAmount: includeArrear ? Number(arrearAmountInput || 0) : 0,
         invoiceNumber
       };
 
@@ -866,6 +888,8 @@ export default function InvoicesModule({
       setEditingInvoiceId(null);
       setAddedItems([]);
       setDiscount('0');
+      setIncludeArrear(false);
+      setArrearAmountInput('0');
     } catch (err: any) {
       console.error(err);
       alert(err.message || "An error occurred while creating/updating the invoice.");
@@ -1369,39 +1393,64 @@ export default function InvoicesModule({
         
         const dividerIndexVal = totalsRows.length; // divider line BEFORE total amount row
         
+        const hasArrear = selectedInvoice && selectedInvoice.arrearAmount && selectedInvoice.arrearAmount > 0;
+
         // 4. Total Amount
         totalsRows.push({
-          label: "Total Amount:",
+          label: hasArrear ? "Current Invoice Amount:" : "Total Amount:",
           valText: formatPDFCurrency(selectedInvoice?.total || 0),
           isBold: true,
-          fontSize: 11, // increased from 8.5
-          labelColor: [15, 23, 42], // slate-900
+          fontSize: 11,
+          labelColor: [15, 23, 42],
           isBoldLabel: true,
-          color: [15, 23, 42] // slate-900
+          color: [15, 23, 42]
         });
+
+        if (hasArrear && selectedInvoice.arrearAmount) {
+          totalsRows.push({
+            label: "Previous Outstanding / Arrear:",
+            valText: "+" + formatPDFCurrency(selectedInvoice.arrearAmount),
+            isBold: true,
+            fontSize: 10,
+            labelColor: [180, 83, 9],
+            isBoldLabel: false,
+            color: [180, 83, 9]
+          });
+
+          totalsRows.push({
+            label: "Final Total Payable:",
+            valText: formatPDFCurrency((selectedInvoice?.total || 0) + selectedInvoice.arrearAmount),
+            isBold: true,
+            fontSize: 11.5,
+            labelColor: [15, 23, 42],
+            isBoldLabel: true,
+            color: [91, 33, 255]
+          });
+        }
         
         // 5. Amount Paid
         totalsRows.push({
           label: "Amount Paid:",
           valText: formatPDFCurrency(selectedInvoice?.paidAmount || 0),
           isBold: true,
-          fontSize: 10, // increased from 8
-          labelColor: [13, 148, 136], // teal-600
+          fontSize: 10,
+          labelColor: [13, 148, 136],
           isBoldLabel: false,
-          color: [16, 185, 129] // emerald-600
+          color: [16, 185, 129]
         });
         
         const secondDividerIndex = totalsRows.length; // divider line BEFORE Pending Outstanding row
         
         // 6. Pending Outstanding
+        const netDueAmount = (selectedInvoice?.dueAmount || 0) + (hasArrear && selectedInvoice.arrearAmount ? selectedInvoice.arrearAmount : 0);
         totalsRows.push({
-          label: "Pending Outstanding:",
-          valText: formatPDFCurrency(selectedInvoice?.dueAmount || 0),
+          label: hasArrear ? "Net Balance Payable:" : "Pending Outstanding:",
+          valText: formatPDFCurrency(netDueAmount),
           isBold: true,
-          fontSize: 11.5, // increased from 8.5
-          labelColor: [225, 29, 72], // rose-600
+          fontSize: 11.5,
+          labelColor: [225, 29, 72],
           isBoldLabel: true,
-          color: [225, 29, 72] // rose-600
+          color: [225, 29, 72]
         });
         
         // Determine box height based on actual number of rows with wider layout using a robust symmetrical formula
@@ -2284,11 +2333,30 @@ export default function InvoicesModule({
                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.03)]">
                   {/* Total row with beautiful accent background */}
                   <div className={`${invoiceTemplate === 'emerald' ? 'bg-teal-50 border-teal-100' : invoiceTemplate === 'minimal' ? 'bg-slate-50 border-slate-100' : 'bg-indigo-50/45'} p-3.5 flex justify-between items-center border-b border-slate-100`}>
-                    <span className="text-slate-900 font-bold text-sm">Total Amount:</span>
+                    <span className="text-slate-900 font-bold text-sm">
+                      {selectedInvoice.arrearAmount && selectedInvoice.arrearAmount > 0 ? "Current Invoice Total:" : "Total Amount:"}
+                    </span>
                     <span className={`font-mono font-black text-base ${invoiceTemplate === 'emerald' ? 'text-teal-800' : invoiceTemplate === 'minimal' ? 'text-slate-950' : 'text-indigo-950'}`}>
                       {renderFormattedCurrency(selectedInvoice.total, true)}
                     </span>
                   </div>
+
+                  {selectedInvoice.arrearAmount && selectedInvoice.arrearAmount > 0 ? (
+                    <div className="bg-amber-50/80 p-3.5 border-b border-amber-200/70 space-y-2">
+                      <div className="flex justify-between items-center text-amber-900 font-bold text-xs">
+                        <span>Previous Outstanding / Arrear:</span>
+                        <span className="font-mono font-bold text-amber-800">
+                          +{renderFormattedCurrency(selectedInvoice.arrearAmount, true)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-amber-950 font-black text-xs pt-1.5 border-t border-amber-200/60">
+                        <span>Final Total Payable:</span>
+                        <span className="font-mono font-black text-sm text-indigo-900 bg-white/80 px-2 py-0.5 rounded border border-indigo-200">
+                          {renderFormattedCurrency(selectedInvoice.total + selectedInvoice.arrearAmount, true)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Payment status, split with a subtle line */}
                   <div className="bg-white p-3.5 space-y-2.5">
@@ -2300,9 +2368,9 @@ export default function InvoicesModule({
                     </div>
                     
                     <div className="flex justify-between items-center text-rose-800 font-extrabold border-t border-slate-100 pt-2.5">
-                      <span>Pending Outstanding:</span>
+                      <span>{selectedInvoice.arrearAmount && selectedInvoice.arrearAmount > 0 ? "Net Balance Payable:" : "Pending Outstanding:"}</span>
                       <span className="font-mono font-black text-rose-600 bg-rose-50/60 px-2 py-0.5 rounded">
-                        {renderFormattedCurrency(selectedInvoice.dueAmount, true)}
+                        {renderFormattedCurrency(selectedInvoice.dueAmount + (selectedInvoice.arrearAmount || 0), true)}
                       </span>
                     </div>
                   </div>
@@ -2821,6 +2889,48 @@ export default function InvoicesModule({
               </div>
 
               {/* Subtotal blocks */}
+              {selectedClientDetails && (
+                <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-amber-900 select-none">
+                      <input 
+                        type="checkbox"
+                        checked={includeArrear}
+                        onChange={(e) => {
+                          setIncludeArrear(e.target.checked);
+                          if (e.target.checked && (!arrearAmountInput || Number(arrearAmountInput) <= 0)) {
+                            setArrearAmountInput(String(selectedClientDetails.outstandingBalance || 0));
+                          }
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span>Include Previous Outstanding / Arrear Amount in Invoice PDF &amp; Preview</span>
+                    </label>
+                    {selectedClientDetails.outstandingBalance > 0 && (
+                      <span className="text-[10.5px] font-mono font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                        Old Balance: {formatCurrency(selectedClientDetails.outstandingBalance)}
+                      </span>
+                    )}
+                  </div>
+                  {includeArrear && (
+                    <div className="pl-6 space-y-1 pt-1">
+                      <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Arrear / Old Outstanding Amount (INR)</label>
+                      <input 
+                        type="number"
+                        min={0}
+                        value={arrearAmountInput}
+                        onChange={(e) => setArrearAmountInput(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:outline-none focus:border-amber-500 font-mono font-bold text-amber-900 shadow-sm"
+                        placeholder="Enter arrear amount..."
+                      />
+                      <p className="text-[10px] text-amber-700 italic">
+                        * Note: Actual invoice total ({formatCurrency(draftTotal)}) will NOT change. This arrear amount ({formatCurrency(Number(arrearAmountInput || 0))}) will only update PDF, print, mail &amp; preview sections.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-100">
                 <div className="space-y-3">
                   <div className="space-y-1">
@@ -2862,10 +2972,24 @@ export default function InvoicesModule({
                         <span>-{formatCurrency(draftDiscountNum)}</span>
                       </div>
                     )}
+                    {includeArrear && Number(arrearAmountInput) > 0 && (
+                      <div className="flex justify-between text-amber-300 font-bold pt-1 border-t border-slate-800/80">
+                        <span>Previous Arrear / Outstanding:</span>
+                        <span>+{formatCurrency(Number(arrearAmountInput))}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between items-center text-sm font-bold pt-3 font-sans">
-                    <span className="text-white">Amount Due (INR):</span>
-                    <span className="text-xl text-[#8B5CF6] font-mono font-extrabold">{formatCurrency(draftTotal)}</span>
+                  <div className="space-y-1 pt-3 font-sans">
+                    <div className="flex justify-between items-center text-xs text-slate-300">
+                      <span>Invoice Total (Actual):</span>
+                      <span className="text-sm text-indigo-300 font-mono font-bold">{formatCurrency(draftTotal)}</span>
+                    </div>
+                    {includeArrear && Number(arrearAmountInput) > 0 && (
+                      <div className="flex justify-between items-center text-xs font-bold text-amber-200 pt-1 border-t border-slate-800">
+                        <span>Final Total Payable (PDF/Preview):</span>
+                        <span className="text-base text-amber-400 font-mono font-extrabold">{formatCurrency(draftTotal + Number(arrearAmountInput))}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -476,11 +476,6 @@ const LOCAL_CACHE_PATH = path.join(process.cwd(), 'local-db-cache.json');
 
 // Self-contained file database persistent helpers
 function saveStateToLocalCache() {
-  if (db) {
-    // If Firebase DB is defined and active, we do NOT use or write to local disk,
-    // ensuring all data is persisted in the cloud database only.
-    return;
-  }
   const data = {
     db_settings,
     db_clients,
@@ -555,7 +550,7 @@ if (fs.existsSync(apkHistoryPath)) {
 }
 
 // Direct synchronizer helper mapping active state mutations to Cloud Firestore & Local Cache
-async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = true) {
+async function syncStateToFirestore(topic: string, id?: string, blocking: boolean = false) {
   // Always commit synchronously to local file cache as priority persistent layer
   saveStateToLocalCache();
 
@@ -2237,6 +2232,7 @@ app.post('/api/invoices', checkPermission('invoices', 'write'), async (req: Requ
     status: data.status || "unpaid",
     createdAt: new Date().toISOString(),
     notes: data.notes || "",
+    arrearAmount: Number(data.arrearAmount || 0),
     readCount: 0
   };
 
@@ -2296,6 +2292,7 @@ app.put('/api/invoices/:id', checkPermission('invoices', 'write'), async (req: R
         total: newTotal,
         paidAmount: newPaidAmount,
         dueAmount: newDueAmount,
+        arrearAmount: data.arrearAmount !== undefined ? Number(data.arrearAmount || 0) : (oldInv.arrearAmount || 0),
       };
       
       const newClientId = db_invoices[index].clientId;

@@ -1367,8 +1367,8 @@ export default function App() {
   const handleAddClient = async (c: Partial<Client>) => {
     try {
       await api.createClient(c);
+      await loadMasterData(true, true);
       showToast(`Corporate partner "${c.name}" registered successfully!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1377,8 +1377,8 @@ export default function App() {
   const handleUpdateClient = async (id: string, c: Partial<Client>) => {
     try {
       await api.updateClient(id, c);
+      await loadMasterData(true, true);
       showToast(`Partner profile updated.`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1387,8 +1387,8 @@ export default function App() {
   const handleDeleteClient = async (id: string) => {
     try {
       await api.deleteClient(id);
+      await loadMasterData(true, true);
       showToast(`Successfully removed client.`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1397,8 +1397,8 @@ export default function App() {
   const handleAddProduct = async (p: Partial<Product>) => {
     try {
       await api.createProduct(p);
+      await loadMasterData(true, true);
       showToast(`Catalogue item "${p.name}" listed successfully!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1407,8 +1407,8 @@ export default function App() {
   const handleUpdateProduct = async (id: string, p: Partial<Product>) => {
     try {
       await api.updateProduct(id, p);
+      await loadMasterData(true, true);
       showToast("Catalogue product description modified.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1417,8 +1417,8 @@ export default function App() {
   const handleDeleteProduct = async (id: string) => {
     try {
       await api.deleteProduct(id);
+      await loadMasterData(true, true);
       showToast("Catalogue item removed.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1427,8 +1427,8 @@ export default function App() {
   const handleAddCategory = async (name: string) => {
     try {
       await api.createCategory(name);
+      await loadMasterData(true, true);
       showToast(`Category "${name}" added successfully.`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1437,8 +1437,8 @@ export default function App() {
   const handleUpdateCategory = async (oldName: string, newName: string) => {
     try {
       await api.updateCategory(oldName, newName);
+      await loadMasterData(true, true);
       showToast(`Category renamed to "${newName}" successfully.`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1447,8 +1447,8 @@ export default function App() {
   const handleDeleteCategory = async (name: string) => {
     try {
       await api.deleteCategory(name);
+      await loadMasterData(true, true);
       showToast(`Category "${name}" has been deleted.`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1457,8 +1457,8 @@ export default function App() {
   const handleAddInvoice = async (inv: Partial<Invoice>) => {
     try {
       await api.createInvoice(inv);
+      await loadMasterData(true, true);
       showToast(`Authorized & dispatched invoice!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1467,8 +1467,8 @@ export default function App() {
   const handleUpdateInvoice = async (id: string, inv: Partial<Invoice>) => {
     try {
       await api.updateInvoice(id, inv);
+      await loadMasterData(true, true);
       showToast(`Maturity/bill items updated successfully!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1486,8 +1486,8 @@ export default function App() {
   const handleDeleteInvoice = async (id: string) => {
     try {
       await api.deleteInvoice(id);
+      await loadMasterData(true, true);
       showToast("Invoice reversed and outstanding balanced.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1496,8 +1496,8 @@ export default function App() {
   const handleCreateQuotation = async (q: Partial<Quotation>) => {
     try {
       await api.createQuotation(q);
+      await loadMasterData(true, true);
       showToast(`Proposal estimate dispatched to client!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1506,8 +1506,8 @@ export default function App() {
   const handleConvertQuotation = async (id: string) => {
     try {
       await api.convertQuotation(id);
+      await loadMasterData(true, true);
       showToast("Approved: Proposal estimate converted to official Tax Invoice successfully!");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1516,8 +1516,8 @@ export default function App() {
   const handleUpdateQuotation = async (id: string, q: Partial<Quotation>) => {
     try {
       await api.updateQuotation(id, q);
+      await loadMasterData(true, true);
       showToast("Estimate proposal updated successfully.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1526,8 +1526,8 @@ export default function App() {
   const handleDeleteQuotation = async (id: string) => {
     try {
       await api.deleteQuotation(id);
+      await loadMasterData(true, true);
       showToast("Estimate proposal deleted successfully.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1536,8 +1536,8 @@ export default function App() {
   const handleAddPayment = async (p: Partial<Payment>) => {
     try {
       await api.createPayment(p);
+      await loadMasterData(true, true);
       showToast(`Cleared: Added ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.amount!)} deposit to client ledger!`);
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1546,8 +1546,8 @@ export default function App() {
   const handleUpdatePayment = async (id: string, p: Partial<Payment>) => {
     try {
       await api.updatePayment(id, p);
+      await loadMasterData(true, true);
       showToast("Approved: Modified payment receipt references successfully.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1556,8 +1556,8 @@ export default function App() {
   const handleDeletePayment = async (id: string) => {
     try {
       await api.deletePayment(id);
+      await loadMasterData(true, true);
       showToast("Approved: Voided and deleted payment successfully.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1566,8 +1566,8 @@ export default function App() {
   const handleCreateCashbookEntry = async (entry: Partial<CashbookEntry>) => {
     try {
       await api.createCashbookEntry(entry);
+      await loadMasterData(true, true);
       showToast("Approved: Recorded Cashbook operating voucher.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1576,8 +1576,8 @@ export default function App() {
   const handleUpdateCashbookEntry = async (id: string, entry: Partial<CashbookEntry>) => {
     try {
       await api.updateCashbookEntry(id, entry);
+      await loadMasterData(true, true);
       showToast("Approved: Updated cashbook operating voucher.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1586,8 +1586,8 @@ export default function App() {
   const handleDeleteCashbookEntry = async (id: string) => {
     try {
       await api.deleteCashbookEntry(id);
+      await loadMasterData(true, true);
       showToast("Approved: Deleted cashbook operating voucher.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1596,8 +1596,8 @@ export default function App() {
   const handleSaveSettings = async (settings: Partial<BusinessSettings>) => {
     try {
       await api.saveSettings(settings);
+      await loadMasterData(true, true);
       showToast("Approved: System firm parameters updated.");
-      
     } catch (err: any) {
       showToast(err.message, 'error');
     }

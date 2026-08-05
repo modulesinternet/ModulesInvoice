@@ -225,11 +225,29 @@ export default function PublicInvoiceView({ invoiceNumber }: PublicInvoiceViewPr
                   <td className="py-3.5 px-4 text-slate-700">{formatDisplayDate(invoice.date || invoice.createdAt)}</td>
                 </tr>
                 <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Total Amount</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                    {invoice.arrearAmount && invoice.arrearAmount > 0 ? "Invoice Amount" : "Total Amount"}
+                  </td>
                   <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
                     {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(invoice.total)}
                   </td>
                 </tr>
+                {invoice.arrearAmount && invoice.arrearAmount > 0 ? (
+                  <>
+                    <tr className="border-b border-slate-100 hover:bg-amber-50/30 transition">
+                      <td className="py-3.5 px-4 font-bold text-amber-800 uppercase tracking-wider bg-amber-50/50">Previous Arrear / Old Due</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-amber-700">
+                        +{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(invoice.arrearAmount)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-100 hover:bg-indigo-50/30 transition">
+                      <td className="py-3.5 px-4 font-bold text-indigo-900 uppercase tracking-wider bg-indigo-50/50">Final Total Payable</td>
+                      <td className="py-3.5 px-4 font-mono font-extrabold text-[#5B21FF]">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(invoice.total + invoice.arrearAmount)}
+                      </td>
+                    </tr>
+                  </>
+                ) : null}
                 <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition">
                   <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Paid Amount</td>
                   <td className="py-3.5 px-4 font-mono text-emerald-600 font-semibold">
@@ -237,9 +255,11 @@ export default function PublicInvoiceView({ invoiceNumber }: PublicInvoiceViewPr
                   </td>
                 </tr>
                 <tr className="hover:bg-slate-50/50 transition">
-                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">Due Amount</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                    {invoice.arrearAmount && invoice.arrearAmount > 0 ? "Net Balance Payable" : "Due Amount"}
+                  </td>
                   <td className="py-3.5 px-4 font-mono font-extrabold text-rose-600 bg-red-50/20 text-sm">
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(outstandingAmount)}
+                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(outstandingAmount + (invoice.arrearAmount || 0))}
                   </td>
                 </tr>
               </tbody>

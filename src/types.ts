@@ -72,6 +72,7 @@ export interface Invoice {
   status: "unpaid" | "partially_paid" | "paid" | "overdue";
   createdAt: string;
   notes?: string;
+  arrearAmount?: number;
   readCount?: number;
   pdfUrl?: string;
   attachments?: { name: string; url: string; size?: number; type?: string }[];
