@@ -1669,14 +1669,8 @@ export default function InvoicesModule({
         }
       }
 
-      const formatExportPdfName = (compName?: string, invNum?: string) => {
-        const companyRaw = (compName || businessSettings?.companyName || selectedInvoice?.clientName || "Invoice").trim();
-        const cleanedCompany = companyRaw.replace(/\s+/g, '_');
-        const cleanedInvoiceNum = String(invNum || selectedInvoice?.invoiceNumber || "Invoice").trim().replace(/\//g, '_').replace(/\s+/g, '_');
-        return `${cleanedCompany}_ ${cleanedInvoiceNum}`;
-      };
-
-      const safeInvoiceName = formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber);
+      const clientCompName = selectedInvoice?.clientName || clients.find(c => c.id === selectedInvoice?.clientId)?.name || "Invoice";
+      const safeInvoiceName = formatExportPdfName(clientCompName, selectedInvoice?.invoiceNumber);
       
       const generatedArrayBuffer = pdf.output('arraybuffer');
       let finalBytes = new Uint8Array(generatedArrayBuffer);
@@ -1787,7 +1781,8 @@ export default function InvoicesModule({
   };
 
   const handleSendEmailSimulation = () => {
-    const safeInvoiceName = `${formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber)}.pdf`;
+    const clientCompName = selectedInvoice?.clientName || clients.find(c => c.id === selectedInvoice?.clientId)?.name || "Invoice";
+    const safeInvoiceName = `${formatExportPdfName(clientCompName, selectedInvoice?.invoiceNumber)}.pdf`;
     alert(`Success: Interactive dispatch complete. Standardized attachment "${safeInvoiceName}" successfully generated and forwarded to ${emailTo}`);
     setIsEmailModalOpen(false);
   };
@@ -3081,7 +3076,8 @@ export default function InvoicesModule({
                 />
               </div>
               <p className="text-[11px] text-slate-400 italic">This dispatch bundles the standardized PDF document "<b>{(() => {
-                return `${formatExportPdfName(businessSettings?.companyName || selectedInvoice?.clientName, selectedInvoice?.invoiceNumber)}.pdf`;
+                const clientCompName = selectedInvoice?.clientName || clients.find(c => c.id === selectedInvoice?.clientId)?.name || "Invoice";
+                return `${formatExportPdfName(clientCompName, selectedInvoice?.invoiceNumber)}.pdf`;
               })()}</b>" along with payment instructions.</p>
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button 
